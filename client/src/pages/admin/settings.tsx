@@ -9,7 +9,9 @@ type Settings = {
   site_description: string;
   site_tagline: string;
   author_name: string;
+  author_title: string;
   author_bio: string;
+  author_avatar: string;
   github_url: string;
   twitter_url: string;
   email: string;
@@ -22,7 +24,9 @@ const defaultSettings: Settings = {
   site_description: "书写代码、设计与边缘计算的个人博客",
   site_tagline: "在秩序与混沌的交界处，寻找属于自己的巨石碑。",
   author_name: "Monolith",
+  author_title: "独立开发者",
   author_bio: "热爱于前端架构、设计系统与边缘计算。\n相信技术应当服务于人，而非反过来。",
+  author_avatar: "",
   github_url: "",
   twitter_url: "",
   email: "",
@@ -128,9 +132,39 @@ export function AdminSettings() {
 
       {/* 作者信息 */}
       <section className="mb-[24px]">
-        <SectionHeader icon={User} title="作者信息" />
+        <SectionHeader icon={User} title="博主名片" />
         <div className="rounded-lg border border-border/25 bg-card/15 p-[20px] space-y-[14px]">
-          <SettingField label="作者名称" value={settings.author_name} onChange={(v) => updateSetting("author_name", v)} placeholder="你的名字" />
+          {/* 头像预览 + URL 输入 */}
+          <div>
+            <label className="mb-[4px] block text-[11px] text-muted-foreground/40 uppercase tracking-wider">头像</label>
+            <div className="flex items-center gap-[14px]">
+              <div className="relative flex-shrink-0">
+                {settings.author_avatar ? (
+                  <img
+                    src={settings.author_avatar}
+                    alt="头像预览"
+                    className="h-[56px] w-[56px] rounded-full object-cover border-2 border-border/30"
+                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                  />
+                ) : (
+                  <div className="flex h-[56px] w-[56px] items-center justify-center rounded-full bg-gradient-to-br from-blue-500/30 to-cyan-500/30 text-[20px] font-semibold text-foreground border-2 border-border/30">
+                    {(settings.author_name || 'M').charAt(0).toUpperCase()}
+                  </div>
+                )}
+              </div>
+              <div className="flex-1">
+                <input
+                  value={settings.author_avatar}
+                  onChange={(e) => updateSetting("author_avatar", e.target.value)}
+                  placeholder="输入头像图片 URL，留空则显示名称首字母"
+                  className="w-full rounded-md border border-border/25 bg-background/20 px-[12px] h-[34px] text-[13px] text-foreground placeholder:text-muted-foreground/20 outline-none focus:border-foreground/15 transition-colors"
+                />
+                <p className="text-[10px] text-muted-foreground/25 mt-[4px]">💡 支持任意图片链接，也可上传到媒体库后粘贴地址</p>
+              </div>
+            </div>
+          </div>
+          <SettingField label="显示名称" value={settings.author_name} onChange={(v) => updateSetting("author_name", v)} placeholder="你的名字" />
+          <SettingField label="身份头衔" value={settings.author_title} onChange={(v) => updateSetting("author_title", v)} placeholder="独立开发者 / 全栈工程师 / ..." />
           <SettingField label="个人简介" value={settings.author_bio} onChange={(v) => updateSetting("author_bio", v)} placeholder="一段简短的自我介绍" multiline />
         </div>
       </section>
@@ -142,7 +176,7 @@ export function AdminSettings() {
           <SettingField label="GitHub" value={settings.github_url} onChange={(v) => updateSetting("github_url", v)} placeholder="https://github.com/username" />
           <SettingField label="X / Twitter" value={settings.twitter_url} onChange={(v) => updateSetting("twitter_url", v)} placeholder="https://x.com/username" />
           <SettingField label="邮箱" value={settings.email} onChange={(v) => updateSetting("email", v)} placeholder="you@example.com" />
-          <p className="text-[10px] text-muted-foreground/25 pt-[4px]">💡 留空则不显示在页脚中。填入链接后自动出现。</p>
+          <p className="text-[10px] text-muted-foreground/25 pt-[4px]">💡 填入链接后会显示在首页侧边栏的博主名片中。留空则不显示。</p>
         </div>
       </section>
 

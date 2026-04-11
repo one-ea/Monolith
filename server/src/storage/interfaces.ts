@@ -161,6 +161,11 @@ export interface IDatabase {
   getSetting(key: string): Promise<string | null>;
   saveSettings(settings: Record<string, string>): Promise<void>;
 
+  /* 流量统计 */
+  recordDailyView(): Promise<void>;
+  getDailyViews(days: number): Promise<{ date: string; count: number }[]>;
+  getTotalViews(): Promise<number>;
+
   /* 备份与恢复 */
   exportAll(): Promise<BackupData>;
   importAll(data: {

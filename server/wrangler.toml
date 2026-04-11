@@ -12,6 +12,7 @@ BLOG_NAME = "Monolith"
 binding = "DB"
 database_name = "monolith-db"
 database_id = "260856eb-760d-4a36-aad7-31f8aa1291e9"
+migrations_dir = "src/migrations"
 
 # R2 存储桶绑定
 [[r2_buckets]]

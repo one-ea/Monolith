@@ -14,9 +14,7 @@ export function Hero() {
         <br />
         <span className="text-muted-foreground/60">在秩序与混沌的交界处，寻找属于自己的巨石碑。</span>
       </p>
-      <div className="mt-[40px] flex flex-col items-center gap-[8px] text-muted-foreground/40 animate-fade-in delay-4">
-        <div className="h-[28px] w-[1px] bg-gradient-to-b from-transparent via-muted-foreground/30 to-transparent animate-pulse" />
-      </div>
+
     </section>
   );
 }

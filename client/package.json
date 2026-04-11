@@ -27,6 +27,7 @@
     "wouter": "^3.3.5"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260411.1",
     "@tailwindcss/vite": "^4",
     "@types/react": "^19",
     "@types/react-dom": "^19",

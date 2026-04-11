@@ -69,14 +69,17 @@ app.get("/api/posts/:slug", async (c) => {
   const post = await db.getPostBySlug(slug);
   if (!post) return c.json({ error: "文章未找到" }, 404);
 
-  // 异步递增浏览量——不阻塞响应
+  // 异步递增浏览量 + 记录日访问量——不阻塞响应
   try {
     const viewPromise = db.incrementViewCount(slug);
+    const dailyPromise = db.recordDailyView();
     // 边缘环境中使用 waitUntil 确保异步任务完成
     if (c.executionCtx?.waitUntil) {
       c.executionCtx.waitUntil(viewPromise);
+      c.executionCtx.waitUntil(dailyPromise);
     } else {
       viewPromise.catch(() => {});
+      dailyPromise.catch(() => {});
     }
   } catch {
     /* 浏览量统计失败不影响文章返回 */
@@ -141,11 +144,30 @@ app.get("/api/settings/public", async (c) => {
   return c.json({
     site_title: all.site_title || "Monolith",
     site_description: all.site_description || "",
+    site_tagline: all.site_tagline || "",
     footer_text: all.footer_text || "",
+    author_name: all.author_name || "Monolith",
+    author_title: all.author_title || "",
+    author_bio: all.author_bio || "",
+    author_avatar: all.author_avatar || "",
     github_url: all.github_url || "",
     twitter_url: all.twitter_url || "",
     email: all.email || "",
     rss_enabled: all.rss_enabled || "true",
+  });
+});
+
+// 公开流量统计（侧边栏折线图）
+app.get("/api/stats/traffic", async (c) => {
+  const db = c.get("db");
+  const [chart, stats] = await Promise.all([
+    db.getDailyViews(14),
+    db.getViewStats(1),   // 只取 top1 即可，主要用 totalViews
+  ]);
+  return c.json({
+    totalViews: stats.totalViews,
+    totalPosts: stats.topPosts.length > 0 ? undefined : 0, // 前端已有文章数，无需重复传
+    chart,
   });
 });
 

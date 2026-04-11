@@ -439,6 +439,49 @@ export class PostgresAdapter implements IDatabase {
     }
   }
 
+  /* ── 流量统计 ─────────────────── */
+
+  private async ensureDailyViewsTable(): Promise<void> {
+    await this.db.execute(sql`CREATE TABLE IF NOT EXISTS daily_views (date TEXT NOT NULL PRIMARY KEY, count INTEGER NOT NULL DEFAULT 0)`);
+  }
+
+  async recordDailyView(): Promise<void> {
+    try {
+      const today = new Date().toISOString().slice(0, 10);
+      await this.db.execute(
+        sql`INSERT INTO daily_views (date, count) VALUES (${today}, 1) ON CONFLICT(date) DO UPDATE SET count = daily_views.count + 1`
+      );
+    } catch {
+      await this.ensureDailyViewsTable();
+      const today = new Date().toISOString().slice(0, 10);
+      await this.db.execute(
+        sql`INSERT INTO daily_views (date, count) VALUES (${today}, 1) ON CONFLICT(date) DO UPDATE SET count = daily_views.count + 1`
+      );
+    }
+  }
+
+  async getDailyViews(days: number): Promise<{ date: string; count: number }[]> {
+    try {
+      const since = new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
+      const rows = await this.db.execute(
+        sql`SELECT date, count FROM daily_views WHERE date >= ${since} ORDER BY date ASC`
+      );
+      return (rows.rows || []).map((r: any) => ({ date: r.date, count: r.count }));
+    } catch {
+      await this.ensureDailyViewsTable();
+      return [];
+    }
+  }
+
+  async getTotalViews(): Promise<number> {
+    try {
+      const rows = await this.db.execute(sql`SELECT COALESCE(SUM(count), 0) as total FROM daily_views`);
+      return (rows.rows?.[0] as any)?.total ?? 0;
+    } catch {
+      return 0;
+    }
+  }
+
   /* ── 备份与恢复 ───────────────── */
 
   async exportAll(): Promise<BackupData> {

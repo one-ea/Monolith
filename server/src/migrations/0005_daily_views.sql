@@ -1,0 +1,5 @@
+-- 每日访问量统计表
+CREATE TABLE IF NOT EXISTS daily_views (
+  date TEXT NOT NULL PRIMARY KEY,
+  count INTEGER NOT NULL DEFAULT 0
+);
