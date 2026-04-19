@@ -18,6 +18,7 @@ type Bindings = {
   BUCKET: R2Bucket;
   ADMIN_PASSWORD: string;
   JWT_SECRET: string;
+  REACTION_SALT?: string;
   DB_PROVIDER?: string;
   STORAGE_PROVIDER?: string;
   WEBHOOK_URLS?: string; // 逗号分隔的 Webhook 目标地址
@@ -33,10 +34,22 @@ const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
 /* ── 全局中间件 ────────────────────────────── */
 app.use("*", cors({
-  origin: "*",
+  origin: (origin) => origin || "*",
   allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   allowHeaders: ["Content-Type", "Authorization"],
 }));
+
+app.use("*", async (c, next) => {
+  await next();
+  const headers = c.res.headers;
+  headers.set("X-Content-Type-Options", "nosniff");
+  headers.set("X-Frame-Options", "DENY");
+  headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
+  headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+  if (c.req.url.startsWith("https://")) {
+    headers.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains; preload");
+  }
+});
 
 // 注入存储实例到上下文（每次请求创建 — 在边缘环境中是无状态的）
 app.use("*", async (c, next) => {
@@ -81,13 +94,7 @@ async function triggerWebhook(c: any, eventName: string, payload: any) {
 
 /* ── 健康检查端点 ──────────────────────────── */
 app.get("/api/health", async (c) => {
-  return c.json({
-    status: "ok",
-    timestamp: new Date().toISOString(),
-    dbProvider: c.env.DB_PROVIDER || "d1",
-    storageProvider: c.env.STORAGE_PROVIDER || "r2",
-    environment: "production"
-  });
+  return c.json({ status: "ok", timestamp: new Date().toISOString() });
 });
 /* ── 公开 API ──────────────────────────────── */
 
@@ -174,12 +181,13 @@ app.get("/api/categories", async (c) => {
   return c.json(categories);
 });
 
-// 获取文章评论（仅已审核）
+// 获取文章评论（仅已审核，不暴露邮箱）
 app.get("/api/posts/:slug/comments", async (c) => {
   const slug = c.req.param("slug");
   const db = c.get("db");
   const comments = await db.getApprovedComments(slug);
-  return c.json(comments);
+  const safe = comments.map(({ author_email, authorEmail, ...rest }: any) => rest);
+  return c.json(safe);
 });
 
 // 提交评论（公开接口，需审核后才显示）
@@ -262,10 +270,11 @@ app.post("/api/posts/:slug/reactions", async (c) => {
     return c.json({ error: "无效的反应类型" }, 400);
   }
 
-  // IP hash 去重
+  // IP hash 去重（使用环境变量盐值，避免源码泄露后可反推）
   const ip = c.req.header("CF-Connecting-IP") || c.req.header("X-Forwarded-For") || "unknown";
+  const reactionSalt = c.env.REACTION_SALT || "monolith-reaction-default";
   const encoder = new TextEncoder();
-  const data = encoder.encode(ip + ":monolith-reaction-salt");
+  const data = encoder.encode(ip + ":" + reactionSalt);
   const hashBuffer = await crypto.subtle.digest("SHA-256", data);
   const hashArray = Array.from(new Uint8Array(hashBuffer));
   const ipHash = hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
@@ -429,19 +438,41 @@ Sitemap: ${siteUrl}/sitemap.xml
   });
 });
 
+/* ── 登录速率限制 ─────────────────────────── */
+const loginAttempts = new Map<string, { count: number; firstAttempt: number }>();
+const LOGIN_RATE_LIMIT = 5;       // 最多 5 次
+const LOGIN_RATE_WINDOW = 15 * 60 * 1000; // 15 分钟窗口
+
 /* ── 认证 API ──────────────────────────────── */
 
 // 登录
 app.post("/api/auth/login", async (c) => {
+  const ip = c.req.header("CF-Connecting-IP") || c.req.header("X-Forwarded-For") || "unknown";
+
+  // 速率限制
+  const now = Date.now();
+  const record = loginAttempts.get(ip);
+  if (record && record.count >= LOGIN_RATE_LIMIT && (now - record.firstAttempt) < LOGIN_RATE_WINDOW) {
+    return c.json({ error: "尝试次数过多，请稍后再试" }, 429);
+  }
+  if (!record || (now - record.firstAttempt) >= LOGIN_RATE_WINDOW) {
+    loginAttempts.set(ip, { count: 1, firstAttempt: now });
+  } else {
+    record.count++;
+  }
+
   const body = await c.req.json<{ password: string }>();
 
   if (!body.password || body.password !== c.env.ADMIN_PASSWORD) {
     return c.json({ error: "密码错误" }, 401);
   }
 
-  const now = Math.floor(Date.now() / 1000);
+  // 登录成功后清除速率限制
+  loginAttempts.delete(ip);
+
+  const now2 = Math.floor(Date.now() / 1000);
   const token = await sign(
-    { sub: "admin", iat: now, exp: now + 60 * 60 * 24 * 7 },
+    { sub: "admin", iat: now2, exp: now2 + 60 * 60 * 24 * 7 },
     c.env.JWT_SECRET,
     "HS256"
   );
@@ -609,24 +640,34 @@ app.delete("/api/admin/posts/:slug", async (c) => {
 /** 从 Markdown 内容中提取所有外链图片 URL */
 function extractExternalImageUrls(content: string): string[] {
   const urls = new Set<string>();
-  // Markdown 格式：![alt](url) 或 ![alt](url "title")
   const mdRegex = /!\[[^\]]*\]\(([^\s"')]+)/g;
   let match;
   while ((match = mdRegex.exec(content)) !== null) {
     const url = match[1].trim();
     if (url && !url.startsWith("/") && !url.startsWith("data:")) {
-      try { new URL(url); urls.add(url); } catch { /* 非合法 URL 跳过 */ }
+      try { new URL(url); urls.add(url); } catch { /* non-URL skip */ }
     }
   }
-  // HTML img 标签：<img src="url">
   const imgRegex = /<img[^>]+src=["']([^"']+)["']/gi;
   while ((match = imgRegex.exec(content)) !== null) {
     const url = match[1].trim();
     if (url && !url.startsWith("/") && !url.startsWith("data:")) {
-      try { new URL(url); urls.add(url); } catch { /* 跳过 */ }
+      try { new URL(url); urls.add(url); } catch { /* skip */ }
     }
   }
   return Array.from(urls);
+}
+
+/** SSRF 防护：仅允许 https:// 开头的外部图片地址 */
+function isSafeImageUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== "https:") return false;
+    if (/^(10\.|172\.(1[6-9]|2[0-9]|3[01])\.|192\.168\.|127\.|0\.|169\.254\.)/.test(parsed.hostname)) return false;
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 // 单篇文章：外链图片转本地
@@ -649,6 +690,11 @@ app.post("/api/admin/posts/:slug/localize-images", async (c) => {
   let content = post.content;
 
   for (const url of externalUrls) {
+    if (!isSafeImageUrl(url)) {
+      failed++;
+      errors.push(`${url}: 仅允许 HTTPS 外部图片地址`);
+      continue;
+    }
     try {
       const abortCtrl = new AbortController();
       const timeoutId = setTimeout(() => abortCtrl.abort(), 10000); // 10秒超时
@@ -714,6 +760,7 @@ app.post("/api/admin/localize-all-images", async (c) => {
     let content = post.content;
 
     for (const url of externalUrls) {
+      if (!isSafeImageUrl(url)) { failed++; continue; }
       try {
         const resp = await fetch(url, { headers: { "User-Agent": "Monolith-Bot/1.0" } });
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
@@ -993,6 +1040,19 @@ app.post("/api/admin/backup/webdav", async (c) => {
     url: string; username: string; password: string; path?: string;
   }>();
 
+  // SSRF 防护：仅允许 https:// 的外部 URL
+  try {
+    const parsed = new URL(body.url);
+    if (parsed.protocol !== "https:") {
+      return c.json({ error: "仅允许 HTTPS 协议的 WebDAV 地址" }, 400);
+    }
+    if (/^(10\.|172\.(1[6-9]|2[0-9]|3[01])\.|192\.168\.|127\.|0\.|169\.254\.|::1|fc)/.test(parsed.hostname)) {
+      return c.json({ error: "不允许内网地址" }, 400);
+    }
+  } catch {
+    return c.json({ error: "无效的 WebDAV 地址" }, 400);
+  }
+
   const db = c.get("db");
   const data = await db.exportAll();
   const json = JSON.stringify(data, null, 2);
@@ -1207,11 +1267,7 @@ app.post("/api/admin/pages/delete", async (c) => {
   return c.json({ success: true });
 });
 
-/* ── 健康检查 ──────────────────────────────── */
-app.get("/api/health", (c) => {
-  return c.json({ status: "ok", timestamp: new Date().toISOString() });
-});
-
+/* ── Durable Object / 导出 ──────────────────── */
 export default {
   fetch: app.fetch,
   async scheduled(event: any, env: Bindings, ctx: any) {

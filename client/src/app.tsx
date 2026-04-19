@@ -1,5 +1,6 @@
 import { Route, Switch, useLocation } from "wouter";
 import { useEffect, Suspense, lazy } from "react";
+import DOMPurify from "dompurify";
 import { Navbar } from "@/components/navbar";
 import { Footer } from "@/components/footer";
 import { SearchOverlay } from "@/components/search";
@@ -24,17 +25,22 @@ const DynamicPage = lazy(() => import("@/pages/dynamic-page").then((m) => ({ def
 const NotFoundPage = lazy(() => import("@/pages/not-found").then((m) => ({ default: m.NotFoundPage })));
 
 
-/** 将 HTML 字符串安全注入到容器中（支持 script 标签执行） */
+/** 将设置中的 HTML/JS 代码安全注入到页面（仅允许外部脚本 src） */
 function injectHtml(container: HTMLElement, html: string) {
   const temp = document.createElement("div");
-  temp.innerHTML = html;
+  temp.innerHTML = DOMPurify.sanitize(html, {
+    ADD_TAGS: ["script"],
+    ADD_ATTR: ["src", "async", "defer"],
+    FORBID_TAGS: ["style", "iframe", "object", "embed", "form"],
+    FORBID_ATTR: ["onerror", "onload", "onclick", "onmouseover", "onfocus", "onblur"],
+  });
   Array.from(temp.childNodes).forEach((node) => {
     if (node instanceof HTMLScriptElement) {
-      // script 需要重新创建才能执行
+      if (!node.src) return; // 禁止内联脚本，只允许带 src 的外部脚本
       const script = document.createElement("script");
-      if (node.src) script.src = node.src;
-      else script.textContent = node.textContent;
-      Array.from(node.attributes).forEach((a) => script.setAttribute(a.name, a.value));
+      script.src = node.src;
+      if (node.hasAttribute("async")) script.async = true;
+      if (node.hasAttribute("defer")) script.defer = true;
       container.appendChild(script);
     } else {
       container.appendChild(node.cloneNode(true));

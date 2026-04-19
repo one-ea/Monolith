@@ -10,22 +10,10 @@ function formatDate(dateStr: string): string {
   });
 }
 
-/** 通过邮箱生成 Gravatar 头像 URL */
-function gravatarUrl(email: string, size = 40): string {
-  // 简单 hash 用于无邮箱时的默认颜色
-  if (!email) return `https://api.dicebear.com/7.x/initials/svg?seed=U&size=${size}`;
-  const trimmed = email.trim().toLowerCase();
-  return `https://gravatar.com/avatar/${simpleHash(trimmed)}?s=${size}&d=identicon`;
-}
-
-function simpleHash(str: string): string {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    const char = str.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
-    hash |= 0;
-  }
-  return Math.abs(hash).toString(16).padStart(32, "0");
+/** 通过昵称生成 DiceBear 头像 URL（不再传输邮箱） */
+function avatarUrl(name: string, size = 40): string {
+  const seed = encodeURIComponent(name.trim() || "U");
+  return `https://api.dicebear.com/7.x/initials/svg?seed=${seed}&size=${size}`;
 }
 
 /* ── 单条评论 ──────────────────────────── */
@@ -34,7 +22,7 @@ function CommentItem({ comment }: { comment: CommentData }) {
     <div className="group flex gap-[12px] py-[16px]">
       <div className="shrink-0">
         <img
-          src={gravatarUrl(comment.authorEmail)}
+          src={avatarUrl(comment.authorName)}
           alt={comment.authorName}
           className="h-[36px] w-[36px] rounded-full bg-card/30 ring-1 ring-border/20"
           loading="lazy"

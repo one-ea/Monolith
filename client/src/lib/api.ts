@@ -290,13 +290,13 @@ export type CommentData = {
   id: number;
   postId: number;
   authorName: string;
-  authorEmail: string;
   content: string;
   approved: boolean;
   createdAt: string;
 };
 
 export type AdminComment = CommentData & {
+  authorEmail: string;
   postSlug: string;
   postTitle: string;
 };

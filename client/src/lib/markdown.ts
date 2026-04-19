@@ -279,8 +279,9 @@ renderer.table = function (token: any) {
 // 链接：外部链接自动 target="_blank"（兼容 marked v15 token 结构）
 renderer.link = function (token: any) {
   const href = token.href || '';
+  // 防止 javascript: URI XSS
+  if (/^\s*javascript:/i.test(href)) return escapeHtml(token.text || href);
   const title = token.title || '';
-  // 用 parseInline 解析链接文本中的 inline 格式
   const text = token.tokens && this.parser
     ? this.parser.parseInline(token.tokens)
     : (token.text || '');
