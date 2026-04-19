@@ -15,7 +15,7 @@
     "@types/dompurify": "^3.0.5",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
-    "dompurify": "^3.3.3",
+    "dompurify": "^3.4.0",
     "highlight.js": "^11.11.1",
     "lucide-react": "^1.7.0",
     "marked": "^17.0.6",
