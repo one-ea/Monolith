@@ -12,9 +12,7 @@ dist/
 # ────────────────────── 环境变量与密钥（绝不推送）──────────────────
 # 所有 .env 文件都可能含密钥，禁止推送
 .env
-.env.local
-.env.*.local
-.env.production
+.env.*
 !.env.example
 
 # Wrangler 本地密钥（含 ADMIN_PASSWORD / JWT_SECRET 等）
