@@ -6,6 +6,7 @@ import { Footer } from "@/components/footer";
 import { SearchOverlay } from "@/components/search";
 import { ProtectedRoute } from "@/components/protected-route";
 import { AdminLayout } from "@/components/admin-layout";
+import { CookieConsent, getCookieConsent } from "@/components/cookie-consent";
 
 // 代码分割 (Code Splitting)
 const HomePage = lazy(() => import("@/pages/home").then((m) => ({ default: m.HomePage })));
@@ -21,6 +22,7 @@ const AdminPages = lazy(() => import("@/pages/admin/pages").then((m) => ({ defau
 const AdminComments = lazy(() => import("@/pages/admin/comments").then((m) => ({ default: m.AdminComments })));
 const AdminMedia = lazy(() => import("@/pages/admin/media").then((m) => ({ default: m.AdminMedia })));
 const AdminAnalytics = lazy(() => import("@/pages/admin/analytics").then((m) => ({ default: m.AdminAnalytics })));
+const PrivacyPage = lazy(() => import("@/pages/privacy").then((m) => ({ default: m.PrivacyPage })));
 const DynamicPage = lazy(() => import("@/pages/dynamic-page").then((m) => ({ default: m.DynamicPage })));
 const NotFoundPage = lazy(() => import("@/pages/not-found").then((m) => ({ default: m.NotFoundPage })));
 
@@ -62,23 +64,36 @@ export function App() {
   const isAdminArea = isAdminRoot && !isEditorPage && !isLoginPage;
   const isPublicPage = !isAdminRoot;
 
-  // 注入自定义 header/footer 代码（仅执行一次）
+  // 注入自定义 header/footer 代码（需 Cookie 同意后加载第三方脚本）
   useEffect(() => {
     fetch("/api/settings/public")
       .then((r) => r.json())
       .then((s) => {
-        if (s.custom_header) {
-          const container = document.createElement("div");
-          container.id = "monolith-custom-header";
-          injectHtml(container, s.custom_header);
-          // 将子节点移入 head
-          Array.from(container.childNodes).forEach((n) => document.head.appendChild(n));
-        }
-        if (s.custom_footer) {
-          const container = document.createElement("div");
-          container.id = "monolith-custom-footer";
-          injectHtml(container, s.custom_footer);
-          document.body.appendChild(container);
+        const hasThirdParty = (s.custom_header && /<script/i.test(s.custom_header))
+          || (s.custom_footer && /<script/i.test(s.custom_footer));
+
+        const inject = () => {
+          if (s.custom_header) {
+            const container = document.createElement("div");
+            container.id = "monolith-custom-header";
+            injectHtml(container, s.custom_header);
+            Array.from(container.childNodes).forEach((n) => document.head.appendChild(n));
+          }
+          if (s.custom_footer) {
+            const container = document.createElement("div");
+            container.id = "monolith-custom-footer";
+            injectHtml(container, s.custom_footer);
+            document.body.appendChild(container);
+          }
+        };
+
+        // 无第三方脚本则直接注入；有则等 Cookie 同意
+        if (!hasThirdParty) {
+          inject();
+        } else if (getCookieConsent()) {
+          inject();
+        } else {
+          window.addEventListener("cookie-consent-accepted", inject, { once: true });
         }
       })
       .catch(() => {});
@@ -99,6 +114,7 @@ export function App() {
                 <Route path="/posts/:slug" component={PostPage} />
                 <Route path="/archive" component={ArchivePage} />
                 <Route path="/about" component={AboutPage} />
+                <Route path="/privacy" component={PrivacyPage} />
                 <Route path="/page/:slug" component={DynamicPage} />
                 <Route>
                   <NotFoundPage />
@@ -107,6 +123,7 @@ export function App() {
             </Suspense>
           </main>
           <Footer />
+          <CookieConsent />
         </>
       )}
 
