@@ -112,6 +112,23 @@ export async function toggleReaction(slug: string, type: string): Promise<{ acti
   return res.json();
 }
 
+/* ── 独立页面导航 ────────────────────────────── */
+export type NavPage = {
+  slug: string;
+  title: string;
+  showInNav: boolean;
+  sortOrder: number;
+};
+
+export async function fetchNavPages(): Promise<NavPage[]> {
+  try {
+    const all = await fetchJsonWithCache<NavPage[]>("/api/pages", 60_000);
+    return all.filter((p) => p.showInNav);
+  } catch {
+    return [];
+  }
+}
+
 /* ── 认证 ──────────────────────────────────── */
 export function getToken(): string | null {
   return localStorage.getItem("monolith_token");

@@ -1,15 +1,16 @@
 "use client";
 
 import { Link, useLocation } from "wouter";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { Menu } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { AdminGate } from "@/components/admin-gate";
 import { SearchTrigger } from "@/components/search";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { fetchNavPages, type NavPage } from "@/lib/api";
 
-const navLinks = [
-  { href: "/", label: "首页" },
+const fixedStart = [{ href: "/", label: "首页" }];
+const fixedEnd = [
   { href: "/archive", label: "归档" },
   { href: "/about", label: "关于" },
 ];
@@ -18,8 +19,21 @@ export function Navbar() {
   const [location] = useLocation();
   const [open, setOpen] = useState(false);
   const [gateOpen, setGateOpen] = useState(false);
+  const [navPages, setNavPages] = useState<NavPage[]>([]);
 
-  // 全局键盘快捷键 Ctrl+Shift+A
+  useEffect(() => {
+    fetchNavPages().then(setNavPages);
+  }, []);
+
+  const navLinks = useMemo(
+    () => [
+      ...fixedStart,
+      ...navPages.map((p) => ({ href: `/page/${p.slug}`, label: p.title })),
+      ...fixedEnd,
+    ],
+    [navPages],
+  );
+
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.ctrlKey && e.shiftKey && e.key === "A") {
@@ -31,21 +45,18 @@ export function Navbar() {
     return () => window.removeEventListener("keydown", handler);
   }, []);
 
-  // Logo 双击处理
   const handleLogoDoubleClick = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
     setGateOpen(true);
   }, []);
 
-  // 管理页面不显示暗门（已经在后台了）
   const isAdmin = location.startsWith("/admin");
 
   return (
     <>
       <header className="app-header sticky top-0 z-50 w-full border-b border-border/40 bg-background/80 backdrop-blur-xl backdrop-saturate-150">
         <div className="mx-auto flex h-[56px] max-w-[1440px] items-center justify-between px-[20px] lg:px-[40px]">
-          {/* Logo — 双击触发管理暗门 */}
           <Link
             href="/"
             className="group flex items-center gap-[10px] select-none animate-slide-in-left"
@@ -59,13 +70,12 @@ export function Navbar() {
             </span>
           </Link>
 
-          {/* 桌面端导航 */}
           <nav className="hidden items-center gap-[8px] md:flex">
-            {navLinks.map((link, i) => (
+            {navLinks.map((link) => (
               <Link
                 key={link.href}
                 href={link.href}
-                className={`relative px-[12px] py-[6px] text-[14px] transition-colors duration-200 animate-fade-in-down delay-${i + 1} ${
+                className={`relative px-[12px] py-[6px] text-[14px] transition-colors duration-200 ${
                   location === link.href
                     ? "text-foreground"
                     : "text-muted-foreground hover:text-foreground"
@@ -79,13 +89,11 @@ export function Navbar() {
             ))}
           </nav>
 
-          {/* 右侧工具区：搜索 + 主题 + 移动端菜单 */}
           <div className="flex items-center gap-[4px]">
             <SearchTrigger />
             <span className="w-[1px] h-[16px] bg-border/40 mx-[2px]" />
             <ThemeToggle />
 
-            {/* 移动端汉堡菜单 */}
             <Sheet open={open} onOpenChange={setOpen}>
               <SheetTrigger className="md:hidden inline-flex items-center justify-center h-[36px] w-[36px] rounded-md text-muted-foreground hover:bg-accent hover:text-foreground transition-colors duration-200 ml-[4px]">
                 <Menu className="h-[18px] w-[18px]" />
@@ -113,7 +121,6 @@ export function Navbar() {
         </div>
       </header>
 
-      {/* 管理员暗门弹窗 */}
       {!isAdmin && (
         <AdminGate open={gateOpen} onClose={() => setGateOpen(false)} />
       )}

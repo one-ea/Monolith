@@ -1,32 +1,55 @@
-# 依赖
-node_modules/
-.next/
+# ============================================================
+#  Monolith .gitignore — 什么该推送，什么不该推送
+# ============================================================
 
-# 构建产出
+# ────────────────────── 依赖目录（不推送）──────────────────────
+node_modules/
+
+# ────────────────────── 构建产出（不推送）──────────────────────
 dist/
 .wrangler/
-.turbo/
 
-# 环境变量
+# ────────────────────── 环境变量与密钥（绝不推送）──────────────────
+# 所有 .env 文件都可能含密钥，禁止推送
 .env
 .env.local
-.env.*
+.env.*.local
+.env.production
 !.env.example
+
+# Wrangler 本地密钥（含 ADMIN_PASSWORD / JWT_SECRET 等）
 .dev.vars
 
-# 系统文件
+# ────────────────────── 系统与编辑器临时文件（不推送）──────────────
 .DS_Store
+Thumbs.db
 *.swp
 *.swo
+*~
 
-# IDE
+# IDE 配置
 .idea/
+.vscode/
 *.code-workspace
 
-# Wrangler 本地数据
-.wrangler/
-
-# AI 助手记忆库（含私人配置、密码等，禁止推送）
+# ────────────────────── AI 工具私有数据（绝不推送）──────────────────
+# 记忆库含密码、PAT、私人偏好等敏感信息
 .agents/
+
+# 编辑器/AI 全局配置（Antigravity、Gemini、OpenCode 等）
 GEMINI.md
 
+# ────────────────────── 日志与调试产物（不推送）──────────────────
+*.log
+npm-debug.log*
+
+# ────────────────────── 必须推送的重要文件 ──────────────────────
+# 以下文件虽然常被误加 gitignore，但必须跟踪：
+# ✅ package-lock.json   — 锁定依赖版本，CI 的 npm ci 依赖它
+# ✅ client/functions/    — Pages Functions 反向代理，漏掉则 /api/* 回退为首页 HTML
+# ✅ scripts/            — 部署脚本 (deploy-cloudflare.mjs)
+# ✅ AGENTS.md           — OpenCode 项目规则（不含密钥）
+# ✅ opencode.json       — OpenCode 项目配置（含 MCP 远程服务，不含本地密钥）
+# ✅ .github/             — CI/CD workflows、Issue/PR 模板、分支保护
+# ✅ SECURITY.md          — 安全政策
+# ✅ PRIVACY.md           — 隐私政策

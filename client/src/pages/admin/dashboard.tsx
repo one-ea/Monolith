@@ -25,6 +25,7 @@ export function AdminDashboard() {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<FilterType>("all");
   const [selectedTag, setSelectedTag] = useState<string>("");
+  const [tagExpanded, setTagExpanded] = useState(false);
   const [viewStats, setViewStats] = useState<ViewStats | null>(null);
 
   useEffect(() => {
@@ -268,7 +269,7 @@ export function AdminDashboard() {
         </div>
 
         {/* ─── 右侧边栏：标签 + 热门 + SEO ─── */}
-        <div className="space-y-[14px]">
+        <div className="space-y-[14px] lg:sticky lg:top-[24px] lg:self-start">
 
           {/* SEO 健康状态 */}
           {posts.length > 0 && (() => {
@@ -336,8 +337,15 @@ export function AdminDashboard() {
           {/* 标签 */}
           {allTags.length > 0 && (
             <div>
-              <h3 className="mb-[8px] text-[10px] font-medium text-muted-foreground/30 uppercase tracking-wider">标签</h3>
-              <div className="flex flex-wrap gap-[4px]">
+              <div className="flex items-center justify-between mb-[8px]">
+                <h3 className="text-[10px] font-medium text-muted-foreground/30 uppercase tracking-wider">标签</h3>
+                {allTags.length > 8 && (
+                  <button onClick={() => setTagExpanded(!tagExpanded)} className="text-[10px] text-cyan-400/60 hover:text-cyan-400 transition-colors">
+                    {tagExpanded ? "收起" : `+${allTags.length - 8}`}
+                  </button>
+                )}
+              </div>
+              <div className={`flex flex-wrap gap-[4px] ${!tagExpanded ? "max-h-[64px] overflow-hidden" : ""}`}>
                 {allTags.map((tag) => {
                   const count = posts.filter((p) => p.tags.includes(tag)).length;
                   return (

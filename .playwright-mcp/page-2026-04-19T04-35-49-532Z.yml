@@ -1,8 +1,0 @@
-- main [ref=e7]:
-  - generic [ref=e10]:
-    - generic [ref=e11]:
-      - heading "管理后台" [level=1] [ref=e13]
-      - paragraph [ref=e14]: 输入密码以进入管理界面
-    - generic [ref=e15]:
-      - textbox "管理密码" [active] [ref=e16]
-      - button "登录" [disabled] [ref=e17]

@@ -25,13 +25,9 @@ export function AdminLayout({ children }: AdminLayoutProps) {
 
   useEffect(() => {
     if (!mobileMenuOpen) return;
-
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setMobileMenuOpen(false);
-      }
+      if (event.key === "Escape") setMobileMenuOpen(false);
     };
-
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [mobileMenuOpen]);
@@ -66,42 +62,65 @@ export function AdminLayout({ children }: AdminLayoutProps) {
     },
   ];
 
+  const SidebarFooter = () => (
+    <div className="border-t border-border/40 p-[12px] space-y-[2px]">
+      <div className="flex items-center justify-between px-[12px] py-[8px]">
+        <span className="text-[13px] font-medium text-muted-foreground/60">主题</span>
+        <ThemeToggle />
+      </div>
+      <a
+        href="/"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="flex items-center gap-[10px] px-[12px] py-[8px] rounded-md text-[13px] font-medium text-muted-foreground/60 hover:bg-muted/50 hover:text-foreground transition-colors"
+      >
+        <ExternalLink className="w-[14px] h-[14px]" />
+        查看站点
+      </a>
+      <button
+        onClick={handleLogout}
+        className="w-full flex items-center gap-[10px] px-[12px] py-[8px] rounded-md text-[13px] font-medium text-red-500/70 hover:bg-red-500/10 hover:text-red-500 transition-colors"
+      >
+        <LogOut className="w-[14px] h-[14px]" />
+        退出登录
+      </button>
+    </div>
+  );
+
   const SidebarContent = () => (
-    <div className="flex flex-col h-full overflow-y-auto">
-      {/* Brand */}
-      <div className="p-6">
-        <Link href="/admin" className="flex items-center gap-2" onClick={() => setMobileMenuOpen(false)}>
-          <div className="w-8 h-8 rounded-lg bg-foreground text-background flex items-center justify-center font-bold text-lg">
+    <div className="flex flex-col h-full">
+      <div className="p-[20px]">
+        <Link href="/admin" className="flex items-center gap-[10px]" onClick={() => setMobileMenuOpen(false)}>
+          <div className="w-[32px] h-[32px] rounded-lg bg-foreground text-background flex items-center justify-center font-bold text-[16px]">
             M
           </div>
-          <span className="font-semibold text-lg tracking-tight">Monolith</span>
+          <span className="font-semibold text-[18px] tracking-[-0.02em]">Monolith</span>
         </Link>
       </div>
 
-      {/* Navigation */}
-      <nav className="flex-1 px-4 space-y-6">
+      <nav className="flex-1 px-[12px] space-y-[16px] overflow-y-auto">
         {navGroups.map((group) => (
           <div key={group.title}>
-            <h3 className="px-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+            <h3 className="px-[12px] text-[10px] font-semibold text-muted-foreground/30 uppercase tracking-wider mb-[6px]">
               {group.title}
             </h3>
-            <div className="space-y-1">
+            <div className="space-y-[2px]">
               {group.items.map((item) => {
-                const isActive = item.href === "/admin" 
-                  ? location === "/admin" 
+                const isActive = item.href === "/admin"
+                  ? location === "/admin"
                   : location.startsWith(item.href);
                 return (
                   <Link
                     key={item.href}
                     href={item.href}
                     onClick={() => setMobileMenuOpen(false)}
-                    className={`flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                    className={`flex items-center gap-[10px] px-[12px] py-[8px] rounded-md text-[13px] font-medium transition-colors ${
                       isActive
                         ? "bg-foreground text-background"
-                        : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                        : "text-muted-foreground/50 hover:bg-muted/50 hover:text-foreground"
                     }`}
                   >
-                    <item.icon className="w-4 h-4" />
+                    <item.icon className="w-[14px] h-[14px]" />
                     {item.label}
                   </Link>
                 );
@@ -111,82 +130,62 @@ export function AdminLayout({ children }: AdminLayoutProps) {
         ))}
       </nav>
 
-      {/* Footer / User Profile */}
-      <div className="p-4 mt-auto border-t">
-        <div className="space-y-1">
-          <div className="flex items-center justify-between px-3 py-2">
-            <span className="text-sm font-medium text-muted-foreground">主题设置</span>
-            <ThemeToggle />
-          </div>
-          <a
-            href="/"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-          >
-            <ExternalLink className="w-4 h-4" />
-            查看站点
-          </a>
-          <button
-            onClick={handleLogout}
-            className="w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium text-red-500/80 hover:bg-red-500/10 hover:text-red-500 transition-colors"
-          >
-            <LogOut className="w-4 h-4" />
-            退出登录
-          </button>
-        </div>
-      </div>
+      <SidebarFooter />
     </div>
   );
 
   return (
-    <div className="flex min-h-screen w-full bg-background">
-      {/* Desktop Sidebar */}
-      <aside className="hidden md:flex flex-col w-64 border-r bg-muted/10 sticky top-0 h-screen">
+    <div className="h-screen w-full bg-background">
+      <aside className="hidden md:flex flex-col w-[240px] border-r border-border/40 bg-muted/[0.03] fixed inset-y-0 left-0 z-30">
         <SidebarContent />
       </aside>
 
-      {/* Mobile Drawer */}
       {mobileMenuOpen && (
         <div className="md:hidden fixed inset-0 z-50 flex">
-          {/* Backdrop */}
-          <div 
-            className="absolute inset-0 bg-black/40 backdrop-blur-sm" 
-            onClick={() => setMobileMenuOpen(false)} 
+          <div
+            className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+            onClick={() => setMobileMenuOpen(false)}
           />
-          {/* Sidebar Sheet */}
-          <aside id="admin-mobile-navigation" className="relative flex-col w-[280px] max-w-[80vw] h-full bg-background shadow-2xl animate-in slide-in-from-left">
+          <aside
+            role="dialog"
+            aria-label="导航菜单"
+            className="relative flex flex-col w-[260px] max-w-[80vw] h-full bg-background shadow-2xl animate-in slide-in-from-left"
+          >
             <SidebarContent />
           </aside>
         </div>
       )}
 
-      {/* Main Content */}
-      <main className="flex-1 flex flex-col min-w-0">
-        {/* Mobile Header */}
-        <header className="md:hidden sticky top-0 z-40 flex items-center justify-between px-4 h-14 border-b bg-background/80 backdrop-blur-md">
-          <div className="flex items-center gap-2 font-semibold">
-             <div className="w-6 h-6 rounded bg-foreground text-background flex items-center justify-center text-xs font-bold">M</div>
-             <span>Admin</span>
+      <main className="md:ml-[240px] min-h-screen overflow-y-auto">
+        <header className="md:hidden sticky top-0 z-40 flex items-center justify-between px-[16px] h-[52px] border-b border-border/40 bg-background/80 backdrop-blur-md shrink-0">
+          <div className="flex items-center gap-[8px] font-semibold text-[14px]">
+            <div className="w-[24px] h-[24px] rounded bg-foreground text-background flex items-center justify-center text-[11px] font-bold">M</div>
+            <span>Admin</span>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-[4px]">
             <ThemeToggle />
+            <a
+              href="/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="p-[6px] text-muted-foreground/50 hover:text-foreground transition-colors"
+              aria-label="查看站点"
+            >
+              <ExternalLink className="w-[16px] h-[16px]" />
+            </a>
             <button
               onClick={() => setMobileMenuOpen(true)}
-              className="p-2 -mr-2 text-muted-foreground hover:text-foreground"
-              aria-label="打开后台导航菜单"
-            aria-expanded={mobileMenuOpen}
+              className="p-[6px] text-muted-foreground/50 hover:text-foreground transition-colors"
+              aria-label="打开导航菜单"
+              aria-expanded={mobileMenuOpen}
               aria-controls="admin-mobile-navigation"
             >
-              <Menu className="w-5 h-5" />
+              <Menu className="w-[18px] h-[18px]" />
             </button>
           </div>
         </header>
 
-        {/* Content Area */}
-        <div className="flex-1 overflow-x-hidden">
-          {children}
-        </div>
+        {children}
       </main>
     </div>
   );

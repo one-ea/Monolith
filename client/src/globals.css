@@ -433,10 +433,44 @@
 
 @media (max-width: 768px) {
   .prose-monolith .code-block-wrapper pre {
-    padding: 12px 16px;
-    /* 移动端：确保 pre 宽度可以超出 wrapper，由 wrapper 滚动 */
-    width: max-content;
-    min-width: 100%;
+    padding: 10px 12px;
+  }
+
+  .prose-monolith .code-header {
+    padding: 5px 10px 5px 12px;
+  }
+
+  .prose-monolith .code-title-bar {
+    padding: 8px 12px;
+  }
+
+  .prose-monolith .copy-code-btn {
+    padding: 3px 6px;
+    font-size: 10px;
+    gap: 3px;
+  }
+
+  .prose-monolith .code-title-dots span {
+    width: 7px;
+    height: 7px;
+  }
+
+  .prose-monolith .code-lang {
+    font-size: 10px;
+  }
+
+  .prose-monolith .code-title-text {
+    font-size: 11px;
+  }
+
+  .prose-monolith pre code .line-number {
+    width: 22px;
+    padding-right: 8px;
+    font-size: 10px;
+  }
+
+  .prose-monolith .has-line-numbers pre {
+    padding-left: 8px;
   }
 }
 
@@ -552,6 +586,10 @@
   border-bottom: none;
   border-radius: 8px 8px 0 0;
   overflow: hidden;
+  /* 横向滚动时固定在顶部，不随代码滑走 */
+  position: sticky;
+  left: 0;
+  z-index: 5;
 }
 
 .prose-monolith .has-header > pre {
@@ -624,6 +662,9 @@
   color: oklch(0.55 0 0);
   font-family: ui-monospace, "SF Mono", "Cascadia Code", "Fira Code", Consolas, monospace;
   overflow: hidden;
+  position: sticky;
+  left: 0;
+  z-index: 5;
 }
 
 .prose-monolith .has-title pre {
@@ -657,18 +698,25 @@
 
 /* 代码行布局 */
 .prose-monolith pre code .code-line {
-  display: inline-block;
+  display: flex;
+  align-items: baseline;
   padding: 0 4px;
   margin: 0 -4px;
   border-radius: 2px;
-  /* min-width 由 code 元素的 white-space:pre 自然撑开，不在此设置避免循环依赖 */
+}
+
+.prose-monolith pre code .line-content {
+  flex: 1;
+  min-width: 0;
+  white-space: pre;
 }
 
 /* 行号 */
 .prose-monolith pre code .line-number {
+  flex-shrink: 0;
   display: inline-block;
   width: 28px;
-  margin-right: 12px;
+  padding-right: 12px;
   text-align: right;
   color: oklch(0.35 0 0);
   user-select: none;
@@ -846,6 +894,13 @@
   background: oklch(0.96 0.002 250) !important;
   border-color: oklch(0 0 0 / 8%);
 }
+
+@media (max-width: 768px) {
+  :root[data-theme="light"] .prose-monolith .code-block-wrapper {
+    border-radius: 0;
+  }
+}
+
 :root[data-theme="light"] .prose-monolith pre {
   background: oklch(0.96 0.002 250) !important;
   border-color: oklch(0 0 0 / 8%);
