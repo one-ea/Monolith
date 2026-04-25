@@ -563,8 +563,8 @@ app.delete("/api/admin/comments/:id", async (c) => {
 // 从 markdown 中提取首张图片 URL，作为封面缺省兜底
 function extractFirstImage(markdown: string): string {
   if (!markdown) return "";
-  // 优先匹配 ![](url)
-  const md = markdown.match(/!\[[^\]]*\]\((\S+?)(?:\s+"[^"]*")?\)/);
+  // 优先匹配 ![](url)；只允许非空白与非右括号字符，避免回溯灾难
+  const md = markdown.match(/!\[[^\]]*\]\(([^\s)]+)/);
   if (md?.[1]) return md[1];
   // 兜底匹配 <img src="url">
   const html = markdown.match(/<img[^>]+src=["']([^"']+)["']/i);
