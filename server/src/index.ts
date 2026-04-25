@@ -21,6 +21,7 @@ type Bindings = {
   DB_PROVIDER?: string;
   STORAGE_PROVIDER?: string;
   WEBHOOK_URLS?: string; // 逗号分隔的 Webhook 目标地址
+  SITE_ORIGIN?: string; // 对外公开域名（如 https://monolith-client.pages.dev），用于 sitemap/robots
 };
 
 type Variables = {
@@ -369,7 +370,7 @@ ${items}
 // sitemap.xml — 动态站点地图
 app.get("/sitemap.xml", async (c) => {
   const db = c.get("db");
-  const siteUrl = new URL(c.req.url).origin;
+  const siteUrl = c.env.SITE_ORIGIN || new URL(c.req.url).origin;
 
   const allPosts = await db.getRecentPublishedPosts(1000);
   const allPages = await db.getPublishedPages();
@@ -424,7 +425,7 @@ ${urls.join("\n")}
 
 // robots.txt — 爬虫规则
 app.get("/robots.txt", (c) => {
-  const siteUrl = new URL(c.req.url).origin;
+  const siteUrl = c.env.SITE_ORIGIN || new URL(c.req.url).origin;
   const txt = `User-agent: *
 Allow: /
 Disallow: /admin

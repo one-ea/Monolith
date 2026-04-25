@@ -8,6 +8,7 @@ import {
   ImageIcon,
   BarChart3,
   HardDrive,
+  Sparkles,
   Settings,
   LogOut,
   ExternalLink,
@@ -51,6 +52,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
       items: [
         { href: "/admin/media", icon: ImageIcon, label: "媒体库" },
         { href: "/admin/analytics", icon: BarChart3, label: "数据分析" },
+        { href: "/admin/seo", icon: Sparkles, label: "SEO 优化" },
         { href: "/admin/backup", icon: HardDrive, label: "安全备份" },
       ],
     },

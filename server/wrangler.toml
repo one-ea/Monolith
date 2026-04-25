@@ -6,6 +6,8 @@ compatibility_flags = ["nodejs_compat"]
 [vars]
 # 非敏感配置变量（敏感的用 wrangler secret put）
 BLOG_NAME = "Monolith"
+# 对外公开域名（用于 sitemap.xml / robots.txt 的绝对 URL）
+SITE_ORIGIN = "https://monolith-client.pages.dev"
 
 # D1 数据库绑定
 [[d1_databases]]
