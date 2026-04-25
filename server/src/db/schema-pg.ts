@@ -14,6 +14,7 @@ export const pgPosts = pgTable("posts", {
   content: text("content").notNull().default(""),
   excerpt: text("excerpt").default(""),
   coverColor: text("cover_color").default("from-gray-500/20 to-gray-600/20"),
+  coverImage: text("cover_image").default(""),
   published: boolean("published").notNull().default(true),
   listed: boolean("listed").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

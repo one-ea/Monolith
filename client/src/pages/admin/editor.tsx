@@ -114,6 +114,7 @@ export function AdminEditor() {
     content: "",
     excerpt: "",
     coverColor: "from-cyan-500/20 to-blue-600/20",
+    coverImage: "",
     tags: "",
     published: true,
     pinned: false,
@@ -160,6 +161,7 @@ export function AdminEditor() {
           content: post.content,
           excerpt: post.excerpt || "",
           coverColor: post.coverColor || "",
+          coverImage: post.coverImage || "",
           tags: post.tags.join(", "),
           published: post.published,
           pinned: post.pinned,
@@ -227,6 +229,7 @@ export function AdminEditor() {
         content: form.content,
         excerpt: form.excerpt,
         coverColor: form.coverColor,
+        coverImage: form.coverImage,
         published: form.published,
         tags: tagsList,
         pinned: form.pinned,
@@ -595,6 +598,46 @@ export function AdminEditor() {
                         }`}
                       />
                     ))}
+                  </div>
+                </div>
+                <div className="sm:col-span-2 lg:col-span-3">
+                  <label className="mb-[2px] block text-[10px] text-muted-foreground/85 uppercase tracking-wider">封面图（可选 · 留空则取正文首图）</label>
+                  <div className="flex items-center gap-[8px]">
+                    <input
+                      value={form.coverImage}
+                      onChange={(e) => updateField("coverImage", e.target.value)}
+                      placeholder="https://... 或上传后自动填充"
+                      className="h-[30px] flex-1 rounded-md border border-border/25 bg-background/20 px-[10px] text-[12px] text-foreground placeholder:text-muted-foreground/50 outline-none focus:border-foreground/25 transition-colors"
+                    />
+                    <label className="inline-flex h-[30px] cursor-pointer items-center gap-[4px] rounded-md border border-border/25 bg-background/20 px-[10px] text-[12px] text-muted-foreground hover:border-foreground/25 hover:text-foreground transition-colors">
+                      <Upload className="h-[12px] w-[12px]" />
+                      <span>{uploading ? "上传中…" : "上传"}</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          setUploading(true);
+                          try {
+                            const result = await uploadImage(file);
+                            updateField("coverImage", result.url);
+                            showMsg("封面图已上传", "success");
+                          } catch {
+                            showMsg("封面图上传失败", "error");
+                          } finally {
+                            setUploading(false);
+                            e.target.value = "";
+                          }
+                        }}
+                      />
+                    </label>
+                    {form.coverImage && (
+                      <div className="h-[30px] w-[48px] shrink-0 overflow-hidden rounded-md border border-border/25">
+                        <img src={form.coverImage} alt="封面预览" className="h-full w-full object-cover" />
+                      </div>
+                    )}
                   </div>
                 </div>
                 <div>

@@ -9,6 +9,7 @@ export const posts = sqliteTable("posts", {
   content: text("content").notNull().default(""),
   excerpt: text("excerpt").default(""),
   coverColor: text("cover_color").default("from-gray-500/20 to-gray-600/20"),
+  coverImage: text("cover_image").default(""),
   published: integer("published", { mode: "boolean" }).notNull().default(true),
   listed: integer("listed", { mode: "boolean" }).notNull().default(true),
   createdAt: text("created_at")

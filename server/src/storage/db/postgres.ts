@@ -41,6 +41,7 @@ export class PostgresAdapter implements IDatabase {
         content TEXT NOT NULL DEFAULT '',
         excerpt TEXT DEFAULT '',
         cover_color TEXT DEFAULT 'from-gray-500/20 to-gray-600/20',
+        cover_image TEXT DEFAULT '',
         published BOOLEAN NOT NULL DEFAULT true,
         listed BOOLEAN NOT NULL DEFAULT true,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -66,6 +67,9 @@ export class PostgresAdapter implements IDatabase {
     `.catch(() => {});
     await this.client`
       ALTER TABLE posts ADD COLUMN IF NOT EXISTS series_order INTEGER DEFAULT 0
+    `.catch(() => {});
+    await this.client`
+      ALTER TABLE posts ADD COLUMN IF NOT EXISTS cover_image TEXT DEFAULT ''
     `.catch(() => {});
     await this.client`
       CREATE TABLE IF NOT EXISTS tags (
@@ -206,6 +210,7 @@ export class PostgresAdapter implements IDatabase {
         title: pgPosts.title,
         excerpt: pgPosts.excerpt,
         coverColor: pgPosts.coverColor,
+        coverImage: pgPosts.coverImage,
         createdAt: pgPosts.createdAt,
         pinned: pgPosts.pinned,
         publishAt: pgPosts.publishAt,
@@ -226,6 +231,7 @@ export class PostgresAdapter implements IDatabase {
       title: post.title,
       excerpt: post.excerpt || "",
       coverColor: post.coverColor || "",
+      coverImage: post.coverImage || "",
       createdAt: this.ts(post.createdAt),
       tags: tagMap.get(post.id) || [],
       pinned: post.pinned,
@@ -250,6 +256,7 @@ export class PostgresAdapter implements IDatabase {
       content: post.content,
       excerpt: post.excerpt || "",
       coverColor: post.coverColor || "",
+      coverImage: post.coverImage || "",
       published: post.published,
       listed: post.listed,
       createdAt: this.ts(post.createdAt),
@@ -280,6 +287,7 @@ export class PostgresAdapter implements IDatabase {
       content: post.content,
       excerpt: post.excerpt || "",
       coverColor: post.coverColor || "",
+      coverImage: post.coverImage || "",
       published: post.published,
       listed: post.listed,
       createdAt: this.ts(post.createdAt),
@@ -303,6 +311,7 @@ export class PostgresAdapter implements IDatabase {
         content: data.content,
         excerpt: data.excerpt || "",
         coverColor: data.coverColor || "from-gray-500/20 to-gray-600/20",
+        coverImage: data.coverImage || "",
         published: data.published ?? true,
         listed: data.listed ?? true,
         pinned: data.pinned ?? false,
@@ -324,6 +333,7 @@ export class PostgresAdapter implements IDatabase {
       content: newPost.content,
       excerpt: newPost.excerpt || "",
       coverColor: newPost.coverColor || "",
+      coverImage: newPost.coverImage || "",
       published: newPost.published,
       listed: newPost.listed,
       createdAt: this.ts(newPost.createdAt),
@@ -354,6 +364,7 @@ export class PostgresAdapter implements IDatabase {
         ...(data.content !== undefined && { content: data.content }),
         ...(data.excerpt !== undefined && { excerpt: data.excerpt }),
         ...(data.coverColor !== undefined && { coverColor: data.coverColor }),
+        ...(data.coverImage !== undefined && { coverImage: data.coverImage }),
         ...(data.published !== undefined && { published: data.published }),
         ...(data.listed !== undefined && { listed: data.listed }),
         ...(data.pinned !== undefined && { pinned: data.pinned }),
@@ -377,6 +388,7 @@ export class PostgresAdapter implements IDatabase {
       content: updated.content,
       excerpt: updated.excerpt || "",
       coverColor: updated.coverColor || "",
+      coverImage: updated.coverImage || "",
       published: updated.published,
       listed: updated.listed,
       createdAt: this.ts(updated.createdAt),
@@ -651,6 +663,7 @@ export class PostgresAdapter implements IDatabase {
         content: p.content,
         excerpt: p.excerpt || "",
         coverColor: p.coverColor || "",
+        coverImage: p.coverImage || "",
         published: p.published,
         listed: p.listed,
         createdAt: this.ts(p.createdAt),
@@ -704,6 +717,7 @@ export class PostgresAdapter implements IDatabase {
               content: post.content,
               excerpt: post.excerpt || "",
               coverColor: post.coverColor || "",
+              coverImage: post.coverImage || "",
               published: post.published ?? true,
               listed: post.listed ?? true,
               pinned: post.pinned ?? false,
@@ -719,6 +733,7 @@ export class PostgresAdapter implements IDatabase {
             content: post.content,
             excerpt: post.excerpt || "",
             coverColor: post.coverColor || "",
+            coverImage: post.coverImage || "",
             published: post.published ?? true,
             listed: post.listed ?? true,
             pinned: post.pinned ?? false,
@@ -748,6 +763,7 @@ export class PostgresAdapter implements IDatabase {
         title: pgPosts.title,
         excerpt: pgPosts.excerpt,
         coverColor: pgPosts.coverColor,
+        coverImage: pgPosts.coverImage,
         createdAt: pgPosts.createdAt,
         pinned: pgPosts.pinned,
         publishAt: pgPosts.publishAt,
@@ -768,6 +784,7 @@ export class PostgresAdapter implements IDatabase {
         title: post.title,
         excerpt: post.excerpt || "",
         coverColor: post.coverColor || "",
+        coverImage: post.coverImage || "",
         createdAt: this.ts(post.createdAt),
         tags: await this.getPostTags(post.id),
         pinned: post.pinned,

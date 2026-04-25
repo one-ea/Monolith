@@ -47,6 +47,7 @@ export type PostMeta = {
   title: string;
   excerpt: string | null;
   coverColor: string | null;
+  coverImage: string | null;
   createdAt: string;
   tags: string[];
   pinned: boolean;

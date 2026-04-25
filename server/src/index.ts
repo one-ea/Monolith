@@ -560,10 +560,25 @@ app.delete("/api/admin/comments/:id", async (c) => {
   return c.json({ success: true });
 });
 
+// 从 markdown 中提取首张图片 URL，作为封面缺省兜底
+function extractFirstImage(markdown: string): string {
+  if (!markdown) return "";
+  // 优先匹配 ![](url)
+  const md = markdown.match(/!\[[^\]]*\]\((\S+?)(?:\s+"[^"]*")?\)/);
+  if (md?.[1]) return md[1];
+  // 兜底匹配 <img src="url">
+  const html = markdown.match(/<img[^>]+src=["']([^"']+)["']/i);
+  if (html?.[1]) return html[1];
+  return "";
+}
+
 // 创建文章
 app.post("/api/admin/posts", async (c) => {
   const body = await c.req.json();
   const db = c.get("db");
+  if (!body.coverImage) {
+    body.coverImage = extractFirstImage(body.content || "");
+  }
   const newPost = await db.createPost(body);
   await triggerWebhook(c, "post_created", newPost);
   return c.json(newPost, 201);
@@ -574,6 +589,10 @@ app.put("/api/admin/posts/:slug", async (c) => {
   const slug = c.req.param("slug");
   const body = await c.req.json();
   const db = c.get("db");
+  // 若用户清空了封面但正文有图，自动回填首图
+  if (body.content !== undefined && (body.coverImage === undefined || body.coverImage === "")) {
+    body.coverImage = extractFirstImage(body.content);
+  }
   const updated = await db.updatePost(slug, body);
   if (!updated) return c.json({ error: "文章未找到" }, 404);
   

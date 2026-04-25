@@ -13,6 +13,7 @@ export type Post = {
   content: string;
   excerpt: string;
   coverColor: string;
+  coverImage: string;
   published: boolean;
   listed: boolean;
   createdAt: string;
@@ -31,6 +32,7 @@ export type PostSummary = {
   title: string;
   excerpt: string;
   coverColor: string;
+  coverImage: string;
   createdAt: string;
   tags: string[];
   pinned: boolean;
@@ -69,6 +71,7 @@ export type CreatePostInput = {
   content: string;
   excerpt?: string;
   coverColor?: string;
+  coverImage?: string;
   published?: boolean;
   listed?: boolean;
   tags?: string[];
@@ -85,6 +88,7 @@ export type UpdatePostInput = {
   content?: string;
   excerpt?: string;
   coverColor?: string;
+  coverImage?: string;
   published?: boolean;
   listed?: boolean;
   tags?: string[];

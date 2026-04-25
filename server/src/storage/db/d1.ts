@@ -38,6 +38,7 @@ export class D1Adapter implements IDatabase {
         await this.ensureReactionsTable();
         await this.ensureVisitsTable();
         await this.ensureCategoryColumn();
+        await this.ensureCoverImageColumn();
       })();
     }
     await this.schemaReady;
@@ -135,6 +136,12 @@ export class D1Adapter implements IDatabase {
     } catch { /* 已存在 */ }
   }
 
+  private async ensureCoverImageColumn(): Promise<void> {
+    try {
+      await this.db.run(sql`ALTER TABLE posts ADD COLUMN cover_image TEXT DEFAULT ''`);
+    } catch { /* 已存在 */ }
+  }
+
   private async ensurePagesTable(): Promise<void> {
     await this.db.run(sql`CREATE TABLE IF NOT EXISTS pages (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -171,6 +178,7 @@ export class D1Adapter implements IDatabase {
         title: posts.title,
         excerpt: posts.excerpt,
         coverColor: posts.coverColor,
+        coverImage: posts.coverImage,
         createdAt: posts.createdAt,
         pinned: posts.pinned,
         publishAt: posts.publishAt,
@@ -191,6 +199,7 @@ export class D1Adapter implements IDatabase {
       title: post.title,
       excerpt: post.excerpt || "",
       coverColor: post.coverColor || "",
+      coverImage: post.coverImage || "",
       createdAt: post.createdAt,
       tags: tagMap.get(post.id) || [],
       pinned: post.pinned,
@@ -215,6 +224,7 @@ export class D1Adapter implements IDatabase {
       content: post.content,
       excerpt: post.excerpt || "",
       coverColor: post.coverColor || "",
+      coverImage: post.coverImage || "",
       published: post.published,
       listed: post.listed,
       createdAt: post.createdAt,
@@ -245,6 +255,7 @@ export class D1Adapter implements IDatabase {
       content: post.content,
       excerpt: post.excerpt || "",
       coverColor: post.coverColor || "",
+      coverImage: post.coverImage || "",
       published: post.published,
       listed: post.listed,
       createdAt: post.createdAt,
@@ -268,6 +279,7 @@ export class D1Adapter implements IDatabase {
         content: data.content,
         excerpt: data.excerpt || "",
         coverColor: data.coverColor || "from-gray-500/20 to-gray-600/20",
+        coverImage: data.coverImage || "",
         published: data.published ?? true,
         listed: data.listed ?? true,
         pinned: data.pinned ?? false,
@@ -289,6 +301,7 @@ export class D1Adapter implements IDatabase {
       content: newPost.content,
       excerpt: newPost.excerpt || "",
       coverColor: newPost.coverColor || "",
+      coverImage: newPost.coverImage || "",
       published: newPost.published,
       listed: newPost.listed,
       createdAt: newPost.createdAt,
@@ -319,6 +332,7 @@ export class D1Adapter implements IDatabase {
         ...(data.content !== undefined && { content: data.content }),
         ...(data.excerpt !== undefined && { excerpt: data.excerpt }),
         ...(data.coverColor !== undefined && { coverColor: data.coverColor }),
+        ...(data.coverImage !== undefined && { coverImage: data.coverImage }),
         ...(data.published !== undefined && { published: data.published }),
         ...(data.listed !== undefined && { listed: data.listed }),
         ...(data.pinned !== undefined && { pinned: data.pinned }),
@@ -342,6 +356,7 @@ export class D1Adapter implements IDatabase {
       content: updated.content,
       excerpt: updated.excerpt || "",
       coverColor: updated.coverColor || "",
+      coverImage: updated.coverImage || "",
       published: updated.published,
       listed: updated.listed,
       createdAt: updated.createdAt,
@@ -615,6 +630,7 @@ export class D1Adapter implements IDatabase {
         ...p,
         excerpt: p.excerpt || "",
         coverColor: p.coverColor || "",
+        coverImage: p.coverImage || "",
         category: p.category || "",
         seriesSlug: p.seriesSlug || null,
         seriesOrder: p.seriesOrder ?? 0,
@@ -663,6 +679,7 @@ export class D1Adapter implements IDatabase {
               content: post.content,
               excerpt: post.excerpt || "",
               coverColor: post.coverColor || "",
+              coverImage: post.coverImage || "",
               published: post.published ?? true,
               updatedAt: new Date().toISOString(),
             }).where(eq(posts.slug, post.slug));
@@ -675,6 +692,7 @@ export class D1Adapter implements IDatabase {
             content: post.content,
             excerpt: post.excerpt || "",
             coverColor: post.coverColor || "",
+            coverImage: post.coverImage || "",
             published: post.published ?? true,
             listed: post.listed ?? true,
             pinned: post.pinned ?? false,
@@ -707,6 +725,7 @@ export class D1Adapter implements IDatabase {
         title: posts.title,
         excerpt: posts.excerpt,
         coverColor: posts.coverColor,
+        coverImage: posts.coverImage,
         createdAt: posts.createdAt,
         pinned: posts.pinned,
         publishAt: posts.publishAt,
@@ -729,6 +748,7 @@ export class D1Adapter implements IDatabase {
         title: post.title,
         excerpt: post.excerpt || "",
         coverColor: post.coverColor || "",
+        coverImage: post.coverImage || "",
         createdAt: post.createdAt,
         tags: await this.getPostTags(post.id),
         pinned: post.pinned,
