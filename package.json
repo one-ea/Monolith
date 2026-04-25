@@ -17,7 +17,12 @@
     "db:migrate:local": "npm -w monolith-server run db:migrate:local",
     "db:migrate:remote": "npm -w monolith-server run db:migrate:remote",
     "db:seed:local": "npm -w monolith-server run db:seed:local",
-    "db:seed:test-posts:local": "npm -w monolith-server run db:seed:test-posts:local"
+    "db:seed:test-posts:local": "npm -w monolith-server run db:seed:test-posts:local",
+    "check": "npm -ws run check",
+    "lint": "npm -ws run lint"
+  },
+  "engines": {
+    "node": ">=20"
   },
   "devDependencies": {
     "concurrently": "^9.0.0"

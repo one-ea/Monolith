@@ -10,7 +10,8 @@
     "db:migrate:remote": "wrangler d1 migrations apply monolith-db --remote",
     "db:seed:local": "wrangler d1 execute monolith-db --local --file=src/migrations/0002_seed.sql",
     "db:seed:test-posts:local": "wrangler d1 execute monolith-db --local --file=src/seeds/seed_test_posts.sql",
-    "check": "tsc --noEmit"
+    "check": "tsc --noEmit",
+    "lint": "eslint . --max-warnings 0"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1024.0",
