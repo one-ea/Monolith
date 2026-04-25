@@ -31,11 +31,20 @@ Thumbs.db
 *.code-workspace
 
 # ────────────────────── AI 工具私有数据（绝不推送）──────────────────
-# 记忆库含密码、PAT、私人偏好等敏感信息
+# 通用记忆库（Aider / Cline / 其他）
 .agents/
 
-# 编辑器/AI 全局配置（Antigravity、Gemini、OpenCode 等）
+# Trae 项目私有数据：memory/ 含密码教训、PAT 用法、踩坑记录等敏感信息
+# rules/ skills/ 也仅供本机女仆使用，不入仓库
+.trae/
+
+# 各家 AI 编辑器的项目入口与全局配置（含个人偏好/上下文，不入仓库）
+CLAUDE.md
 GEMINI.md
+AGENTS.md
+opencode.json
+
+# 临时调试目录
 .playwright-mcp/
 .wiki-tmp/
 
@@ -43,13 +52,17 @@ GEMINI.md
 *.log
 npm-debug.log*
 
-# ────────────────────── 必须推送的重要文件 ──────────────────────
-# 以下文件虽然常被误加 gitignore，但必须跟踪：
-# ✅ package-lock.json   — 锁定依赖版本，CI 的 npm ci 依赖它
+# ────────────────────── 测试与临时输出（不推送）──────────────────
+tmp/
+tests/output/
+
+# ────────────────────── 必须推送的重要文件（白名单提醒）─────────────
+# 以下文件虽然容易被误加 gitignore，但必须跟踪：
+# ✅ package-lock.json    — 锁定依赖版本，CI 的 npm ci 依赖它
 # ✅ client/functions/    — Pages Functions 反向代理，漏掉则 /api/* 回退为首页 HTML
-# ✅ scripts/            — 部署脚本 (deploy-cloudflare.mjs)
-# ✅ AGENTS.md           — OpenCode 项目规则（不含密钥）
-# ✅ opencode.json       — OpenCode 项目配置（含 MCP 远程服务，不含本地密钥）
+# ✅ scripts/             — 部署脚本 (deploy-cloudflare.mjs)
 # ✅ .github/             — CI/CD workflows、Issue/PR 模板、分支保护
+# ✅ .coderabbit.yaml     — CodeRabbit 代码审查配置
 # ✅ SECURITY.md          — 安全政策
 # ✅ PRIVACY.md           — 隐私政策
+# ✅ README.md / LICENSE  — 项目门面

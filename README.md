@@ -12,181 +12,161 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-22c55e?style=flat-square)](LICENSE)
 [![Cloudflare Workers](https://img.shields.io/badge/Cloudflare-Workers-F38020?style=flat-square&logo=cloudflare&logoColor=white)](https://workers.cloudflare.com/)
-[![Vite](https://img.shields.io/badge/Vite-6.x-646CFF?style=flat-square&logo=vite&logoColor=white)](https://vitejs.dev/)
-[![React](https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=black)](https://react.dev/)
-[![Hono](https://img.shields.io/badge/Hono-4.x-E36002?style=flat-square&logo=hono&logoColor=white)](https://hono.dev/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![React](https://img.shields.io/badge/React-61DAFB?style=flat-square&logo=react&logoColor=black)](https://react.dev/)
+[![Hono](https://img.shields.io/badge/Hono-E36002?style=flat-square&logo=hono&logoColor=white)](https://hono.dev/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 
 <br/>
 
-[**📚 文档**](https://github.com/one-ea/Monolith/wiki) · [**🐛 Issue**](https://github.com/one-ea/Monolith/issues) · [**☁️ 在线预览**](https://monolith-client.pages.dev)
+[**📚 文档**](https://github.com/one-ea/Monolith/wiki) · [**☁️ 在线预览**](https://monolith-client.pages.dev) · [**🐛 反馈**](https://github.com/one-ea/Monolith/issues) · [**🛡️ 安全**](./SECURITY.md) · [**🔒 隐私**](./PRIVACY.md)
 
 </div>
 
 ---
 
-## ✨ 项目简介
+## ✨ 简介
 
-Monolith 是一套运行在 **Cloudflare 全球边缘网络**上的现代化无服务器博客系统。前后端完全解耦，通过适配器模式支持多种数据库与对象存储后端，无需运维，全球延迟 < 50ms。
+**Monolith** 是一套运行在 Cloudflare 全球边缘网络上的现代化博客系统，前后端通过适配器模式解耦，零运维即可获得全球 < 50ms 的访问延迟。
 
-> 🎨 **沉浸式阅读体验**：延续高质感排版、顺滑过渡与边缘原生速度，围绕内容创作与后台管理提供稳定一致的写作体验。
+设计哲学：**内容优先 · 边缘原生 · 沉浸式阅读**。
 
 ---
 
 ## 🌟 核心特性
 
-| 特性 | 描述 |
-|------|------|
-| ⚡ **边缘原生** | Hono + Cloudflare Workers，无冷启动，全球毫秒级响应 |
-| 🔌 **存储适配器** | 数据库：D1 / Turso / PostgreSQL；对象存储：R2 / S3 兼容 |
-| 🌗 **高质感主题** | 统一视觉语言、细腻动效与内容优先的阅读体验 |
-| 📝 **Markdown** | 代码高亮 + 一键复制、TOC、阅读进度条、预计阅读时间 |
-| 🔍 **全站搜索** | ⌘K 快捷触发，标题与内容全文检索 |
-| 🔐 **安全设计** | JWT 认证 + 路由守卫 + 管理入口隐藏 |
-| 📊 **数据洞察** | 浏览量统计、14 日趋势图、热门排行 |
-| 💬 **评论系统** | Honeypot 反垃圾 + 人工审核 |
-| 💾 **备份恢复** | JSON / R2-S3 / WebDAV 多端备份 |
-| 🗺️ **SEO** | sitemap.xml、RSS 2.0、robots.txt、语义化 HTML |
-| 🧩 **代码注入** | 后台注入任意第三方脚本与样式 |
-| 🤖 **AI 就绪** | 配备独立的 MCP Server 工具链，赋能 AI 助手全自动打理博客文章与系统配置 |
+### ✍️ 创作体验
+- **沉浸式编辑器** — Markdown + 实时预览，KaTeX 数学公式，代码高亮一键复制
+- **多平台导入** — 一键迁移 WordPress / Ghost / Hexo / Hugo / Jekyll / Halo
+- **内容编排** — 草稿、定时发布、置顶、系列合集、独立页动态导航
 
-> 🤖 **MCP 强大赋能**：Monolith 拥有独立的 [Monolith-MCP](https://github.com/one-ea/Monolith-MCP) 工具链（提供多种核心工具），您可以直接在 Cursor / Windsurf / Antigravity 等 AI 编辑器中唤醒 AI 为您自动写稿、审核评论、生成数据报表、乃至进行灾备恢复！
+### 🎨 阅读体验
+- **暗/亮双主题** — OKLCH 色值系统，过渡顺滑无闪烁
+- **文章导航** — 自动 TOC、阅读进度条、IntersectionObserver 章节追踪
+- **⌘K 全站搜索** — 防抖检索、键盘导航、关键词高亮
+- **Reaction 表情** — 文末轻互动，无需登录即可表态
+
+### ⚡ 性能架构
+- **边缘原生** — Hono + Cloudflare Workers，无冷启动，全球 < 50ms
+- **存储适配** — 数据库 D1 / Turso / PostgreSQL，对象存储 R2 / S3 兼容
+- **零运维成本** — 单脚本一键部署，前后端走同一条流水线
+
+### 🛡️ 安全合规
+- **认证与防护** — JWT + 限流，CSP/HSTS 全套头，SSRF 拦截
+- **隐私优先** — Cookie 同意横幅，第三方脚本门控，GDPR 数据导出
+- **多端备份** — JSON / R2-S3 / WebDAV 自由切换
+
+### 🤖 智能扩展
+- **MCP 工具链** — 配套 [Monolith-MCP](https://github.com/one-ea/Monolith-MCP)，让 AI 助手代为写稿、审评、备份
+- **SEO 友好** — sitemap、RSS 2.0、JSON-LD、OG/Twitter Card
+- **数据洞察** — 浏览量、14 日趋势、热门 Top 10
 
 ---
 
 ## 🏗️ 架构
 
 ```
-┌──────────────────────┐         ┌──────────────────────────┐
-│  Cloudflare Pages    │         │   Cloudflare Workers     │
-│                      │         │                          │
-│  Vite + React SPA    │         │  Hono  ──▶  IDatabase    │
-│  Pages Functions     │──API──▶ │           ├── D1         │
-│  (反向代理层)         │         │           ├── Turso      │
-└──────────────────────┘         │           └── PostgreSQL │
-                                 │                          │
-                                 │        ──▶  IObjectStorage│
-                                 │           ├── R2         │
-                                 │           └── S3 兼容    │
-                                 └──────────────────────────┘
+                        ┌──────────────────────────────────────────┐
+                        │            Cloudflare Edge               │
+                        │       (200+ PoPs · global anycast)       │
+                        └──────────────────────────────────────────┘
+                                          │
+        ┌─────────────────────────────────┼─────────────────────────────────┐
+        ▼                                 ▼                                 ▼
+┌──────────────────┐            ┌──────────────────┐            ┌──────────────────┐
+│  Cloudflare      │            │  Cloudflare      │            │  Cloudflare R2   │
+│  Pages           │            │  Workers         │            │  (or S3 兼容)    │
+│                  │            │                  │            │                  │
+│  React SPA       │            │  Hono Router     │            │  上传 / 媒体库    │
+│  ├ 阅读端        │  /api/*    │  ├ Public  API   │            │  ├ 文章封面      │
+│  ├ ⌘K 搜索       │ ─────────▶ │  ├ Admin   API   │ ─对象存储─▶ │  ├ Markdown 图片 │
+│  ├ TOC / 阅读条  │  反向代理  │  ├ Auth (JWT)    │            │  └ 备份归档      │
+│  └ 后台 App Shell│            │  └ Importers     │            └──────────────────┘
+│                  │            │                  │                      ▲
+│  Pages Functions │            │  Storage Factory │                      │
+│  ├ /api/*  转发  │            │  ├ IDatabase     │                      │
+│  ├ /cdn/*  代理  │            │  │  ├ D1         │                      │
+│  └ /rss.xml      │            │  │  ├ Turso      │                      │
+└──────────────────┘            │  │  └ Postgres   │ ◀── 参数化 SQL ─┐    │
+                                │  └ IObjectStorage│                 │    │
+                                │     ├ R2         │ ─────────────────┘    │
+                                │     └ S3 兼容    │                       │
+                                └──────────────────┘                       │
+                                          ▲                                │
+                                          │ MCP Protocol                   │
+                                          │                                │
+                                ┌──────────────────┐                       │
+                                │  Monolith-MCP    │                       │
+                                │  (AI 助手通道)    │                       │
+                                │  ├ 写稿 / 审评    │ ──────────────────────┘
+                                │  ├ 备份 / 恢复    │   (写入媒体库)
+                                │  └ 数据洞察       │
+                                └──────────────────┘
 ```
 
-> 详细架构、项目结构与技术选型请参阅 [Wiki · 架构概览](https://github.com/one-ea/Monolith/wiki/Architecture)
+**分层职责**
 
----
+| 层级 | 模块 | 关键路径 |
+|------|------|---------|
+| 边缘网络 | Cloudflare 全球 anycast | 200+ PoPs · 自动 TLS · DDoS 防护 |
+| 前端 | React SPA + Pages Functions | `client/src` · `client/functions` |
+| 后端 | Hono Workers + Storage Factory | `server/src/index.ts` · `server/src/storage` |
+| 持久层 | D1 / Turso / PostgreSQL · R2 / S3 | `server/src/storage/db` · `server/src/storage/object` |
+| 智能层 | Monolith-MCP（独立仓库） | [one-ea/Monolith-MCP](https://github.com/one-ea/Monolith-MCP) |
 
-## ✅ 前置条件
+**关键设计决策**
 
-- Node.js `20+` 与 npm `10+`
-- 已安装并登录 `Wrangler CLI`（`npm install -g wrangler && wrangler login`）
-- Cloudflare 账户已具备 Workers、Pages、D1、R2 的访问权限
-- 已准备好后端必需密钥：`ADMIN_PASSWORD`、`JWT_SECRET`
+- **适配器模式** — 数据库与对象存储均实现统一接口（`IDatabase` / `IObjectStorage`），切换后端零侵入
+- **Pages Functions 反向代理** — 前端域名直连 `/api/*`，规避 CORS 复杂度，同步注入安全头
+- **Drizzle ORM** — 所有 SQL 参数化，Schema 一处定义、三端同步生成
+- **Monorepo 单脚本部署** — `npm run deploy:cloudflare` 串起迁移 → Workers → Pages 全链路
+
+> 详细架构、模块图与设计决策请参阅 [**Wiki · 架构概览**](https://github.com/one-ea/Monolith/wiki/Architecture)。
 
 ---
 
 ## 🚀 快速开始
 
 ```bash
-# 克隆 & 安装
 git clone https://github.com/one-ea/Monolith.git && cd Monolith
-cd client && npm install && cd ../server && npm install && cd ..
-
-# 配置密钥
-cat > server/.dev.vars << 'EOF'
-ADMIN_PASSWORD=your_secure_password
-JWT_SECRET=your_random_secret_key
-EOF
-
-# 初始化数据库 & 启动
-cd server && npx wrangler d1 migrations apply monolith-db --local
-npm run dev      # → http://localhost:8787
-
-# 另一终端
-cd client && npm run dev      # → http://localhost:5173
+npm install
+npm run dev
 ```
 
-> 📖 完整指南：[Wiki · 快速开始](https://github.com/one-ea/Monolith/wiki/Quick-Start) ｜ [Wiki · 部署指南](https://github.com/one-ea/Monolith/wiki/Deployment)
+> 完整环境准备、密钥配置与本地数据库初始化请参阅 [**Wiki · 快速开始**](https://github.com/one-ea/Monolith/wiki/Quick-Start)。
 
----
-
-## ☁️ 一键部署到 Cloudflare
-
-仓库现已提供一条完整的 Cloudflare 一键部署脚本，会按顺序自动做这几件事：
-
-1. 执行 Workers 远程数据库迁移
-2. 部署 Workers 后端
-3. 自动提取最新的 Workers `workers.dev` 地址
-4. 把该地址写入 Cloudflare Pages 项目的 `API_BASE`
-5. 从 `client/` 目录部署 Pages 前端，并自动带上 `client/functions/` 的 Functions bundle
-
-执行命令：
+## ☁️ 部署
 
 ```bash
-npm install
 npm run deploy:cloudflare
 ```
 
-常用参数：
+一条命令完成「远程迁移 → Workers → API_BASE 注入 → Pages 前端」全链路，亦支持 GitHub Actions 触发。
 
-```bash
-# 指定 Pages 项目名与生产分支
-npm run deploy:cloudflare -- --pages-project monolith-client --branch main
-
-# 如果自动识别 Workers URL 失败，可以手动指定
-npm run deploy:cloudflare -- --api-base https://your-worker.your-account.workers.dev
-
-# 只重发前端，不重复跑迁移和后端部署
-npm run deploy:cloudflare -- --skip-migrate --skip-server --api-base https://your-worker.your-account.workers.dev
-
-# 只更新后端与环境变量，暂时跳过前端发布
-npm run deploy:cloudflare -- --skip-client --api-base https://your-worker.your-account.workers.dev
-```
-
-这个流程的设计目标，是避免部署后出现“前端已经上线，但 Pages Functions 还在指向默认后端”导致的发文保存失败、无法创建页面等问题。
-
-### GitHub Actions 自动部署
-
-仓库现已额外提供工作流：`.github/workflows/deploy-cloudflare.yml`
-
-它支持两种触发方式：
-
-1. `push` 到 `main` 时自动部署
-2. Actions 面板手动触发 `Cloudflare Deploy`
-
-需要在 GitHub Secrets 中配置：
-
-```text
-CLOUDFLARE_API_TOKEN
-CLOUDFLARE_ACCOUNT_ID
-```
-
-手动触发时可选参数：
-
-- `branch`：部署到 `main` 或 `dev`
-- `skip_migrate`
-- `skip_server`
-- `skip_client`
-- `api_base`
-
-这条 Actions 链路底层复用了 `npm run deploy:cloudflare`，不会出现“本地脚本和 CI 工作流行为不一致”的双轨漂移。
-
-### 部署防呆说明
-
-- `seed_test_posts.sql` 已从生产迁移目录移出，改为本地专用的 `server/src/seeds/seed_test_posts.sql`
-- 测试文章只允许通过 `npm run db:seed:test-posts:local` 手动写入本地数据库
-- 生产远程迁移只会读取 `server/src/migrations/` 下的正式迁移文件
-
-部署完成后，建议立即验证：
-
-```text
-1. 打开 /api/health，确认后端连通
-2. 打开 /admin 登录后台
-3. 新建一篇测试文章并保存
-4. 新建一个测试页面并保存
-```
+> 部署参数、CI 配置与故障排查请参阅 [**Wiki · 部署指南**](https://github.com/one-ea/Monolith/wiki/Deployment)。
 
 ---
 
+## 📚 文档导航
+
+| 入口 | 内容 |
+|------|------|
+| [Wiki](https://github.com/one-ea/Monolith/wiki) | 架构、部署、API、二次开发 |
+| [SECURITY.md](./SECURITY.md) | 安全策略与漏洞披露 |
+| [PRIVACY.md](./PRIVACY.md) | 隐私政策 |
+| [LICENSE](./LICENSE) | MIT 开源协议 |
+
+---
+
+## 🤝 贡献
+
+欢迎通过 [Issue](https://github.com/one-ea/Monolith/issues) 反馈问题，或通过 Pull Request 贡献代码。提交前请阅读 [Wiki · 贡献指南](https://github.com/one-ea/Monolith/wiki/Contributing)。
+
 ## 📄 License
 
-[MIT](LICENSE)
+基于 [MIT License](./LICENSE) 开源发布。
+
+<div align="center">
+
+<sub>Crafted with ♡ on the edge.</sub>
+
+</div>
