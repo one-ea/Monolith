@@ -1,6 +1,7 @@
 import { marked } from "marked";
 import hljs from "highlight.js/lib/core";
 import DOMPurify from "dompurify";
+import katex from "katex";
 
 
 // 按需注册语言（避免打包过大）
@@ -302,20 +303,66 @@ function escapeHtml(s: string): string {
 }
 
 /**
- * 渲染 Markdown 为 HTML（已通过 DOMPurify 净化，防 XSS）
- * 支持：标题/粗体/斜体/删除线/链接/图片/代码块(高亮)/行内代码/
- *       表格/任务列表/有序无序列表/引用/分隔线/脚注
+ * u6570u5b66u516cu5f0fu9884u5904u7406uff1au5728 Markdown u89e3u6790u524du5c06 LaTeX u516cu5f0fu8f6cu4e3a KaTeX HTML
+ * u652fu6301 $$...$$ u5757u7ea7u548c $...$ u884cu5185u516cu5f0f
+ */
+function renderMath(md: string): string {
+  // u4fddu62a4u4ee3u7801u5757u548cu884cu5185u4ee3u7801uff0cu907fu514du5176u4e2du7684 $ u88abu8befu89e3u4e3au516cu5f0f
+  const preserved: string[] = [];
+  const ph = (s: string) => { preserved.push(s); return `\x00MATH_GUARD_${preserved.length - 1}\x00`; };
+  md = md.replace(/```[\s\S]*?```/g, ph);
+  md = md.replace(/`[^`]+`/g, ph);
+
+  // u5757u7ea7u516cu5f0fuff1a$$...$$
+  md = md.replace(/\$\$([\s\S]+?)\$\$/g, (_, tex) => {
+    try {
+      return katex.renderToString(tex.trim(), { displayMode: true, throwOnError: false });
+    } catch {
+      return `<pre class="math-error">${escapeHtml(tex)}</pre>`;
+    }
+  });
+  // u884cu5185u516cu5f0fuff1a$...$uff08u907fu514du5339u914du8d27u5e01u7b26u53f7u5982 $100uff09
+  md = md.replace(/(?<!\\)\$([^$\n]+?)\$/g, (_, tex) => {
+    try {
+      return katex.renderToString(tex.trim(), { displayMode: false, throwOnError: false });
+    } catch {
+      return `<code class="math-error">${escapeHtml(tex)}</code>`;
+    }
+  });
+
+  // u8fd8u539fu4fddu62a4u7684u4ee3u7801u5757
+  md = md.replace(/\x00MATH_GUARD_(\d+)\x00/g, (_, i) => preserved[parseInt(i)]);
+  return md;
+}
+
+/**
+ * u6e32u67d3 Markdown u4e3a HTMLuff08u5df2u901au8fc7 DOMPurify u51c0u5316uff0cu9632 XSSuff09
+ * u652fu6301uff1au6807u9898/u7c97u4f53/u659cu4f53/u5220u9664u7ebf/u94feu63a5/u56feu7247/u4ee3u7801u5757(u9ad8u4eae)/u884cu5185u4ee3u7801/
+ *       u8868u683c/u4efbu52a1u5217u8868/u6709u5e8fu65e0u5e8fu5217u8868/u5f15u7528/u5206u9694u7ebf/u811au6ce8/u6570u5b66u516cu5f0f(KaTeX)
  */
 export function renderMarkdown(md: string): string {
-  const raw = marked.parse(md, { async: false }) as string;
+  const mathProcessed = renderMath(md);
+  const raw = marked.parse(mathProcessed, { async: false }) as string;
   // 净化 HTML，允许 iframe（B站/YouTube 嵌入）和代码块复制按钮所需的 data 属性
   return DOMPurify.sanitize(raw, {
-    ADD_TAGS: ["iframe", "video", "source", "figure", "figcaption"],
+    ADD_TAGS: ["iframe", "video", "source", "figure", "figcaption",
+      "math", "mrow", "mi", "mo", "mn", "msup", "msub", "mfrac",
+      "mover", "munder", "msqrt", "mroot", "mtable", "mtr", "mtd",
+      "mtext", "mspace", "annotation", "semantics", "mpadded",
+      "menclose", "msubsup", "munderover", "mmultiscripts",
+      "span"],
     ADD_ATTR: [
       "allow", "allowfullscreen", "frameborder", "scrolling",
       "playsinline", "preload", "controls",
       "loading", "decoding", "data-lazy-img",
       "target", "rel",
+      "xmlns", "encoding", "mathvariant", "stretchy", "fence",
+      "separator", "accent", "accentunder", "lspace", "rspace",
+      "columnalign", "rowalign", "columnspacing", "rowspacing",
+      "displaystyle", "scriptlevel", "minsize", "maxsize",
+      "movablelimits", "symmetric", "linethickness", "columnspan",
+      "rowspan", "depth", "height", "voffset", "width",
+      "aria-hidden",
     ],
   });
 }

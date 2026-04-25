@@ -36,6 +36,8 @@ Thumbs.db
 
 # 编辑器/AI 全局配置（Antigravity、Gemini、OpenCode 等）
 GEMINI.md
+.playwright-mcp/
+.wiki-tmp/
 
 # ────────────────────── 日志与调试产物（不推送）──────────────────
 *.log

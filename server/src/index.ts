@@ -7,7 +7,6 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { sign, verify } from "hono/jwt";
-import { marked } from "marked";
 import { createDatabase, createObjectStorage } from "./storage/factory";
 import type { IDatabase } from "./storage/interfaces";
 import type { IObjectStorage } from "./storage/interfaces";

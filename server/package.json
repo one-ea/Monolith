@@ -17,7 +17,6 @@
     "@libsql/client": "^0.17.2",
     "drizzle-orm": "^0.45.2",
     "hono": "^4.12.14",
-    "marked": "^18.0.0",
     "postgres": "^3.4.9"
   },
   "devDependencies": {
