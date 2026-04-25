@@ -21,6 +21,13 @@ migrations_dir = "src/migrations"
 binding = "BUCKET"
 bucket_name = "monolith-assets"
 
+# Analytics Engine 数据集绑定（CF 专属增强分析模块）
+# 灵感来源: HanAnalytics (MIT) — https://github.com/uxiaohan/HanAnalytics
+# 仅在 Cloudflare 部署时生效，Turso/PG 后端会自动跳过 AE 写入与查询
+[[analytics_engine_datasets]]
+binding = "AE"
+dataset = "monolith_analytics"
+
 # 定时触发器 (每 1 分钟执行一次)
 [triggers]
 crons = ["* * * * *"]

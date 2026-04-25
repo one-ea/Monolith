@@ -7,6 +7,7 @@ import { SearchOverlay } from "@/components/search";
 import { ProtectedRoute } from "@/components/protected-route";
 import { AdminLayout } from "@/components/admin-layout";
 import { CookieConsent, getCookieConsent } from "@/components/cookie-consent";
+import { trackPageview, bindUnloadTracker } from "@/lib/analytics";
 
 // 代码分割 (Code Splitting)
 const HomePage = lazy(() => import("@/pages/home").then((m) => ({ default: m.HomePage })));
@@ -57,6 +58,12 @@ function matchesPathPrefix(pathname: string, prefix: string) {
 
 export function App() {
   const [location] = useLocation();
+
+  // 访客埋点：路由变化触发 pageview，页面卸载触发 duration 上报
+  useEffect(() => {
+    bindUnloadTracker();
+    trackPageview(location);
+  }, [location]);
 
   // 路由判断逻辑
   const isAdminRoot = matchesPathPrefix(location, "/admin");

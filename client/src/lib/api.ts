@@ -303,6 +303,44 @@ export async function fetchAnalytics(days = 7): Promise<AnalyticsData> {
   return res.json();
 }
 
+/* ── AE 增强分析（CF 专属，仅在 D1 后端可用） ────────── */
+export type AEAnalyticsData = {
+  visitsByDay: { date: string; count: number; uv: number }[];
+  topCountries: { country: string; count: number }[];
+  topReferers: { referer: string; count: number }[];
+  deviceBreakdown: { device: string; count: number }[];
+  browserBreakdown: { browser: string; count: number }[];
+  osBreakdown: { os: string; count: number }[];
+  topPages: { path: string; count: number }[];
+  topScreens: { screen: string; count: number }[];
+  topLanguages: { language: string; count: number }[];
+  totalVisits: number;
+  uniqueVisitors: number;
+  avgDuration: number;
+};
+
+export type AEAnalyticsError = {
+  /** 501 = 非 CF 部署；503 = 缺 token；502 = AE SQL 失败 */
+  status: number;
+  message: string;
+};
+
+export async function fetchAEAnalytics(days = 7): Promise<AEAnalyticsData> {
+  const res = await fetch(`${API_BASE}/api/admin/analytics/ae?days=${days}`, {
+    headers: authHeaders(),
+  });
+  if (!res.ok) {
+    let message = `AE 分析数据加载失败 (${res.status})`;
+    try {
+      const body = await res.json() as { error?: string };
+      if (body.error) message = body.error;
+    } catch { /* ignore */ }
+    const err: AEAnalyticsError = { status: res.status, message };
+    throw err;
+  }
+  return res.json();
+}
+
 /* ── 评论 ──────────────────────────────────── */
 export type CommentData = {
   id: number;

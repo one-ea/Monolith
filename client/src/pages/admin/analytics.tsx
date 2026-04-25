@@ -1,6 +1,9 @@
 import { useState, useEffect } from "react";
 import { fetchAnalytics, type AnalyticsData } from "@/lib/api";
-import { Globe, Monitor, Smartphone, Tablet, Bot, ExternalLink, TrendingUp, BarChart3 } from "lucide-react";
+import { Globe, Monitor, Smartphone, Tablet, Bot, ExternalLink, TrendingUp, BarChart3, Cloud } from "lucide-react";
+import { AnalyticsAEView } from "./analytics-ae";
+
+type TabKey = "basic" | "ae";
 
 const DEVICE_ICONS: Record<string, typeof Monitor> = {
   desktop: Monitor,
@@ -29,9 +32,14 @@ export function AdminAnalytics() {
   const [days, setDays] = useState(7);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [tab, setTab] = useState<TabKey>("basic");
 
   useEffect(() => {
     document.title = "访客分析 | Monolith";
+  }, []);
+
+  useEffect(() => {
+    if (tab !== "basic") return;
     setLoading(true);
     fetchAnalytics(days)
       .then((result) => {
@@ -43,7 +51,7 @@ export function AdminAnalytics() {
         setError("访客分析数据加载失败，请稍后重试。");
       })
       .finally(() => setLoading(false));
-  }, [days]);
+  }, [days, tab]);
 
   const totalVisits = data?.visitsByDay.reduce((s, d) => s + d.count, 0) ?? 0;
   const maxDayCount = data ? Math.max(...data.visitsByDay.map((d) => d.count), 1) : 1;
@@ -73,9 +81,38 @@ export function AdminAnalytics() {
             ))}
           </div>
         </div>
+
+        {/* Tab 切换：基础统计 / AE 增强 (CF 专属) */}
+        <div className="mt-[20px] flex items-center gap-[2px] border-b border-border/30">
+          <button
+            onClick={() => setTab("basic")}
+            className={`px-[14px] py-[8px] text-[13px] -mb-[1px] border-b-2 transition-colors ${
+              tab === "basic"
+                ? "border-cyan-400 text-foreground"
+                : "border-transparent text-muted-foreground/50 hover:text-foreground"
+            }`}
+          >
+            基础统计
+          </button>
+          <button
+            onClick={() => setTab("ae")}
+            className={`px-[14px] py-[8px] text-[13px] -mb-[1px] border-b-2 transition-colors flex items-center gap-[6px] ${
+              tab === "ae"
+                ? "border-cyan-400 text-foreground"
+                : "border-transparent text-muted-foreground/50 hover:text-foreground"
+            }`}
+            title="基于 Cloudflare Analytics Engine，仅在 D1 部署可用"
+          >
+            <Cloud className="h-[12px] w-[12px]" />
+            AE 增强
+            <span className="text-[10px] text-amber-400/70 font-mono">CF</span>
+          </button>
+        </div>
       </div>
 
-      {loading ? (
+      {tab === "ae" ? (
+        <AnalyticsAEView days={days} />
+      ) : loading ? (
         <div className="text-center text-muted-foreground/40 py-[60px]">加载中...</div>
       ) : error ? (
         <div className="rounded-lg border border-red-500/20 bg-red-500/10 px-[16px] py-[24px] text-center text-[13px] text-red-400">{error}</div>

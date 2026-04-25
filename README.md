@@ -49,6 +49,7 @@
 - **边缘原生** — Hono + Cloudflare Workers，无冷启动，全球 < 50ms
 - **存储适配** — 数据库 D1 / Turso / PostgreSQL，对象存储 R2 / S3 兼容
 - **零运维成本** — 单脚本一键部署，前后端走同一条流水线
+- **访客分析** — 内置 D1 `visits` 表轻量统计；**Cloudflare 部署专属**额外解锁 Analytics Engine 增强仪表板（UV/停留时长/浏览器/操作系统/分辨率/语言），其他后端 (Turso / PostgreSQL) 仅基础统计可用
 
 ### 🛡️ 安全合规
 - **认证与防护** — JWT + 限流，CSP/HSTS 全套头，SSRF 拦截
