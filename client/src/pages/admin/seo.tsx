@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { Link } from "wouter";
 import { fetchAdminPosts, type Post } from "@/lib/api";
 import { CheckCircle2, AlertTriangle, XCircle, FileText, Search, ExternalLink, RefreshCw, Edit, Sparkles } from "lucide-react";
-import { buildOverview, type SeoOverview, type SeoCheckResult } from "@/lib/seo-analyzer";
+import { buildOverview, type SeoOverview, type SeoCheckResult, type SiteInfraSignal } from "@/lib/seo-analyzer";
 
 type FilterTab = "all" | "warn" | "poor" | "drafts";
 
@@ -45,23 +45,52 @@ export function AdminSeo() {
   const [tab, setTab] = useState<FilterTab>("all");
   const [sitemapPreview, setSitemapPreview] = useState<{ urls: string[]; raw: string } | null>(null);
   const [robotsPreview, setRobotsPreview] = useState<string>("");
+  const [infra, setInfra] = useState<SiteInfraSignal>({});
+  const [error, setError] = useState<string | null>(null);
 
   const loadAll = async () => {
     setRefreshing(true);
-    try {
-      const list = await fetchAdminPosts();
-      setPosts(list);
-      const [smRes, rbRes] = await Promise.all([
-        fetch("/sitemap.xml").then((r) => (r.ok ? r.text() : "")),
-        fetch("/robots.txt").then((r) => (r.ok ? r.text() : "")),
-      ]);
-      const urls = Array.from(smRes.matchAll(/<loc>([^<]+)<\/loc>/g)).map((m) => m[1]);
-      setSitemapPreview({ urls, raw: smRes });
-      setRobotsPreview(rbRes);
-    } finally {
-      setRefreshing(false);
-      setLoading(false);
+    setError(null);
+    const [postsResult, smResult, rbResult, rssResult] = await Promise.allSettled([
+      fetchAdminPosts(),
+      fetch("/sitemap.xml").then((r) => (r.ok ? r.text() : Promise.reject(new Error(`HTTP ${r.status}`)))),
+      fetch("/robots.txt").then((r) => (r.ok ? r.text() : Promise.reject(new Error(`HTTP ${r.status}`)))),
+      fetch("/rss.xml", { method: "HEAD" }).then((r) => (r.ok ? true : Promise.reject(new Error(`HTTP ${r.status}`)))),
+    ]);
+
+    if (postsResult.status === "fulfilled") {
+      setPosts(postsResult.value);
+    } else {
+      setError(postsResult.reason instanceof Error ? postsResult.reason.message : "文章加载失败");
     }
+
+    const nextInfra: SiteInfraSignal = {};
+    if (smResult.status === "fulfilled") {
+      const raw = smResult.value;
+      const urls = Array.from(raw.matchAll(/<loc>([^<]+)<\/loc>/g)).map((m) => m[1]);
+      setSitemapPreview({ urls, raw });
+      nextInfra.sitemap = { ok: true, urlCount: urls.length };
+    } else {
+      setSitemapPreview({ urls: [], raw: "" });
+      nextInfra.sitemap = { ok: false, urlCount: 0, error: smResult.reason instanceof Error ? smResult.reason.message : "抓取失败" };
+    }
+
+    if (rbResult.status === "fulfilled") {
+      const raw = rbResult.value;
+      setRobotsPreview(raw);
+      nextInfra.robots = { ok: true, hasSitemapDirective: /^\s*sitemap\s*:/im.test(raw) };
+    } else {
+      setRobotsPreview("");
+      nextInfra.robots = { ok: false, hasSitemapDirective: false, error: rbResult.reason instanceof Error ? rbResult.reason.message : "抓取失败" };
+    }
+
+    nextInfra.rss = rssResult.status === "fulfilled"
+      ? { ok: true }
+      : { ok: false, error: rssResult.reason instanceof Error ? rssResult.reason.message : "抓取失败" };
+
+    setInfra(nextInfra);
+    setRefreshing(false);
+    setLoading(false);
   };
 
   useEffect(() => {
@@ -80,18 +109,22 @@ export function AdminSeo() {
       published: p.published,
       createdAt: p.createdAt,
       updatedAt: p.updatedAt,
-    })));
-  }, [posts]);
+    })), infra);
+  }, [posts, infra]);
 
   const filteredReports = useMemo(() => {
     let result = overview.postReports;
-    const slugSet = new Set(posts.filter((p) => {
-      if (tab === "drafts") return !p.published;
-      return p.published;
-    }).map((p) => p.slug));
-    result = result.filter((r) => slugSet.has(r.slug));
-    if (tab === "warn") result = result.filter((r) => r.totalScore >= 60 && r.totalScore < 90);
-    if (tab === "poor") result = result.filter((r) => r.totalScore < 60);
+    if (tab === "drafts") {
+      const draftSlugs = new Set(posts.filter((p) => !p.published).map((p) => p.slug));
+      result = result.filter((r) => draftSlugs.has(r.slug));
+    } else if (tab === "warn" || tab === "poor") {
+      // warn / poor 只评估已发布文章，避免把待发草稿混入"待优化"统计
+      const pubSlugs = new Set(posts.filter((p) => p.published).map((p) => p.slug));
+      result = result.filter((r) => pubSlugs.has(r.slug));
+      if (tab === "warn") result = result.filter((r) => r.totalScore >= 60 && r.totalScore < 90);
+      else result = result.filter((r) => r.totalScore < 60);
+    }
+    // tab === "all": 不按发布状态过滤，真正展示全部文章
     if (search.trim()) {
       const q = search.toLowerCase();
       result = result.filter((r) => r.title.toLowerCase().includes(q) || r.slug.toLowerCase().includes(q));
@@ -132,6 +165,16 @@ export function AdminSeo() {
           刷新
         </button>
       </div>
+
+      {error && (
+        <div className="flex items-start gap-[8px] rounded-lg border border-red-400/30 bg-red-400/5 px-[12px] py-[10px]">
+          <XCircle className="h-[14px] w-[14px] text-red-400 mt-[2px] shrink-0" />
+          <div className="flex-1 min-w-0">
+            <div className="text-[12px] font-medium text-red-400">数据加载失败</div>
+            <div className="text-[11px] text-muted-foreground/70 mt-[2px] break-all">{error}</div>
+          </div>
+        </div>
+      )}
 
       {/* ═══════════ 评分环组 ═══════════ */}
       <div className="rounded-xl border border-border/15 bg-card/5 p-[20px]">

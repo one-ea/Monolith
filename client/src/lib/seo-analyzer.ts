@@ -239,8 +239,18 @@ export function analyzePost(p: AnalyzeInput): PostSeoReport {
   };
 }
 
+/** 站点基础设施实测信号（来自页面端 fetch 结果） */
+export interface SiteInfraSignal {
+  /** sitemap 抓取状态 */
+  sitemap?: { ok: boolean; urlCount: number; error?: string };
+  /** robots 抓取状态 */
+  robots?: { ok: boolean; hasSitemapDirective: boolean; error?: string };
+  /** rss 抓取状态 */
+  rss?: { ok: boolean; error?: string };
+}
+
 /** 汇总全站 SEO 概览 */
-export function buildOverview(posts: AnalyzeInput[]): SeoOverview {
+export function buildOverview(posts: AnalyzeInput[], infra?: SiteInfraSignal): SeoOverview {
   const reports = posts.map(analyzePost);
   const published = posts.filter((p) => p.published);
   const publishedReports = reports.filter((_, i) => posts[i].published);
@@ -278,9 +288,25 @@ export function buildOverview(posts: AnalyzeInput[]): SeoOverview {
   }
 
   const globalChecks: SeoCheckResult[] = [
-    { id: "sitemap", label: "Sitemap.xml", status: "pass", score: 100, detail: "已挂载 /sitemap.xml" },
-    { id: "robots", label: "Robots.txt", status: "pass", score: 100, detail: "已挂载 /robots.txt" },
-    { id: "rss", label: "RSS Feed", status: "pass", score: 100, detail: "已挂载 /rss.xml" },
+    infra?.sitemap
+      ? infra.sitemap.ok && infra.sitemap.urlCount > 0
+        ? { id: "sitemap", label: "Sitemap.xml", status: "pass", score: 100, detail: `已挂载 · ${infra.sitemap.urlCount} URLs` }
+        : infra.sitemap.ok
+        ? { id: "sitemap", label: "Sitemap.xml", status: "warn", score: 60, detail: "可访问但无 URL" }
+        : { id: "sitemap", label: "Sitemap.xml", status: "fail", score: 0, detail: infra.sitemap.error || "抓取失败" }
+      : { id: "sitemap", label: "Sitemap.xml", status: "warn", score: 60, detail: "未检测" },
+    infra?.robots
+      ? infra.robots.ok && infra.robots.hasSitemapDirective
+        ? { id: "robots", label: "Robots.txt", status: "pass", score: 100, detail: "已挂载 · 含 Sitemap 指令" }
+        : infra.robots.ok
+        ? { id: "robots", label: "Robots.txt", status: "warn", score: 70, detail: "缺少 Sitemap 指令" }
+        : { id: "robots", label: "Robots.txt", status: "fail", score: 0, detail: infra.robots.error || "抓取失败" }
+      : { id: "robots", label: "Robots.txt", status: "warn", score: 60, detail: "未检测" },
+    infra?.rss
+      ? infra.rss.ok
+        ? { id: "rss", label: "RSS Feed", status: "pass", score: 100, detail: "已挂载 /rss.xml" }
+        : { id: "rss", label: "RSS Feed", status: "fail", score: 0, detail: infra.rss.error || "抓取失败" }
+      : { id: "rss", label: "RSS Feed", status: "warn", score: 60, detail: "未检测" },
     { id: "prerender", label: "爬虫预渲染", status: "pass", score: 100, detail: "Pages Function 自动注入 OG" },
   ];
 
