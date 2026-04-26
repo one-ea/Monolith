@@ -166,47 +166,44 @@ export async function queryAEAnalytics(env: AEQueryEnv, days: number): Promise<A
     runSql<{ bucket: string; cnt: number }>(
       env,
       `SELECT
-         multiIf(
-           double1 < 10000, '0-10s',
-           double1 < 30000, '10-30s',
-           double1 < 60000, '30s-1m',
-           double1 < 180000, '1-3m',
-           double1 < 600000, '3-10m',
-           '10m+') AS bucket,
+         CASE
+           WHEN double1 < 10000 THEN '0-10s'
+           WHEN double1 < 30000 THEN '10-30s'
+           WHEN double1 < 60000 THEN '30s-1m'
+           WHEN double1 < 180000 THEN '1-3m'
+           WHEN double1 < 600000 THEN '3-10m'
+           ELSE '10m+'
+         END AS bucket,
          SUM(_sample_interval) AS cnt
        FROM ${DATASET}
        WHERE timestamp > NOW() - ${since} AND double1 > 0
        GROUP BY bucket FORMAT JSON`,
     ),
-    // —— 新增：入口页（每个 visitor 在窗口内最早访问的页面） ——
+    // —— 新增：入口页（referer 为空 = 直接访问/外链着陆的页面 Top） ——
     runSql<{ path: string; cnt: number }>(
       env,
-      `SELECT path, COUNT() AS cnt FROM (
-         SELECT blob10 AS vid, argMin(blob2, timestamp) AS path
-         FROM ${DATASET}
-         WHERE timestamp > NOW() - ${since} AND blob10 != ''
-         GROUP BY vid
-       ) GROUP BY path ORDER BY cnt DESC LIMIT 10 FORMAT JSON`,
+      `SELECT blob2 AS path, SUM(_sample_interval) AS cnt
+       FROM ${DATASET}
+       WHERE timestamp > NOW() - ${since} AND blob4 = ''
+       GROUP BY path ORDER BY cnt DESC LIMIT 10 FORMAT JSON`,
     ),
-    // —— 新增：出口页（每个 visitor 在窗口内最后访问的页面） ——
+    // —— 新增：出口页（停留时间 > 0 但短的页面，近似为离开点） ——
     runSql<{ path: string; cnt: number }>(
       env,
-      `SELECT path, COUNT() AS cnt FROM (
-         SELECT blob10 AS vid, argMax(blob2, timestamp) AS path
-         FROM ${DATASET}
-         WHERE timestamp > NOW() - ${since} AND blob10 != ''
-         GROUP BY vid
-       ) GROUP BY path ORDER BY cnt DESC LIMIT 10 FORMAT JSON`,
+      `SELECT blob2 AS path, SUM(_sample_interval) AS cnt
+       FROM ${DATASET}
+       WHERE timestamp > NOW() - ${since} AND double1 > 0 AND double1 < 5000
+       GROUP BY path ORDER BY cnt DESC LIMIT 10 FORMAT JSON`,
     ),
     // —— 新增：跳出 + 人均访问页数（基于 visitor session） ——
     runSql<{ visitors: number; bouncers: number; total_pv: number }>(
       env,
       `SELECT
          COUNT() AS visitors,
-         countIf(pv = 1) AS bouncers,
+         SUM(CASE WHEN pv = 1 THEN 1 ELSE 0 END) AS bouncers,
          SUM(pv) AS total_pv
        FROM (
-         SELECT blob10 AS vid, COUNT(DISTINCT blob2) AS pv
+         SELECT blob10 AS vid, SUM(_sample_interval) AS pv
          FROM ${DATASET}
          WHERE timestamp > NOW() - ${since} AND blob10 != ''
          GROUP BY vid
@@ -215,7 +212,9 @@ export async function queryAEAnalytics(env: AEQueryEnv, days: number): Promise<A
     // —— 新增：扩展引荐 Top 20（含直接访问） ——
     runSql<{ referer: string; cnt: number }>(
       env,
-      `SELECT if(blob4 = '', '(直接访问)', blob4) AS referer, SUM(_sample_interval) AS cnt
+      `SELECT
+         CASE WHEN blob4 = '' THEN '(直接访问)' ELSE blob4 END AS referer,
+         SUM(_sample_interval) AS cnt
        FROM ${DATASET}
        WHERE timestamp > NOW() - ${since}
        GROUP BY referer ORDER BY cnt DESC LIMIT 20 FORMAT JSON`,
@@ -240,7 +239,10 @@ export async function queryAEAnalytics(env: AEQueryEnv, days: number): Promise<A
     const visitorAge = await runSql<{ first_seen: string; cnt: number }>(
       env,
       `SELECT
-         if(toUnixTimestamp(min_ts) > toUnixTimestamp(NOW() - INTERVAL '1' DAY), 'new', 'returning') AS first_seen,
+         CASE
+           WHEN toUnixTimestamp(min_ts) > toUnixTimestamp(NOW() - INTERVAL '1' DAY) THEN 'new'
+           ELSE 'returning'
+         END AS first_seen,
          COUNT() AS cnt
        FROM (
          SELECT blob10 AS vid, MIN(timestamp) AS min_ts
