@@ -144,7 +144,7 @@ npm run deploy:cloudflare   # 远程迁移 → Workers → API_BASE 注入 → P
 
 支持 Windows / macOS / Linux 三端，脚本启动会自动预检 wrangler 登录态、Token、账户 ID 与 Node 版本。
 
-> 完整部署指南（含 Cloudflare 资源准备、密钥生成、CI 部署、故障排查）请参阅 [**docs/DEPLOYMENT.md**](./docs/DEPLOYMENT.md)。
+> 完整部署指南（含 Cloudflare 资源准备、密钥生成、CI 部署、故障排查）请参阅 [**Wiki · 部署指南**](https://github.com/one-ea/Monolith/wiki/Deployment)。
 
 | 方案 | 状态 | 适用场景 |
 |------|------|---------|
@@ -157,7 +157,7 @@ npm run deploy:cloudflare   # 远程迁移 → Workers → API_BASE 注入 → P
 
 | 入口 | 内容 |
 |------|------|
-| [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md) | Cloudflare 部署完整指南（速通 + 进阶 + 排错） |
+| [Wiki · 部署指南](https://github.com/one-ea/Monolith/wiki/Deployment) | Cloudflare 部署完整指南（速通 + 进阶 + 排错） |
 | [Wiki](https://github.com/one-ea/Monolith/wiki) | 架构、API、二次开发 |
 | [SECURITY.md](./SECURITY.md) | 安全策略与漏洞披露 |
 | [PRIVACY.md](./PRIVACY.md) | 隐私政策 |
