@@ -155,8 +155,10 @@ function checkPrerequisites() {
       );
       console.warn("[hint] 建议执行：git config --global core.autocrlf input 后重新 clone 仓库。");
     }
-    const cwdLower = projectRoot.toLowerCase();
-    if (cwdLower.includes("\\onedrive\\") || cwdLower.includes("/onedrive/")) {
+    // 覆盖个人版 (OneDrive)、企业版 (OneDrive - Contoso)、历史变体 (OneDriveCommercial / OneDrive-Personal)
+    // 必须以路径分隔符或路径根开始，紧跟 onedrive，后接空格/连字符/分隔符/词尾，或紧跟字母（Commercial 等）
+    const oneDrivePattern = /(?:^|[\\/])onedrive(?:[\s\-\\/]|[A-Za-z]|$)/i;
+    if (oneDrivePattern.test(projectRoot)) {
       console.warn(
         "[warn] 仓库位于 OneDrive 同步目录——OneDrive 实时同步会与 Node fs.watch 抢锁，构建偶发卡死。",
       );
