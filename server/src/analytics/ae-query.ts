@@ -89,11 +89,18 @@ export async function queryAEAnalytics(env: AEQueryEnv, days: number): Promise<A
     byLang,
     totals,
     heatmap,
-    durBuckets,
+    durB1,
+    durB2,
+    durB3,
+    durB4,
+    durB5,
+    durB6,
     entryPagesRows,
     exitPagesRows,
-    bounceStats,
+    bounceVisitors,
+    bounceBouncers,
     referersFull,
+    directAccess,
   ] = await Promise.all([
     runSql<{ date: string; cnt: number; uv: number }>(
       env,
@@ -162,22 +169,36 @@ export async function queryAEAnalytics(env: AEQueryEnv, days: number): Promise<A
        FROM ${DATASET} WHERE timestamp > NOW() - ${since}
        GROUP BY dow, hour ORDER BY dow, hour FORMAT JSON`,
     ),
-    // —— 新增：停留时长分桶（毫秒） ——
-    runSql<{ bucket: string; cnt: number }>(
+    // —— 新增：停留时长分桶（毫秒）：6 条独立查询并发 ——
+    runSql<{ cnt: number }>(
       env,
-      `SELECT
-         CASE
-           WHEN double1 < 10000 THEN '0-10s'
-           WHEN double1 < 30000 THEN '10-30s'
-           WHEN double1 < 60000 THEN '30s-1m'
-           WHEN double1 < 180000 THEN '1-3m'
-           WHEN double1 < 600000 THEN '3-10m'
-           ELSE '10m+'
-         END AS bucket,
-         SUM(_sample_interval) AS cnt
-       FROM ${DATASET}
-       WHERE timestamp > NOW() - ${since} AND double1 > 0
-       GROUP BY bucket FORMAT JSON`,
+      `SELECT SUM(_sample_interval) AS cnt FROM ${DATASET}
+       WHERE timestamp > NOW() - ${since} AND double1 > 0 AND double1 < 10000 FORMAT JSON`,
+    ),
+    runSql<{ cnt: number }>(
+      env,
+      `SELECT SUM(_sample_interval) AS cnt FROM ${DATASET}
+       WHERE timestamp > NOW() - ${since} AND double1 >= 10000 AND double1 < 30000 FORMAT JSON`,
+    ),
+    runSql<{ cnt: number }>(
+      env,
+      `SELECT SUM(_sample_interval) AS cnt FROM ${DATASET}
+       WHERE timestamp > NOW() - ${since} AND double1 >= 30000 AND double1 < 60000 FORMAT JSON`,
+    ),
+    runSql<{ cnt: number }>(
+      env,
+      `SELECT SUM(_sample_interval) AS cnt FROM ${DATASET}
+       WHERE timestamp > NOW() - ${since} AND double1 >= 60000 AND double1 < 180000 FORMAT JSON`,
+    ),
+    runSql<{ cnt: number }>(
+      env,
+      `SELECT SUM(_sample_interval) AS cnt FROM ${DATASET}
+       WHERE timestamp > NOW() - ${since} AND double1 >= 180000 AND double1 < 600000 FORMAT JSON`,
+    ),
+    runSql<{ cnt: number }>(
+      env,
+      `SELECT SUM(_sample_interval) AS cnt FROM ${DATASET}
+       WHERE timestamp > NOW() - ${since} AND double1 >= 600000 FORMAT JSON`,
     ),
     // —— 新增：入口页（referer 为空 = 直接访问/外链着陆的页面 Top） ——
     runSql<{ path: string; cnt: number }>(
@@ -195,68 +216,105 @@ export async function queryAEAnalytics(env: AEQueryEnv, days: number): Promise<A
        WHERE timestamp > NOW() - ${since} AND double1 > 0 AND double1 < 5000
        GROUP BY path ORDER BY cnt DESC LIMIT 10 FORMAT JSON`,
     ),
-    // —— 新增：跳出 + 人均访问页数（基于 visitor session） ——
-    runSql<{ visitors: number; bouncers: number; total_pv: number }>(
+    // —— 新增：跳出 + 人均访问页数（基于 visitor session）：拆 3 条 ——
+    runSql<{ visitors: number; total_pv: number }>(
       env,
-      `SELECT
-         COUNT() AS visitors,
-         SUM(CASE WHEN pv = 1 THEN 1 ELSE 0 END) AS bouncers,
-         SUM(pv) AS total_pv
-       FROM (
+      `SELECT COUNT() AS visitors, SUM(pv) AS total_pv FROM (
          SELECT blob10 AS vid, SUM(_sample_interval) AS pv
          FROM ${DATASET}
          WHERE timestamp > NOW() - ${since} AND blob10 != ''
          GROUP BY vid
        ) FORMAT JSON`,
     ),
-    // —— 新增：扩展引荐 Top 20（含直接访问） ——
+    runSql<{ bouncers: number }>(
+      env,
+      `SELECT COUNT() AS bouncers FROM (
+         SELECT blob10 AS vid, SUM(_sample_interval) AS pv
+         FROM ${DATASET}
+         WHERE timestamp > NOW() - ${since} AND blob10 != ''
+         GROUP BY vid
+         HAVING pv = 1
+       ) FORMAT JSON`,
+    ),
+    // —— 新增：扩展引荐 Top 20（仅非空 referer，直接访问单独算） ——
     runSql<{ referer: string; cnt: number }>(
       env,
-      `SELECT
-         CASE WHEN blob4 = '' THEN '(直接访问)' ELSE blob4 END AS referer,
-         SUM(_sample_interval) AS cnt
+      `SELECT blob4 AS referer, SUM(_sample_interval) AS cnt
        FROM ${DATASET}
-       WHERE timestamp > NOW() - ${since}
+       WHERE timestamp > NOW() - ${since} AND blob4 != ''
        GROUP BY referer ORDER BY cnt DESC LIMIT 20 FORMAT JSON`,
+    ),
+    // —— 新增：直接访问总量（referer 为空） ——
+    runSql<{ cnt: number }>(
+      env,
+      `SELECT SUM(_sample_interval) AS cnt FROM ${DATASET}
+       WHERE timestamp > NOW() - ${since} AND blob4 = '' FORMAT JSON`,
     ),
   ]);
 
   const totalRow = totals[0] || { total: 0, uv: 0, avg_dur: 0 };
   // 跳出率 / 人均页数
-  const bounceRow = bounceStats[0] || { visitors: 0, bouncers: 0, total_pv: 0 };
-  const visitors = Number(bounceRow.visitors) || 0;
-  const bouncers = Number(bounceRow.bouncers) || 0;
-  const totalPv = Number(bounceRow.total_pv) || 0;
+  const visitorsRow = bounceVisitors[0] || { visitors: 0, total_pv: 0 };
+  const bouncersRow = bounceBouncers[0] || { bouncers: 0 };
+  const visitors = Number(visitorsRow.visitors) || 0;
+  const bouncers = Number(bouncersRow.bouncers) || 0;
+  const totalPv = Number(visitorsRow.total_pv) || 0;
   const bounceRate = visitors > 0 ? bouncers / visitors : 0;
   const pagesPerVisitor = visitors > 0 ? totalPv / visitors : 0;
 
-  // 新老访客比：用首日 visitor 与窗口起点对比
-  // 简化策略：当一个 visitor 在窗口前 24h 出现过则算「老访客」，否则「新访客」
-  // 由于 AE 只保留 31 天，我们取窗口内首次出现 > NOW()-24h 的 visitor 算「新」
+  // 新老访客比：拆为两条查询并行（窗口内首访 > 24h 前 = old，否则 new）
+  // AE 不支持 CASE WHEN，改用两条 HAVING 过滤
   let newVisitors = 0;
   let returningVisitors = 0;
   try {
-    const visitorAge = await runSql<{ first_seen: string; cnt: number }>(
-      env,
-      `SELECT
-         CASE
-           WHEN toUnixTimestamp(min_ts) > toUnixTimestamp(NOW() - INTERVAL '1' DAY) THEN 'new'
-           ELSE 'returning'
-         END AS first_seen,
-         COUNT() AS cnt
-       FROM (
-         SELECT blob10 AS vid, MIN(timestamp) AS min_ts
-         FROM ${DATASET}
-         WHERE timestamp > NOW() - ${since} AND blob10 != ''
-         GROUP BY vid
-       ) GROUP BY first_seen FORMAT JSON`,
-    );
-    for (const row of visitorAge) {
-      if (row.first_seen === "new") newVisitors = Number(row.cnt) || 0;
-      else returningVisitors = Number(row.cnt) || 0;
-    }
+    const [newRows, oldRows] = await Promise.all([
+      runSql<{ cnt: number }>(
+        env,
+        `SELECT COUNT() AS cnt FROM (
+           SELECT blob10 AS vid, MIN(timestamp) AS min_ts
+           FROM ${DATASET}
+           WHERE timestamp > NOW() - ${since} AND blob10 != ''
+           GROUP BY vid
+           HAVING min_ts > NOW() - INTERVAL '1' DAY
+         ) FORMAT JSON`,
+      ),
+      runSql<{ cnt: number }>(
+        env,
+        `SELECT COUNT() AS cnt FROM (
+           SELECT blob10 AS vid, MIN(timestamp) AS min_ts
+           FROM ${DATASET}
+           WHERE timestamp > NOW() - ${since} AND blob10 != ''
+           GROUP BY vid
+           HAVING min_ts <= NOW() - INTERVAL '1' DAY
+         ) FORMAT JSON`,
+      ),
+    ]);
+    newVisitors = Number(newRows[0]?.cnt) || 0;
+    returningVisitors = Number(oldRows[0]?.cnt) || 0;
   } catch {
     // 静默降级：visitorAge 查询失败不影响主响应
+  }
+
+  // 拼接停留分桶（6 条独立查询 → 命名桶）
+  const durationBuckets = [
+    { bucket: "0-10s", count: Number(durB1[0]?.cnt) || 0 },
+    { bucket: "10-30s", count: Number(durB2[0]?.cnt) || 0 },
+    { bucket: "30s-1m", count: Number(durB3[0]?.cnt) || 0 },
+    { bucket: "1-3m", count: Number(durB4[0]?.cnt) || 0 },
+    { bucket: "3-10m", count: Number(durB5[0]?.cnt) || 0 },
+    { bucket: "10m+", count: Number(durB6[0]?.cnt) || 0 },
+  ];
+
+  // 引荐 Top 20：把直接访问拼到首位（按数量重排）
+  const directCount = Number(directAccess[0]?.cnt) || 0;
+  const referersFullList = referersFull.map((r) => ({
+    referer: r.referer,
+    count: Number(r.cnt) || 0,
+  }));
+  if (directCount > 0) {
+    referersFullList.push({ referer: "(直接访问)", count: directCount });
+    referersFullList.sort((a, b) => b.count - a.count);
+    referersFullList.splice(20);
   }
 
   return {
@@ -277,7 +335,7 @@ export async function queryAEAnalytics(env: AEQueryEnv, days: number): Promise<A
       hour: Number(r.hour) || 0,
       count: Number(r.cnt) || 0,
     })),
-    durationBuckets: durBuckets.map((r) => ({ bucket: r.bucket, count: Number(r.cnt) || 0 })),
+    durationBuckets,
     entryPages: entryPagesRows.map((r) => ({ path: r.path, count: Number(r.cnt) || 0 })),
     exitPages: exitPagesRows.map((r) => ({ path: r.path, count: Number(r.cnt) || 0 })),
     visitorTypes: [
@@ -286,6 +344,6 @@ export async function queryAEAnalytics(env: AEQueryEnv, days: number): Promise<A
     ],
     bounceRate,
     pagesPerVisitor,
-    topReferersFull: referersFull.map((r) => ({ referer: r.referer, count: Number(r.cnt) || 0 })),
+    topReferersFull: referersFullList,
   };
 }
