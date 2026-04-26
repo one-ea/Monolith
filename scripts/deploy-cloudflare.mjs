@@ -3,6 +3,9 @@ import process from "node:process";
 
 const projectRoot = process.cwd();
 const clientRoot = `${projectRoot}/client`;
+// Windows 下 npm/npx 实际是 .cmd 脚本，必须 shell:true 才能找到
+const IS_WIN = process.platform === "win32";
+const SHELL = IS_WIN;
 
 function parseArgs(argv) {
   const options = {
@@ -60,9 +63,20 @@ function runStep(title, command, args, extra = {}) {
     stdio: extra.input ? ["pipe", "inherit", "inherit"] : "inherit",
     input: extra.input,
     encoding: "utf8",
+    shell: SHELL,
   });
 
+  if (result.error) {
+    console.error(`\n[error] 步骤 "${title}" 启动失败：${result.error.message}`);
+    if (result.error.code === "ENOENT") {
+      console.error(`[hint] 找不到命令 "${command}"。请确认已安装 Node.js (>=20) 与 npm，并将其加入 PATH。`);
+      console.error(`[hint] Windows 用户请通过官网安装包或 nvm-windows 安装；macOS/Linux 推荐用 fnm/nvm。`);
+    }
+    process.exit(1);
+  }
+
   if (result.status !== 0) {
+    console.error(`\n[error] 步骤 "${title}" 失败 (exit code ${result.status})。`);
     process.exit(result.status || 1);
   }
 }
@@ -72,16 +86,58 @@ function runCapture(title, command, args) {
   const result = spawnSync(command, args, {
     cwd: projectRoot,
     encoding: "utf8",
+    shell: SHELL,
   });
 
   if (result.stdout) process.stdout.write(result.stdout);
   if (result.stderr) process.stderr.write(result.stderr);
 
+  if (result.error) {
+    console.error(`\n[error] 步骤 "${title}" 启动失败：${result.error.message}`);
+    process.exit(1);
+  }
+
   if (result.status !== 0) {
+    console.error(`\n[error] 步骤 "${title}" 失败 (exit code ${result.status})。`);
     process.exit(result.status || 1);
   }
 
   return `${result.stdout || ""}\n${result.stderr || ""}`;
+}
+
+function checkPrerequisites() {
+  const errors = [];
+  // wrangler 登录态检测：API_TOKEN 或本机 oauth 二选一
+  const tokenPresent = !!process.env.CLOUDFLARE_API_TOKEN;
+  if (!tokenPresent) {
+    const probe = spawnSync("npx", ["wrangler", "whoami"], {
+      cwd: projectRoot,
+      encoding: "utf8",
+      shell: SHELL,
+    });
+    if (probe.status !== 0) {
+      errors.push(
+        "未检测到 CLOUDFLARE_API_TOKEN，且本机 wrangler 未登录。请先 `npx wrangler login`，或导出 CLOUDFLARE_API_TOKEN 后重试。",
+      );
+    } else {
+      console.log("[ok] 已通过本机 wrangler 登录态。");
+    }
+  } else {
+    console.log("[ok] 检测到 CLOUDFLARE_API_TOKEN。");
+  }
+
+  if (!process.env.CLOUDFLARE_ACCOUNT_ID && tokenPresent) {
+    errors.push(
+      "已设置 CLOUDFLARE_API_TOKEN 但未设置 CLOUDFLARE_ACCOUNT_ID。Token 模式下必须显式提供账户 ID。",
+    );
+  }
+
+  if (errors.length > 0) {
+    console.error("\n[预检失败]");
+    for (const e of errors) console.error(`  - ${e}`);
+    console.error("\n详见 README 「☁️ 部署 → 预检清单」。");
+    process.exit(1);
+  }
 }
 
 function detectWorkersUrl(output) {
@@ -104,6 +160,7 @@ function printPrerequisiteHints() {
 
 const options = parseArgs(process.argv.slice(2));
 printPrerequisiteHints();
+checkPrerequisites();
 
 if (!options.skipMigrate) {
   runStep("应用远程数据库迁移", "npm", ["run", "db:migrate:remote"]);

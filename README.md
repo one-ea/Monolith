@@ -137,13 +137,28 @@ npm run dev
 
 ## ☁️ 部署
 
+**首选方案：本机 CLI 一键部署（已生产验证）**
+
 ```bash
+# 1. 登录 wrangler（首次执行，浏览器 OAuth 一次即可）
+npx wrangler login
+
+# 2. 一键部署
 npm run deploy:cloudflare
 ```
 
-一条命令完成「远程迁移 → Workers → API_BASE 注入 → Pages 前端」全链路，亦支持 GitHub Actions 触发。
+一条命令完成「预检 → 远程迁移 → Workers → API_BASE 注入 → Pages 前端」全链路。脚本已支持 Windows / macOS / Linux 三端。
 
-> 部署参数、CI 配置与故障排查请参阅 [**Wiki · 部署指南**](https://github.com/one-ea/Monolith/wiki/Deployment)。
+**预检清单**（脚本启动后自动校验）：
+- 已 `wrangler login` 或导出 `CLOUDFLARE_API_TOKEN`
+- Token 模式下需同时设置 `CLOUDFLARE_ACCOUNT_ID`
+- Node.js ≥ 20 在 PATH 中
+
+> **GitHub Actions 在线部署：⚠️ 待测试**
+>
+> `.github/workflows/deploy-cloudflare.yml` 提供了 workflow_dispatch 触发的 CI 部署，但截至当前版本**尚未完成端到端验证**，已收到用户反馈在 Windows 环境下脚本会在「应用远程数据库迁移」步骤静默卡死（v2.3.0 起已通过 `shell:true` + ENOENT 诊断修复，仍需 CI 端跑通才能转正）。在线部署稳定前，请优先使用本机 CLI 方案。
+
+> 详细部署参数、CI 配置与故障排查请参阅 [**Wiki · 部署指南**](https://github.com/one-ea/Monolith/wiki/Deployment)。
 
 ---
 
