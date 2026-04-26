@@ -76,8 +76,10 @@ function runStep(title, command, args, extra = {}) {
   }
 
   if (result.status !== 0) {
-    console.error(`\n[error] 步骤 "${title}" 失败 (exit code ${result.status})。`);
-    process.exit(result.status || 1);
+    const code = result.status === null ? "signal/null" : result.status;
+    console.error(`\n[error] 步骤 "${title}" 失败 (exit code ${code})。`);
+    if (result.signal) console.error(`[hint] 子进程被信号中断：${result.signal}`);
+    process.exit(typeof result.status === "number" ? result.status : 1);
   }
 }
 
@@ -163,7 +165,14 @@ printPrerequisiteHints();
 checkPrerequisites();
 
 if (!options.skipMigrate) {
-  runStep("应用远程数据库迁移", "npm", ["run", "db:migrate:remote"]);
+  // 绕过 npm workspace shim 直接调 wrangler，避免 Windows 双层 shell 转发吞 stdin
+  // 显式 pipe "y\n" 兜底 wrangler "Ok to proceed?" 交互（非 TTY 环境下也能放行）
+  runStep(
+    "应用远程数据库迁移",
+    "npx",
+    ["wrangler", "d1", "migrations", "apply", "monolith-db", "--remote"],
+    { cwd: `${projectRoot}/server`, input: "y\n" },
+  );
 }
 
 if (!options.skipServer) {
