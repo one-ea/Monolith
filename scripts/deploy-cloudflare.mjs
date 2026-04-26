@@ -153,6 +153,8 @@ if (!options.skipClient) {
     "--branch",
     options.branch,
     "--commit-dirty=true",
+    "--commit-message",
+    "monolith deploy",
   ], { cwd: clientRoot });
 }
 
