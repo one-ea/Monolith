@@ -92,7 +92,7 @@ export function AdminGate({
               验证中...
             </div>
           ) : (
-            <form onSubmit={handleSubmit}>
+            <form onSubmit={handleSubmit} aria-label="管理员登录">
               <div className="mb-[16px] text-center">
                 <div className="mx-auto mb-[10px] flex h-[36px] w-[36px] items-center justify-center rounded-lg bg-gradient-to-b from-foreground/8 to-foreground/4 border border-border/20">
                   <span className="text-[16px]">🔐</span>
@@ -102,8 +102,22 @@ export function AdminGate({
                 </p>
               </div>
 
+              {/* 隐藏 username 字段：让 Bitwarden / 1Password / Chrome 等密码管理器识别为登录表单 */}
+              <input
+                type="text"
+                name="username"
+                value="admin"
+                autoComplete="username"
+                readOnly
+                hidden
+                tabIndex={-1}
+                aria-hidden="true"
+              />
+
               <input
                 ref={inputRef}
+                id="admin-gate-password"
+                name="password"
                 type="password"
                 value={password}
                 onChange={(e) => {
@@ -112,6 +126,7 @@ export function AdminGate({
                 }}
                 placeholder="输入密码"
                 autoComplete="current-password"
+                aria-label="管理员密码"
                 className="h-[40px] w-full rounded-lg border border-border/40 bg-background/50 px-[14px] text-[14px] text-foreground placeholder:text-muted-foreground/30 outline-none focus:border-foreground/25 focus:ring-1 focus:ring-foreground/10 transition-all"
               />
 

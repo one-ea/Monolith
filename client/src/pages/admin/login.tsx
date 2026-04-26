@@ -35,12 +35,27 @@ export function AdminLogin() {
           <h1 className="text-[20px] font-semibold tracking-[-0.01em]">管理后台</h1>
           <p className="mt-[8px] text-[13px] text-muted-foreground">输入密码以进入管理界面</p>
         </div>
-        <form onSubmit={handleSubmit} className="flex flex-col gap-[16px]">
+        <form onSubmit={handleSubmit} className="flex flex-col gap-[16px]" aria-label="管理员登录">
+          {/* 隐藏 username 字段：让 Bitwarden / 1Password / Chrome 等密码管理器识别为登录表单 */}
           <input
+            type="text"
+            name="username"
+            value="admin"
+            autoComplete="username"
+            readOnly
+            hidden
+            tabIndex={-1}
+            aria-hidden="true"
+          />
+          <input
+            id="admin-login-password"
+            name="password"
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             placeholder="管理密码"
+            autoComplete="current-password"
+            aria-label="管理员密码"
             autoFocus
             className="h-[40px] rounded-md border border-border/60 bg-background/50 px-[12px] text-[14px] text-foreground placeholder:text-muted-foreground/40 outline-none focus:border-foreground/30 transition-colors"
           />
