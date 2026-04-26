@@ -27,6 +27,117 @@ function countryFlag(code: string): string {
   );
 }
 
+// 访问趋势图：柱状 + 折线叠加 + 网格参考线，hover 高亮当日
+function TrendChart({ data, max }: { data: { date: string; count: number }[]; max: number }) {
+  const [hover, setHover] = useState<number | null>(null);
+  const W = 720;
+  const H = 200;
+  const PAD_T = 16;
+  const PAD_B = 36;
+  const PAD_X = 24;
+  const innerH = H - PAD_T - PAD_B;
+  const innerW = W - PAD_X * 2;
+  const n = data.length;
+  const step = n > 1 ? innerW / (n - 1) : 0;
+  const barW = n > 0 ? Math.min(40, (innerW / n) * 0.55) : 0;
+  const safeMax = max || 1;
+
+  // 网格 4 等分（含顶/底）
+  const gridLines = [0, 0.25, 0.5, 0.75, 1].map((p) => ({
+    y: PAD_T + innerH * (1 - p),
+    label: Math.round(safeMax * p),
+  }));
+
+  const points = data.map((d, i) => ({
+    x: PAD_X + (n > 1 ? step * i : innerW / 2),
+    y: PAD_T + innerH * (1 - d.count / safeMax),
+    count: d.count,
+    date: d.date,
+  }));
+
+  const linePath = points.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(" ");
+  const areaPath = points.length > 0
+    ? `${linePath} L ${points[points.length - 1].x.toFixed(1)} ${PAD_T + innerH} L ${points[0].x.toFixed(1)} ${PAD_T + innerH} Z`
+    : "";
+
+  return (
+    <div className="px-[16px] pt-[12px] pb-[8px]">
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto" preserveAspectRatio="none" role="img" aria-label="访问趋势图">
+        <defs>
+          <linearGradient id="trendArea" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="oklch(0.65 0.15 200)" stopOpacity="0.35" />
+            <stop offset="100%" stopColor="oklch(0.65 0.15 200)" stopOpacity="0" />
+          </linearGradient>
+          <linearGradient id="trendBar" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="oklch(0.7 0.16 200)" stopOpacity="0.55" />
+            <stop offset="100%" stopColor="oklch(0.55 0.18 220)" stopOpacity="0.18" />
+          </linearGradient>
+        </defs>
+
+        {/* 网格 + Y 轴刻度 */}
+        {gridLines.map((g, i) => (
+          <g key={i}>
+            <line x1={PAD_X} x2={W - PAD_X} y1={g.y} y2={g.y} stroke="currentColor" strokeOpacity={i === 0 ? 0 : 0.08} strokeDasharray={i === gridLines.length - 1 ? "0" : "3 4"} />
+            <text x={PAD_X - 6} y={g.y + 3} textAnchor="end" className="fill-current opacity-30" fontSize="10" fontFamily="monospace">{g.label}</text>
+          </g>
+        ))}
+
+        {/* 柱子 */}
+        {points.map((p, i) => {
+          const barH = PAD_T + innerH - p.y;
+          return (
+            <rect
+              key={`b-${i}`}
+              x={p.x - barW / 2}
+              y={p.y}
+              width={barW}
+              height={Math.max(0, barH)}
+              rx={2}
+              fill="url(#trendBar)"
+              opacity={hover === null || hover === i ? 1 : 0.45}
+              style={{ transition: "opacity .2s" }}
+            />
+          );
+        })}
+
+        {/* 面积 + 折线 */}
+        {areaPath && <path d={areaPath} fill="url(#trendArea)" />}
+        {linePath && <path d={linePath} fill="none" stroke="oklch(0.78 0.14 200)" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />}
+
+        {/* 数据点 + 数值 */}
+        {points.map((p, i) => (
+          <g key={`p-${i}`}>
+            <circle cx={p.x} cy={p.y} r={hover === i ? 5 : 3} fill="oklch(0.85 0.15 200)" stroke="oklch(0.13 0.005 260)" strokeWidth={1.5} style={{ transition: "r .15s" }} />
+            <text x={p.x} y={p.y - 10} textAnchor="middle" className="fill-current opacity-70" fontSize="10" fontFamily="monospace" fontWeight="600">{p.count}</text>
+          </g>
+        ))}
+
+        {/* X 轴日期 */}
+        {points.map((p, i) => (
+          <text key={`x-${i}`} x={p.x} y={H - PAD_B + 18} textAnchor="middle" className="fill-current opacity-40" fontSize="10" fontFamily="monospace">{p.date.slice(5)}</text>
+        ))}
+
+        {/* 透明 hover 区域 */}
+        {points.map((p, i) => {
+          const w = step > 0 ? step : innerW;
+          return (
+            <rect
+              key={`h-${i}`}
+              x={p.x - w / 2}
+              y={PAD_T}
+              width={w}
+              height={innerH + PAD_B - 16}
+              fill="transparent"
+              onMouseEnter={() => setHover(i)}
+              onMouseLeave={() => setHover(null)}
+            />
+          );
+        })}
+      </svg>
+    </div>
+  );
+}
+
 export function AdminAnalytics() {
   const [data, setData] = useState<AnalyticsData | null>(null);
   const [days, setDays] = useState(7);
@@ -142,34 +253,20 @@ export function AdminAnalytics() {
             </div>
           </div>
 
-          {/* 趋势图（简易柱状图） */}
+          {/* 趋势图（SVG 折线 + 柱状叠加） */}
           <div className="analytics-section">
             <h2 className="analytics-section__title">
               <TrendingUp className="h-[14px] w-[14px]" />
               访问趋势
+              <span className="ml-auto text-[11px] text-muted-foreground/40 font-normal">
+                峰值 {maxDayCount} · 日均 {days > 0 ? Math.round(totalVisits / days) : 0}
+              </span>
             </h2>
-            <div className="analytics-chart">
-              {data.visitsByDay.length === 0 ? (
-                <div className="text-center text-muted-foreground/30 py-[40px] text-[12px]">暂无访问数据</div>
-              ) : (
-                <div className="analytics-chart__bars">
-                  {data.visitsByDay.map((day) => (
-                    <div key={day.date} className="analytics-chart__col">
-                      <div className="analytics-chart__bar-wrapper">
-                        <div
-                          className="analytics-chart__bar"
-                          style={{ height: `${(day.count / maxDayCount) * 100}%` }}
-                        />
-                      </div>
-                      <span className="analytics-chart__label">
-                        {day.date.slice(5)}
-                      </span>
-                      <span className="analytics-chart__count">{day.count}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+            {data.visitsByDay.length === 0 ? (
+              <div className="text-center text-muted-foreground/30 py-[40px] text-[12px]">暂无访问数据</div>
+            ) : (
+              <TrendChart data={data.visitsByDay} max={maxDayCount} />
+            )}
           </div>
 
           {/* 下方 2 列布局 */}

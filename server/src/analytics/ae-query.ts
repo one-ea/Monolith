@@ -29,6 +29,15 @@ export type AEAnalyticsResult = {
   totalVisits: number;
   uniqueVisitors: number;
   avgDuration: number; // 平均停留毫秒
+  // —— 新增维度 ——
+  hourlyHeatmap: { dow: number; hour: number; count: number }[]; // 0=周日..6=周六, hour 0-23
+  durationBuckets: { bucket: string; count: number }[]; // 0-10s / 10-30s / 30s-1m / 1-3m / 3-10m / 10m+
+  entryPages: { path: string; count: number }[]; // 入口页（每个 visitor 第一次访问的页面）
+  exitPages: { path: string; count: number }[]; // 出口页（每个 visitor 最后访问的页面）
+  visitorTypes: { type: "new" | "returning"; count: number }[]; // 新老访客（窗口内首次访问视为新）
+  bounceRate: number; // 跳出率（只浏览 1 个页面的 visitor 占比，0-1）
+  pagesPerVisitor: number; // 人均访问页面数
+  topReferersFull: { referer: string; count: number }[]; // 引荐扩展到 20 条
 };
 
 /** 执行一条 AE SQL，返回数据数组（失败抛错） */
@@ -79,6 +88,12 @@ export async function queryAEAnalytics(env: AEQueryEnv, days: number): Promise<A
     byScreen,
     byLang,
     totals,
+    heatmap,
+    durBuckets,
+    entryPagesRows,
+    exitPagesRows,
+    bounceStats,
+    referersFull,
   ] = await Promise.all([
     runSql<{ date: string; cnt: number; uv: number }>(
       env,
@@ -140,9 +155,107 @@ export async function queryAEAnalytics(env: AEQueryEnv, days: number): Promise<A
       `SELECT SUM(_sample_interval) AS total, COUNT(DISTINCT blob10) AS uv, AVG(double1) AS avg_dur
        FROM ${DATASET} WHERE timestamp > NOW() - ${since} FORMAT JSON`,
     ),
+    // —— 新增：小时 × 星期 热力图（duration=0 的纯 pageview 也算一次访问） ——
+    runSql<{ dow: number; hour: number; cnt: number }>(
+      env,
+      `SELECT toDayOfWeek(timestamp) AS dow, toHour(timestamp) AS hour, SUM(_sample_interval) AS cnt
+       FROM ${DATASET} WHERE timestamp > NOW() - ${since}
+       GROUP BY dow, hour ORDER BY dow, hour FORMAT JSON`,
+    ),
+    // —— 新增：停留时长分桶（毫秒） ——
+    runSql<{ bucket: string; cnt: number }>(
+      env,
+      `SELECT
+         multiIf(
+           double1 < 10000, '0-10s',
+           double1 < 30000, '10-30s',
+           double1 < 60000, '30s-1m',
+           double1 < 180000, '1-3m',
+           double1 < 600000, '3-10m',
+           '10m+') AS bucket,
+         SUM(_sample_interval) AS cnt
+       FROM ${DATASET}
+       WHERE timestamp > NOW() - ${since} AND double1 > 0
+       GROUP BY bucket FORMAT JSON`,
+    ),
+    // —— 新增：入口页（每个 visitor 在窗口内最早访问的页面） ——
+    runSql<{ path: string; cnt: number }>(
+      env,
+      `SELECT path, COUNT() AS cnt FROM (
+         SELECT blob10 AS vid, argMin(blob2, timestamp) AS path
+         FROM ${DATASET}
+         WHERE timestamp > NOW() - ${since} AND blob10 != ''
+         GROUP BY vid
+       ) GROUP BY path ORDER BY cnt DESC LIMIT 10 FORMAT JSON`,
+    ),
+    // —— 新增：出口页（每个 visitor 在窗口内最后访问的页面） ——
+    runSql<{ path: string; cnt: number }>(
+      env,
+      `SELECT path, COUNT() AS cnt FROM (
+         SELECT blob10 AS vid, argMax(blob2, timestamp) AS path
+         FROM ${DATASET}
+         WHERE timestamp > NOW() - ${since} AND blob10 != ''
+         GROUP BY vid
+       ) GROUP BY path ORDER BY cnt DESC LIMIT 10 FORMAT JSON`,
+    ),
+    // —— 新增：跳出 + 人均访问页数（基于 visitor session） ——
+    runSql<{ visitors: number; bouncers: number; total_pv: number }>(
+      env,
+      `SELECT
+         COUNT() AS visitors,
+         countIf(pv = 1) AS bouncers,
+         SUM(pv) AS total_pv
+       FROM (
+         SELECT blob10 AS vid, COUNT(DISTINCT blob2) AS pv
+         FROM ${DATASET}
+         WHERE timestamp > NOW() - ${since} AND blob10 != ''
+         GROUP BY vid
+       ) FORMAT JSON`,
+    ),
+    // —— 新增：扩展引荐 Top 20（含直接访问） ——
+    runSql<{ referer: string; cnt: number }>(
+      env,
+      `SELECT if(blob4 = '', '(直接访问)', blob4) AS referer, SUM(_sample_interval) AS cnt
+       FROM ${DATASET}
+       WHERE timestamp > NOW() - ${since}
+       GROUP BY referer ORDER BY cnt DESC LIMIT 20 FORMAT JSON`,
+    ),
   ]);
 
   const totalRow = totals[0] || { total: 0, uv: 0, avg_dur: 0 };
+  // 跳出率 / 人均页数
+  const bounceRow = bounceStats[0] || { visitors: 0, bouncers: 0, total_pv: 0 };
+  const visitors = Number(bounceRow.visitors) || 0;
+  const bouncers = Number(bounceRow.bouncers) || 0;
+  const totalPv = Number(bounceRow.total_pv) || 0;
+  const bounceRate = visitors > 0 ? bouncers / visitors : 0;
+  const pagesPerVisitor = visitors > 0 ? totalPv / visitors : 0;
+
+  // 新老访客比：用首日 visitor 与窗口起点对比
+  // 简化策略：当一个 visitor 在窗口前 24h 出现过则算「老访客」，否则「新访客」
+  // 由于 AE 只保留 31 天，我们取窗口内首次出现 > NOW()-24h 的 visitor 算「新」
+  let newVisitors = 0;
+  let returningVisitors = 0;
+  try {
+    const visitorAge = await runSql<{ first_seen: string; cnt: number }>(
+      env,
+      `SELECT
+         if(toUnixTimestamp(min_ts) > toUnixTimestamp(NOW() - INTERVAL '1' DAY), 'new', 'returning') AS first_seen,
+         COUNT() AS cnt
+       FROM (
+         SELECT blob10 AS vid, MIN(timestamp) AS min_ts
+         FROM ${DATASET}
+         WHERE timestamp > NOW() - ${since} AND blob10 != ''
+         GROUP BY vid
+       ) GROUP BY first_seen FORMAT JSON`,
+    );
+    for (const row of visitorAge) {
+      if (row.first_seen === "new") newVisitors = Number(row.cnt) || 0;
+      else returningVisitors = Number(row.cnt) || 0;
+    }
+  } catch {
+    // 静默降级：visitorAge 查询失败不影响主响应
+  }
 
   return {
     visitsByDay: byDay.map((r) => ({ date: r.date, count: Number(r.cnt) || 0, uv: Number(r.uv) || 0 })),
@@ -157,5 +270,20 @@ export async function queryAEAnalytics(env: AEQueryEnv, days: number): Promise<A
     totalVisits: Number(totalRow.total) || 0,
     uniqueVisitors: Number(totalRow.uv) || 0,
     avgDuration: Math.round(Number(totalRow.avg_dur) || 0),
+    hourlyHeatmap: heatmap.map((r) => ({
+      dow: Number(r.dow) || 0,
+      hour: Number(r.hour) || 0,
+      count: Number(r.cnt) || 0,
+    })),
+    durationBuckets: durBuckets.map((r) => ({ bucket: r.bucket, count: Number(r.cnt) || 0 })),
+    entryPages: entryPagesRows.map((r) => ({ path: r.path, count: Number(r.cnt) || 0 })),
+    exitPages: exitPagesRows.map((r) => ({ path: r.path, count: Number(r.cnt) || 0 })),
+    visitorTypes: [
+      { type: "new", count: newVisitors },
+      { type: "returning", count: returningVisitors },
+    ],
+    bounceRate,
+    pagesPerVisitor,
+    topReferersFull: referersFull.map((r) => ({ referer: r.referer, count: Number(r.cnt) || 0 })),
   };
 }

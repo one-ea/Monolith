@@ -317,6 +317,14 @@ export type AEAnalyticsData = {
   totalVisits: number;
   uniqueVisitors: number;
   avgDuration: number;
+  hourlyHeatmap: { dow: number; hour: number; count: number }[];
+  durationBuckets: { bucket: string; count: number }[];
+  entryPages: { path: string; count: number }[];
+  exitPages: { path: string; count: number }[];
+  visitorTypes: { type: "new" | "returning"; count: number }[];
+  bounceRate: number;
+  pagesPerVisitor: number;
+  topReferersFull: { referer: string; count: number }[];
 };
 
 export type AEAnalyticsError = {
