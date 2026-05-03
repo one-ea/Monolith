@@ -114,6 +114,7 @@ export class PostgresAdapter implements IDatabase {
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )
     `;
+    await this.client`CREATE INDEX IF NOT EXISTS pg_comments_post_id_idx ON comments(post_id)`;
     await this.client`
       CREATE TABLE IF NOT EXISTS post_versions (
         id SERIAL PRIMARY KEY,
@@ -144,6 +145,7 @@ export class PostgresAdapter implements IDatabase {
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )
     `;
+    await this.client`CREATE INDEX IF NOT EXISTS pg_visits_path_idx ON visits(path)`;
   }
 
   /* ── 内部辅助 ─────────────────── */

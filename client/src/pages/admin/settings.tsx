@@ -80,11 +80,11 @@ function isSocialIcon(value: unknown): value is SocialIcon {
   return typeof value === "string" && SOCIAL_ICON_OPTIONS.some((option) => option.value === value);
 }
 
-function parseSocialLinks(value: string): SocialLinkConfig[] {
+function parseSocialLinks(value: string): SocialLinkConfig[] | null {
   if (!value.trim()) return [];
   try {
     const parsed: unknown = JSON.parse(value);
-    if (!Array.isArray(parsed)) return [];
+    if (!Array.isArray(parsed)) return null;
 
     return parsed
       .filter((item): item is Record<string, unknown> => typeof item === "object" && item !== null)
@@ -96,7 +96,7 @@ function parseSocialLinks(value: string): SocialLinkConfig[] {
         enabled: typeof item.enabled === "boolean" ? item.enabled : true,
       }));
   } catch {
-    return [];
+    return null;
   }
 }
 
@@ -109,7 +109,9 @@ function getLegacySocialLinks(settings: Settings): SocialLinkConfig[] {
 }
 
 function getSocialLinks(settings: Settings): SocialLinkConfig[] {
-  return settings.social_links.trim() ? parseSocialLinks(settings.social_links) : getLegacySocialLinks(settings);
+  if (!settings.social_links.trim()) return getLegacySocialLinks(settings);
+  const parsed = parseSocialLinks(settings.social_links);
+  return parsed === null ? getLegacySocialLinks(settings) : parsed;
 }
 
 function serializeSocialLinks(links: SocialLinkConfig[]) {

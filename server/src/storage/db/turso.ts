@@ -158,6 +158,7 @@ export class TursoAdapter implements IDatabase {
       device_type TEXT NOT NULL DEFAULT 'desktop',
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     )`);
+    await this.db.run(sql`CREATE INDEX IF NOT EXISTS visits_path_idx ON visits(path)`);
   }
 
   private async ensurePinnedColumn(): Promise<void> {
@@ -179,6 +180,7 @@ export class TursoAdapter implements IDatabase {
       approved INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     )`);
+    await this.db.run(sql`CREATE INDEX IF NOT EXISTS comments_post_id_idx ON comments(post_id)`);
   }
 
   /* ── 文章 ─────────────────────── */

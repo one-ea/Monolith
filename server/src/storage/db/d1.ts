@@ -44,7 +44,67 @@ export class D1Adapter implements IDatabase {
     await this.schemaReady;
   }
 
+  async ensureSchemaBaseline(): Promise<void> {
+    const requiredTableColumns: Record<string, string[]> = {
+      posts: [
+        "id",
+        "slug",
+        "title",
+        "content",
+        "excerpt",
+        "cover_color",
+        "published",
+        "listed",
+        "created_at",
+        "updated_at",
+        "view_count",
+        "pinned",
+        "publish_at",
+        "series_slug",
+        "series_order",
+        "category",
+        "cover_image",
+      ],
+      settings: ["key", "value"],
+      pages: ["id", "slug", "title", "content", "sort_order", "published", "show_in_nav", "created_at", "updated_at"],
+      comments: ["id", "post_id", "author_name", "author_email", "content", "approved", "created_at"],
+      reactions: ["id", "post_slug", "type", "ip_hash", "created_at"],
+      visits: ["id", "path", "country", "referer_domain", "device_type", "created_at"],
+    };
+    const missingTables: string[] = [];
+    const missingColumns: string[] = [];
+
+    for (const table of Object.keys(requiredTableColumns)) {
+      const result = await this.db.run(
+        sql`SELECT name FROM sqlite_master WHERE type = 'table' AND name = ${table}`
+      );
+      if (!result.results?.length) {
+        missingTables.push(table);
+        continue;
+      }
+
+      const columns = await this.getTableColumnSet(table);
+      for (const column of requiredTableColumns[table]) {
+        if (!columns.has(column)) missingColumns.push(`${table}.${column}`);
+      }
+    }
+
+    if (missingTables.length > 0) {
+      throw new Error(`D1 schema 未就绪，缺少表：${missingTables.join(", ")}。请先运行远程迁移和 schema reconcile。`);
+    }
+
+    if (missingColumns.length > 0) {
+      throw new Error(`D1 schema 未就绪，缺少列：${missingColumns.join(", ")}。请先运行 schema reconcile。`);
+    }
+  }
+
   /* ── 内部辅助 ─────────────────── */
+
+  private async getTableColumnSet(table: string): Promise<Set<string>> {
+    const result = await this.db.run(sql`SELECT name FROM pragma_table_info(${table})`);
+    type Row = { name?: string };
+    return new Set(((result.results as Row[] | undefined) || []).map((row) => row.name).filter((name): name is string => Boolean(name)));
+  }
 
   private async getPostTags(postId: number): Promise<string[]> {
     const rows = await this.db
@@ -166,6 +226,7 @@ export class D1Adapter implements IDatabase {
       approved INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     )`);
+    await this.db.run(sql`CREATE INDEX IF NOT EXISTS comments_post_id_idx ON comments(post_id)`);
   }
 
   /* ── 文章 ─────────────────────── */
@@ -989,6 +1050,7 @@ export class D1Adapter implements IDatabase {
       device_type TEXT NOT NULL DEFAULT 'desktop',
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     )`);
+    await this.db.run(sql`CREATE INDEX IF NOT EXISTS visits_path_idx ON visits(path)`);
   }
 
   async recordVisit(data: { path: string; country: string; refererDomain: string; deviceType: string }): Promise<void> {

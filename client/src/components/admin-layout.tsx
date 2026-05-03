@@ -163,6 +163,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
             onClick={() => setMobileMenuOpen(false)}
           />
           <aside
+            id="admin-mobile-navigation"
             role="dialog"
             aria-label="导航菜单"
             className="relative flex flex-col w-[260px] max-w-[80vw] h-full bg-background shadow-2xl animate-in slide-in-from-left"

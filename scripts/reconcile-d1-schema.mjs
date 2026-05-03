@@ -64,13 +64,23 @@ function queryPostsColumns(options) {
       "execute",
       options.database,
       d1Scope(options.mode),
+      "--json",
       "--command",
       "SELECT name FROM pragma_table_info('posts');",
     ],
     "读取 posts 表结构",
   );
 
-  return new Set(output.match(/[A-Za-z_][A-Za-z0-9_]*/g) || []);
+  try {
+    const start = output.indexOf("[");
+    const end = output.lastIndexOf("]");
+    if (start === -1 || end === -1 || end <= start) throw new Error("wrangler 未返回 JSON 数组");
+    const parsed = JSON.parse(output.slice(start, end + 1));
+    const rows = parsed?.[0]?.results ?? [];
+    return new Set(rows.map((row) => row.name).filter(Boolean));
+  } catch {
+    return new Set(output.match(/[A-Za-z_][A-Za-z0-9_]*/g) || []);
+  }
 }
 
 function addColumn(options, column) {

@@ -27,6 +27,8 @@ export async function createDatabase(env: Record<string, unknown>): Promise<IDat
       const d1Adapter = new D1Adapter(env.DB as D1Database);
       if (autoSchemaMigration) {
         await d1Adapter.ensureSchema();
+      } else {
+        await d1Adapter.ensureSchemaBaseline();
       }
       return d1Adapter;
     }

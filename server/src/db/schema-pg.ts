@@ -4,7 +4,7 @@
    但使用 PostgreSQL 方言（serial, timestamp 等）
    ────────────────────────────────────────────── */
 
-import { pgTable, serial, text, boolean, integer, timestamp, primaryKey, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, boolean, integer, timestamp, primaryKey, uniqueIndex, index } from "drizzle-orm/pg-core";
 
 /* ── 文章表 ────────────────────────────────── */
 export const pgPosts = pgTable("posts", {
@@ -69,17 +69,23 @@ export const pgSettings = pgTable("settings", {
 });
 
 /* ── 评论表 ──────────────────────────────── */
-export const pgComments = pgTable("comments", {
-  id: serial("id").primaryKey(),
-  postId: integer("post_id")
-    .notNull()
-    .references(() => pgPosts.id, { onDelete: "cascade" }),
-  authorName: text("author_name").notNull(),
-  authorEmail: text("author_email").notNull().default(""),
-  content: text("content").notNull(),
-  approved: boolean("approved").notNull().default(false),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+export const pgComments = pgTable(
+  "comments",
+  {
+    id: serial("id").primaryKey(),
+    postId: integer("post_id")
+      .notNull()
+      .references(() => pgPosts.id, { onDelete: "cascade" }),
+    authorName: text("author_name").notNull(),
+    authorEmail: text("author_email").notNull().default(""),
+    content: text("content").notNull(),
+    approved: boolean("approved").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    postIdIdx: index("pg_comments_post_id_idx").on(table.postId),
+  })
+);
 
 /* ── 表情反应表 ────────────────────────────── */
 export const pgReactions = pgTable("reactions", {
@@ -95,14 +101,20 @@ export const pgReactions = pgTable("reactions", {
 }));
 
 /* ── 访客记录表 ────────────────────────────── */
-export const pgVisits = pgTable("visits", {
-  id: serial("id").primaryKey(),
-  path: text("path").notNull(),
-  country: text("country").notNull().default("XX"),
-  refererDomain: text("referer_domain").notNull().default(""),
-  deviceType: text("device_type").notNull().default("desktop"),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+export const pgVisits = pgTable(
+  "visits",
+  {
+    id: serial("id").primaryKey(),
+    path: text("path").notNull(),
+    country: text("country").notNull().default("XX"),
+    refererDomain: text("referer_domain").notNull().default(""),
+    deviceType: text("device_type").notNull().default("desktop"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    pathIdx: index("pg_visits_path_idx").on(table.path),
+  })
+);
 
 /* ── 文章版本历史表 ────────────────────────── */
 export const pgPostVersions = pgTable("post_versions", {

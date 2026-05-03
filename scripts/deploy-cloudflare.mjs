@@ -196,6 +196,11 @@ function shouldCreatePagesProject(result) {
   return output.includes("not found") || output.includes("does not exist") || output.includes("404");
 }
 
+function printResultOutput(result) {
+  if (result.stdout) process.stdout.write(result.stdout);
+  if (result.stderr) process.stderr.write(result.stderr);
+}
+
 function printPrerequisiteHints() {
   if (!process.env.CLOUDFLARE_API_TOKEN) {
     console.warn("[warn] 未检测到 CLOUDFLARE_API_TOKEN，当前依赖本机 wrangler 已登录状态。");
@@ -263,7 +268,8 @@ if (!options.skipClient) {
     pagesEnv,
   ];
   console.log(`\n==> 写入 Cloudflare Pages 的 API_BASE`);
-  let pagesSecret = runResult("npx", pagesSecretArgs, { input: `${options.apiBase}\n` });
+  let pagesSecret = runResult("npx", pagesSecretArgs, { input: `${options.apiBase}\n`, stdio: "pipe" });
+  printResultOutput(pagesSecret);
 
   if (pagesSecret.error || pagesSecret.status !== 0) {
     if (!shouldCreatePagesProject(pagesSecret)) {
@@ -272,7 +278,8 @@ if (!options.skipClient) {
     console.warn("[warn] Pages 项目不存在，创建后重试 API_BASE 写入。");
     ensurePagesProject(options.pagesProject, options.branch);
     console.log(`\n==> 重试写入 Cloudflare Pages 的 API_BASE`);
-    pagesSecret = runResult("npx", pagesSecretArgs, { input: `${options.apiBase}\n` });
+    pagesSecret = runResult("npx", pagesSecretArgs, { input: `${options.apiBase}\n`, stdio: "pipe" });
+    printResultOutput(pagesSecret);
   }
 
   if (pagesSecret.error || pagesSecret.status !== 0) {

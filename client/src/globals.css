@@ -137,6 +137,7 @@
   }
   body {
     @apply bg-background text-foreground;
+
     font-size: 16px;
     line-height: 1.8;
     letter-spacing: 0;

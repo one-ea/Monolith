@@ -75,12 +75,25 @@ function parseSocialLinks(value: string): SocialLinkConfig[] {
 
 function normalizeSocialHref(link: SocialLinkConfig) {
   const url = link.url.trim();
-  if (link.icon === "mail" && !url.startsWith("mailto:")) return `mailto:${url}`;
-  if (link.icon === "rss" && !url) return "/rss.xml";
-  return url;
+  const href = link.icon === "mail" && !url.startsWith("mailto:")
+    ? `mailto:${url}`
+    : link.icon === "rss" && !url
+      ? "/rss.xml"
+      : url;
+
+  if (!href) return "";
+  if (href.startsWith("//")) return "";
+  if (!/^[a-z][a-z0-9+.-]*:/i.test(href)) return href;
+
+  try {
+    const protocol = new URL(href).protocol;
+    return ["http:", "https:", "mailto:"].includes(protocol) ? href : "";
+  } catch {
+    return "";
+  }
 }
 
-function getPublicSocialLinks(settings: PublicSettings | null): { icon: React.ElementType; href: string; label: string }[] {
+function getPublicSocialLinks(settings: PublicSettings | null): { id: string; icon: React.ElementType; href: string; label: string }[] {
   if (!settings) return [];
 
   const configuredLinks = settings.social_links.trim() ? parseSocialLinks(settings.social_links) : [];
@@ -91,14 +104,17 @@ function getPublicSocialLinks(settings: PublicSettings | null): { icon: React.El
 
   const sourceLinks = configuredLinks.length > 0 || settings.social_links.trim() ? configuredLinks : legacyLinks;
 
-  const links = sourceLinks.map((link) => ({
-    icon: SOCIAL_ICON_MAP[link.icon] || ExternalLink,
-    href: normalizeSocialHref(link),
-    label: link.label.trim(),
-  }));
+  const links = sourceLinks
+    .map((link) => ({
+      id: link.id,
+      icon: SOCIAL_ICON_MAP[link.icon] || ExternalLink,
+      href: normalizeSocialHref(link),
+      label: link.label.trim(),
+    }))
+    .filter((link) => link.href);
 
   if (links.length > 0 && settings.rss_enabled !== "false" && !links.some((link) => link.href === "/rss.xml")) {
-    links.push({ icon: Rss, href: "/rss.xml", label: "RSS" });
+    links.push({ id: "rss-feed", icon: Rss, href: "/rss.xml", label: "RSS" });
   }
 
   return links;
@@ -336,7 +352,7 @@ export function HomePage() {
                   <div className="mt-[14px] flex items-center gap-[12px] border-t border-border/20 pt-[14px]">
                     {socialLinks.map((link) => (
                       <a
-                        key={link.label}
+                        key={link.id}
                         href={link.href}
                         target={link.href.startsWith("http") ? "_blank" : undefined}
                         rel={link.href.startsWith("http") ? "noopener noreferrer" : undefined}
