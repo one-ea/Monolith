@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { getToken } from "@/lib/api";
-import { Save, Globe, User, Link2, ToggleLeft, ToggleRight, Code, Rss } from "lucide-react";
+import { Save, Globe, User, Link2, ToggleLeft, ToggleRight, Code, Rss, Plus, Trash2, GripVertical } from "lucide-react";
 
 type Settings = {
   site_title: string;
@@ -13,6 +13,7 @@ type Settings = {
   github_url: string;
   twitter_url: string;
   email: string;
+  social_links: string;
   footer_text: string;
   rss_enabled: string;
   custom_header: string;
@@ -30,6 +31,7 @@ const defaultSettings: Settings = {
   github_url: "",
   twitter_url: "",
   email: "",
+  social_links: "",
   footer_text: "© 2026 Monolith. 使用 Hono + Vite 构建，部署于 Cloudflare 边缘。",
   rss_enabled: "true",
   custom_header: "",
@@ -45,6 +47,93 @@ const TABS: TabDefinition[] = [
   { id: "social", label: "社交与订阅", icon: Link2 },
   { id: "advanced", label: "扩展与注入", icon: Code },
 ];
+
+type SocialIcon = "github" | "x" | "mail" | "rss" | "link";
+
+type SocialLinkConfig = {
+  id: string;
+  label: string;
+  url: string;
+  icon: SocialIcon;
+  enabled: boolean;
+};
+
+const SOCIAL_ICON_OPTIONS: { value: SocialIcon; label: string }[] = [
+  { value: "link", label: "链接" },
+  { value: "github", label: "GitHub" },
+  { value: "x", label: "X" },
+  { value: "mail", label: "邮箱" },
+  { value: "rss", label: "RSS" },
+];
+
+function createSocialLink(link: Partial<SocialLinkConfig> = {}): SocialLinkConfig {
+  return {
+    id: link.id || (typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `social-${Date.now()}`),
+    label: link.label || "",
+    url: link.url || "",
+    icon: link.icon || "link",
+    enabled: link.enabled ?? true,
+  };
+}
+
+function isSocialIcon(value: unknown): value is SocialIcon {
+  return typeof value === "string" && SOCIAL_ICON_OPTIONS.some((option) => option.value === value);
+}
+
+function parseSocialLinks(value: string): SocialLinkConfig[] {
+  if (!value.trim()) return [];
+  try {
+    const parsed: unknown = JSON.parse(value);
+    if (!Array.isArray(parsed)) return [];
+
+    return parsed
+      .filter((item): item is Record<string, unknown> => typeof item === "object" && item !== null)
+      .map((item) => createSocialLink({
+        id: typeof item.id === "string" ? item.id : undefined,
+        label: typeof item.label === "string" ? item.label : "",
+        url: typeof item.url === "string" ? item.url : "",
+        icon: isSocialIcon(item.icon) ? item.icon : "link",
+        enabled: typeof item.enabled === "boolean" ? item.enabled : true,
+      }));
+  } catch {
+    return [];
+  }
+}
+
+function getLegacySocialLinks(settings: Settings): SocialLinkConfig[] {
+  const links: SocialLinkConfig[] = [];
+  if (settings.github_url) links.push(createSocialLink({ id: "legacy-github", label: "GitHub", url: settings.github_url, icon: "github" }));
+  if (settings.twitter_url) links.push(createSocialLink({ id: "legacy-x", label: "X", url: settings.twitter_url, icon: "x" }));
+  if (settings.email) links.push(createSocialLink({ id: "legacy-email", label: "邮箱", url: settings.email, icon: "mail" }));
+  return links;
+}
+
+function getSocialLinks(settings: Settings): SocialLinkConfig[] {
+  return settings.social_links.trim() ? parseSocialLinks(settings.social_links) : getLegacySocialLinks(settings);
+}
+
+function serializeSocialLinks(links: SocialLinkConfig[]) {
+  return JSON.stringify(links.map((link) => ({
+    id: link.id,
+    label: link.label.trim(),
+    url: link.url.trim(),
+    icon: link.icon,
+    enabled: link.enabled,
+  })));
+}
+
+function toLegacySocialFields(links: SocialLinkConfig[]) {
+  const enabledLinks = links.filter((link) => link.enabled);
+  const github = enabledLinks.find((link) => link.icon === "github");
+  const x = enabledLinks.find((link) => link.icon === "x");
+  const email = enabledLinks.find((link) => link.icon === "mail");
+
+  return {
+    github_url: github?.url.trim() || "",
+    twitter_url: x?.url.trim() || "",
+    email: email?.url.trim().replace(/^mailto:/i, "") || "",
+  };
+}
 
 export function AdminSettings() {
   const [settings, setSettings] = useState<Settings>(defaultSettings);
@@ -89,6 +178,12 @@ export function AdminSettings() {
 
   const handleSave = async () => {
     setSaving(true);
+    const socialLinks = getSocialLinks(settings);
+    const nextSettings = {
+      ...settings,
+      ...toLegacySocialFields(socialLinks),
+      social_links: serializeSocialLinks(socialLinks),
+    };
     try {
       const res = await fetch("/api/admin/settings", {
         method: "PUT",
@@ -96,9 +191,10 @@ export function AdminSettings() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${getToken()}`,
         },
-        body: JSON.stringify(settings),
+        body: JSON.stringify(nextSettings),
       });
       if (!res.ok) throw new Error("保存失败");
+      setSettings(nextSettings);
       showMsg("设置已保存", "success");
     } catch {
       showMsg("保存失败", "error");
@@ -116,6 +212,23 @@ export function AdminSettings() {
   }, [settings.author_avatar]);
 
   const rssEnabled = settings.rss_enabled !== "false";
+  const socialLinks = getSocialLinks(settings);
+
+  const updateSocialLinks = (links: SocialLinkConfig[]) => {
+    setSettings((prev) => ({ ...prev, social_links: serializeSocialLinks(links) }));
+  };
+
+  const updateSocialLink = (id: string, patch: Partial<SocialLinkConfig>) => {
+    updateSocialLinks(socialLinks.map((link) => link.id === id ? { ...link, ...patch } : link));
+  };
+
+  const addSocialLink = () => {
+    updateSocialLinks([...socialLinks, createSocialLink({ label: "新链接", icon: "link" })]);
+  };
+
+  const removeSocialLink = (id: string) => {
+    updateSocialLinks(socialLinks.filter((link) => link.id !== id));
+  };
 
   if (loading) return <div className="py-[60px] text-center text-muted-foreground/40">加载中...</div>;
 
@@ -244,15 +357,90 @@ export function AdminSettings() {
           {activeTab === "social" && (
             <div className="space-y-[24px] animate-fade-in" role="tabpanel" id="settings-panel-social" aria-labelledby="settings-tab-social">
               <div>
-                <h2 className="text-[16px] font-semibold mb-[4px]">社交网络</h2>
-                <p className="text-[12px] text-muted-foreground/50 mb-[16px]">提供连接外部平台与流量留存的入口。</p>
-                <div className="rounded-xl border border-border/15 bg-card/5 p-[20px] sm:p-[24px] space-y-[18px]">
-                  <SettingField label="GitHub" value={settings.github_url} onChange={(v) => updateSetting("github_url", v)} placeholder="https://github.com/username" />
-                  <SettingField label="X / Twitter" value={settings.twitter_url} onChange={(v) => updateSetting("twitter_url", v)} placeholder="https://x.com/username" />
-                  <SettingField label="联系邮箱" value={settings.email} onChange={(v) => updateSetting("email", v)} placeholder="you@example.com" />
-                  <div className="mt-[8px] flex items-center gap-[6px] text-[11px] text-muted-foreground/30">
-                    <div className="h-[12px] w-[2px] bg-cyan-400/50 rounded-full" />
-                    填入有效链接后将自动在首页侧边卡片中展示对应图标。
+                <div className="mb-[16px] flex flex-col gap-[12px] sm:flex-row sm:items-end sm:justify-between">
+                  <div>
+                    <h2 className="text-[16px] font-semibold mb-[4px]">友链与社交入口</h2>
+                    <p className="text-[12px] text-muted-foreground/50">按需添加任意平台链接，启用后会展示在首页博主名片中。</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={addSocialLink}
+                    className="inline-flex min-h-[44px] items-center justify-center gap-[6px] rounded-lg border border-border/20 bg-background/40 px-[14px] text-[13px] font-medium text-foreground transition-all hover:-translate-y-[2px] hover:bg-accent/45 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                  >
+                    <Plus className="h-[14px] w-[14px]" />
+                    添加链接
+                  </button>
+                </div>
+                <div className="rounded-xl border border-border/15 bg-card/5 p-[14px] sm:p-[20px]">
+                  {socialLinks.length > 0 ? (
+                    <div className="space-y-[10px]">
+                      {socialLinks.map((link) => (
+                        <div key={link.id} className="grid gap-[10px] rounded-lg border border-border/15 bg-background/25 p-[12px] lg:grid-cols-[28px_minmax(110px,0.85fr)_minmax(180px,1.4fr)_112px_44px_44px] lg:items-center">
+                          <div className="hidden h-[28px] w-[28px] items-center justify-center rounded-md text-muted-foreground/25 lg:flex">
+                            <GripVertical className="h-[14px] w-[14px]" />
+                          </div>
+                          <label className="block">
+                            <span className="mb-[6px] block text-[11px] font-medium uppercase tracking-wider text-muted-foreground/40 lg:sr-only">名称</span>
+                            <input
+                              value={link.label}
+                              onChange={(e) => updateSocialLink(link.id, { label: e.target.value })}
+                              placeholder="平台名称"
+                              className="h-[40px] w-full rounded-lg border border-border/20 bg-background/30 px-[12px] text-[13px] text-foreground outline-none transition-all placeholder:text-muted-foreground/25 focus:border-foreground/30 focus:bg-background/50"
+                            />
+                          </label>
+                          <label className="block">
+                            <span className="mb-[6px] block text-[11px] font-medium uppercase tracking-wider text-muted-foreground/40 lg:sr-only">地址</span>
+                            <input
+                              value={link.url}
+                              onChange={(e) => updateSocialLink(link.id, { url: e.target.value })}
+                              placeholder={link.icon === "mail" ? "you@example.com" : "https://example.com"}
+                              className="h-[40px] w-full rounded-lg border border-border/20 bg-background/30 px-[12px] font-mono text-[12px] text-foreground outline-none transition-all placeholder:text-muted-foreground/25 focus:border-foreground/30 focus:bg-background/50"
+                            />
+                          </label>
+                          <label className="block">
+                            <span className="mb-[6px] block text-[11px] font-medium uppercase tracking-wider text-muted-foreground/40 lg:sr-only">图标</span>
+                            <select
+                              value={link.icon}
+                              onChange={(e) => updateSocialLink(link.id, { icon: e.target.value as SocialIcon })}
+                              className="h-[40px] w-full rounded-lg border border-border/20 bg-background/30 px-[10px] text-[13px] text-foreground outline-none transition-all focus:border-foreground/30 focus:bg-background/50"
+                            >
+                              {SOCIAL_ICON_OPTIONS.map((option) => (
+                                <option key={option.value} value={option.value}>{option.label}</option>
+                              ))}
+                            </select>
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => updateSocialLink(link.id, { enabled: !link.enabled })}
+                            aria-label={link.enabled ? `停用 ${link.label || "链接"}` : `启用 ${link.label || "链接"}`}
+                            className="inline-flex min-h-[44px] items-center justify-center rounded-lg border border-border/15 bg-background/25 text-muted-foreground transition-colors hover:bg-accent/45 hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                          >
+                            {link.enabled ? (
+                              <ToggleRight className="h-[28px] w-[28px] text-emerald-400" />
+                            ) : (
+                              <ToggleLeft className="h-[28px] w-[28px] text-muted-foreground/30" />
+                            )}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => removeSocialLink(link.id)}
+                            aria-label={`删除 ${link.label || "链接"}`}
+                            className="inline-flex min-h-[44px] items-center justify-center rounded-lg border border-border/15 bg-background/25 text-muted-foreground/50 transition-colors hover:bg-red-500/10 hover:text-red-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                          >
+                            <Trash2 className="h-[15px] w-[15px]" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="rounded-lg border border-dashed border-border/20 px-[18px] py-[28px] text-center">
+                      <p className="text-[13px] font-medium text-foreground/80">还没有配置链接</p>
+                      <p className="mt-[6px] text-[12px] text-muted-foreground/45">添加 GitHub、邮箱、项目页或任意友链入口。</p>
+                    </div>
+                  )}
+                  <div className="mt-[14px] flex items-center gap-[6px] text-[11px] text-muted-foreground/35">
+                    <div className="h-[12px] w-[2px] rounded-full bg-cyan-400/50" />
+                    旧版 GitHub、X、邮箱字段会自动迁移为列表项，保存后继续兼容旧接口。
                   </div>
                 </div>
               </div>

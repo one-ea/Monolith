@@ -54,7 +54,7 @@ export function ThemeToggle() {
     <button
       onClick={cycle}
       title={`当前：${labels[theme as keyof typeof labels]}，点击切换`}
-      className="inline-flex items-center justify-center h-[32px] w-[32px] rounded-md text-muted-foreground/50 hover:text-foreground hover:bg-accent/30 transition-all duration-200"
+      className="inline-flex h-[44px] w-[44px] items-center justify-center rounded-md text-muted-foreground/55 transition-all duration-200 hover:bg-accent/30 hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring sm:h-[32px] sm:w-[32px]"
       aria-label="切换主题"
     >
       <Icon className="h-[16px] w-[16px] transition-transform duration-300" />

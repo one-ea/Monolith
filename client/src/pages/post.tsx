@@ -197,14 +197,15 @@ export function PostPage() {
       >
         {/* 主内容区 */}
         <article className="post-content py-[32px] lg:py-[56px]">
-          <div className="mb-[32px] flex items-center justify-between animate-fade-in">
-            <Link href="/" className="inline-flex items-center gap-[6px] text-[13px] text-muted-foreground/60 transition-all duration-200 hover:text-foreground hover:-translate-x-[2px]">
+          <div className="mb-[32px] flex items-center justify-between gap-[12px] animate-fade-in">
+            <Link href="/" className="inline-flex min-h-[44px] items-center gap-[6px] rounded-md text-[13px] text-muted-foreground/60 transition-all duration-200 hover:-translate-x-[2px] hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
               <ArrowLeft className="h-[14px] w-[14px]" />返回首页
             </Link>
             <button
               onClick={toggleReadingMode}
-              className="reading-mode-toggle inline-flex items-center gap-[5px] text-[12px] text-muted-foreground/40 transition-all duration-200 hover:text-foreground/70"
+              className="reading-mode-toggle inline-flex min-h-[44px] items-center gap-[5px] rounded-md px-[8px] text-[12px] text-muted-foreground/50 transition-all duration-200 hover:bg-accent/30 hover:text-foreground/80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
               title="进入专注阅读模式"
+              aria-label="进入专注阅读模式"
             >
               <BookOpen className="h-[13px] w-[13px]" />
               专注阅读
@@ -262,7 +263,7 @@ export function PostPage() {
           <Separator className="mt-[48px] bg-border/30" />
           <div className="mt-[24px] flex items-center justify-between flex-wrap gap-[16px] animate-fade-in delay-4">
             <div className="flex items-center gap-[16px]">
-              <Link href="/" className="inline-flex items-center gap-[6px] text-[13px] text-muted-foreground/60 transition-all duration-200 hover:text-foreground hover:-translate-x-[2px]">
+              <Link href="/" className="inline-flex min-h-[44px] items-center gap-[6px] rounded-md text-[13px] text-muted-foreground/60 transition-all duration-200 hover:-translate-x-[2px] hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
                 <ArrowLeft className="h-[14px] w-[14px]" />返回首页
               </Link>
               <span className="text-[12px] text-muted-foreground/40 hidden sm:inline-block">发布于 {formatDate(post.createdAt)}</span>

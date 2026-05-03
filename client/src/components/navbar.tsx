@@ -55,7 +55,7 @@ export function Navbar() {
 
   return (
     <>
-      <header className="app-header sticky top-0 z-50 w-full border-b border-border/40 bg-background/80 backdrop-blur-xl backdrop-saturate-150">
+      <header className="app-header sticky top-0 z-50 w-full border-b border-border/30 bg-background/82 backdrop-blur-xl backdrop-saturate-150">
         <div className="mx-auto flex h-[56px] max-w-[1440px] items-center justify-between px-[20px] lg:px-[40px]">
           <Link
             href="/"
@@ -95,7 +95,10 @@ export function Navbar() {
             <ThemeToggle />
 
             <Sheet open={open} onOpenChange={setOpen}>
-              <SheetTrigger className="md:hidden inline-flex items-center justify-center h-[36px] w-[36px] rounded-md text-muted-foreground hover:bg-accent hover:text-foreground transition-colors duration-200 ml-[4px]">
+              <SheetTrigger
+                className="ml-[4px] inline-flex h-[44px] w-[44px] items-center justify-center rounded-md text-muted-foreground transition-colors duration-200 hover:bg-accent hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring md:hidden"
+                aria-label="打开导航菜单"
+              >
                 <Menu className="h-[18px] w-[18px]" />
               </SheetTrigger>
               <SheetContent side="right" className="w-[280px] bg-background/95 backdrop-blur-xl">

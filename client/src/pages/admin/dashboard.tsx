@@ -120,14 +120,20 @@ export function AdminDashboard() {
 
 
   return (
-    <div className="mx-auto w-full max-w-[960px] py-[24px] sm:py-[36px] px-[16px] sm:px-[20px]">
+    <div className="mx-auto w-full max-w-[1040px] px-[16px] py-[20px] sm:px-[20px] sm:py-[32px]">
 
       {/* ═══════════ 顶栏：标题 + 操作 ═══════════ */}
-      <div className="mb-[24px] sm:mb-[32px]">
-        <div className="flex items-center justify-between">
-          <h1 className="text-[22px] sm:text-[28px] font-semibold tracking-[-0.02em]">控制台</h1>
+      <div className="mb-[22px] rounded-md border border-border/20 bg-card/18 p-[16px] sm:p-[18px]">
+        <div className="flex flex-col gap-[14px] sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="text-[12px] text-muted-foreground/45">今日工作台</p>
+            <h1 className="mt-[4px] text-[24px] font-semibold tracking-[-0.02em] sm:text-[30px]">内容运营控制台</h1>
+            <p className="mt-[8px] max-w-[560px] text-[13px] leading-[1.7] text-muted-foreground/65">
+              集中处理文章状态、搜索筛选、批量发布、SEO 健康与访问趋势。
+            </p>
+          </div>
           <div className="flex items-center gap-[6px]">
-            <Link href="/admin/editor" className="inline-flex items-center gap-[5px] h-[34px] px-[14px] rounded-lg bg-foreground text-background text-[13px] font-medium hover:opacity-90 transition-opacity">
+            <Link href="/admin/editor" className="inline-flex min-h-[44px] items-center gap-[6px] rounded-md bg-foreground px-[16px] text-[13px] font-medium text-background transition-all hover:-translate-y-[2px] hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring sm:min-h-[36px]">
               <Plus className="h-[14px] w-[14px]" />写文章
             </Link>
           </div>
@@ -135,25 +141,25 @@ export function AdminDashboard() {
       </div>
 
       {/* ═══════════ 数据概览行 ═══════════ */}
-      <div className="mb-[24px] grid grid-cols-4 gap-[8px] sm:gap-[10px]">
+      <div className="mb-[22px] grid grid-cols-2 gap-[8px] sm:grid-cols-4 sm:gap-[10px]">
         {([
           { key: "all" as FilterType, label: "全部", value: posts.length, icon: FileText, activeColor: "border-foreground/20 bg-foreground/[0.03]", iconColor: "text-foreground/60" },
           { key: "published" as FilterType, label: "已发布", value: publishedCount, icon: Eye, activeColor: "border-emerald-500/25 bg-emerald-500/[0.04]", iconColor: "text-emerald-400/70" },
           { key: "draft" as FilterType, label: "草稿", value: draftCount, icon: Clock, activeColor: "border-amber-500/25 bg-amber-500/[0.04]", iconColor: "text-amber-400/70" },
         ] as const).map((stat) => (
           <button key={stat.key} onClick={() => { setFilter(stat.key); setSelectedTag(""); }}
-            className={`rounded-xl border p-[12px] sm:p-[14px] text-left transition-all ${filter === stat.key && !selectedTag ? stat.activeColor : "border-border/15 bg-card/5 hover:bg-card/15 hover:border-border/30"}`}
+            className={`min-h-[88px] rounded-md border p-[12px] text-left transition-all hover:-translate-y-[2px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring sm:p-[14px] ${filter === stat.key && !selectedTag ? stat.activeColor : "border-border/15 bg-background/20 hover:border-border/30 hover:bg-card/12"}`}
           >
             <div className="flex items-center justify-between mb-[6px]">
-              <span className="text-[10px] sm:text-[11px] text-muted-foreground/40 font-medium uppercase tracking-wider">{stat.label}</span>
+              <span className="text-[10px] font-medium tracking-normal text-muted-foreground/45 sm:text-[11px]">{stat.label}</span>
               <stat.icon className={`h-[12px] w-[12px] ${filter === stat.key && !selectedTag ? stat.iconColor : "text-muted-foreground/15"}`} />
             </div>
             <p className="text-[22px] sm:text-[26px] font-bold leading-none tracking-tight">{stat.value}</p>
           </button>
         ))}
-        <div className="rounded-xl border border-border/15 bg-card/5 p-[12px] sm:p-[14px] text-left">
+        <div className="min-h-[88px] rounded-md border border-border/15 bg-background/20 p-[12px] text-left sm:p-[14px]">
           <div className="flex items-center justify-between mb-[6px]">
-            <span className="text-[10px] sm:text-[11px] text-muted-foreground/40 font-medium uppercase tracking-wider">浏览量</span>
+            <span className="text-[10px] font-medium tracking-normal text-muted-foreground/45 sm:text-[11px]">浏览量</span>
             <TrendingUp className="h-[12px] w-[12px] text-cyan-400/40" />
           </div>
           <p className="text-[22px] sm:text-[26px] font-bold leading-none tracking-tight">{viewStats?.totalViews?.toLocaleString() ?? "—"}</p>
@@ -167,7 +173,7 @@ export function AdminDashboard() {
           <input
             value={search} onChange={(e) => setSearch(e.target.value)}
             placeholder="搜索标题、Slug 或标签..."
-            className="h-[38px] w-full rounded-lg border border-border/20 bg-card/8 pl-[36px] pr-[14px] text-[13px] text-foreground placeholder:text-muted-foreground/25 outline-none focus:border-foreground/15 transition-all"
+            className="h-[44px] w-full rounded-md border border-border/20 bg-background/35 pl-[36px] pr-[14px] text-[14px] text-foreground outline-none transition-all placeholder:text-muted-foreground/35 focus:border-foreground/25 focus:bg-background/55"
           />
         </div>
       </div>
@@ -178,7 +184,7 @@ export function AdminDashboard() {
         {/* ─── 文章列表 ─── */}
         <div className="flex flex-col min-h-0 lg:max-h-[calc(100vh-260px)]">
           <div className="mb-[10px] flex items-center justify-between shrink-0">
-            <h2 className="text-[12px] font-medium text-muted-foreground/40 uppercase tracking-wider flex items-center gap-[5px]">
+            <h2 className="flex items-center gap-[5px] text-[12px] font-medium tracking-normal text-muted-foreground/45">
               {filter === "all" ? "所有文章" : filter === "published" ? "已发布" : "草稿箱"}
               {selectedTag && <><span className="text-muted-foreground/15">·</span><span className="text-cyan-400 normal-case">{selectedTag}</span></>}
             </h2>
@@ -187,9 +193,9 @@ export function AdminDashboard() {
 
           {/* 批量操作工具栏 */}
           {filteredPosts.length > 0 && (
-            <div className={`mb-[10px] flex items-center justify-between rounded-lg border border-border/15 bg-card/10 px-[14px] py-[8px] transition-all shrink-0 ${selectedSlugs.size > 0 ? "border-cyan-500/30 bg-cyan-500/5" : ""}`}>
+            <div className={`mb-[10px] flex flex-wrap items-center justify-between gap-[8px] rounded-md border border-border/15 bg-background/25 px-[14px] py-[8px] transition-all shrink-0 ${selectedSlugs.size > 0 ? "border-cyan-500/30 bg-cyan-500/5" : ""}`}>
               <div className="flex items-center gap-[10px]">
-                <button onClick={toggleSelectAll} className="text-muted-foreground/40 hover:text-cyan-400 transition-colors flex items-center gap-[6px]">
+                <button onClick={toggleSelectAll} className="flex min-h-[36px] items-center gap-[6px] rounded-md text-muted-foreground/50 transition-colors hover:text-cyan-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
                   {selectedSlugs.size === filteredPosts.length ? <CheckSquare className="h-[14px] w-[14px] text-cyan-400" /> : <Square className="h-[14px] w-[14px]" />}
                   <span className="text-[12px]">{selectedSlugs.size > 0 ? `已选 ${selectedSlugs.size} 项` : "全选"}</span>
                 </button>
@@ -197,13 +203,13 @@ export function AdminDashboard() {
               
               {selectedSlugs.size > 0 && (
                 <div className="flex items-center gap-[6px] animate-fade-in">
-                  <button onClick={() => handleBatchOperate("publish")} disabled={batchOperating} className="flex items-center gap-[4px] px-[10px] py-[4px] rounded-md border border-border/20 text-[11px] text-emerald-400 hover:bg-emerald-400/10 transition-colors disabled:opacity-50">
+                  <button onClick={() => handleBatchOperate("publish")} disabled={batchOperating} className="flex min-h-[36px] items-center gap-[4px] rounded-md border border-border/20 px-[10px] py-[4px] text-[11px] text-emerald-400 transition-colors hover:bg-emerald-400/10 disabled:opacity-50">
                     <Eye className="h-[11px] w-[11px]" /> 发布
                   </button>
-                  <button onClick={() => handleBatchOperate("unpublish")} disabled={batchOperating} className="flex items-center gap-[4px] px-[10px] py-[4px] rounded-md border border-border/20 text-[11px] text-amber-400 hover:bg-amber-400/10 transition-colors disabled:opacity-50">
+                  <button onClick={() => handleBatchOperate("unpublish")} disabled={batchOperating} className="flex min-h-[36px] items-center gap-[4px] rounded-md border border-border/20 px-[10px] py-[4px] text-[11px] text-amber-400 transition-colors hover:bg-amber-400/10 disabled:opacity-50">
                     <EyeOff className="h-[11px] w-[11px]" /> 撤回
                   </button>
-                  <button onClick={() => handleBatchOperate("delete")} disabled={batchOperating} className="flex items-center gap-[4px] px-[10px] py-[4px] rounded-md border border-red-500/30 text-[11px] text-red-400 hover:bg-red-400/10 transition-colors disabled:opacity-50">
+                  <button onClick={() => handleBatchOperate("delete")} disabled={batchOperating} className="flex min-h-[36px] items-center gap-[4px] rounded-md border border-red-500/30 px-[10px] py-[4px] text-[11px] text-red-400 transition-colors hover:bg-red-400/10 disabled:opacity-50">
                     <Trash2 className="h-[11px] w-[11px]" /> 删除
                   </button>
                 </div>
@@ -229,10 +235,10 @@ export function AdminDashboard() {
             <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain pr-[4px] -mr-[4px] scrollbar-thin">
               <div className="space-y-[4px]">
               {filteredPosts.map((post) => (
-                <div key={post.slug} className={`group relative flex items-center gap-[12px] rounded-lg border px-[14px] py-[12px] transition-all ${selectedSlugs.has(post.slug) ? "border-cyan-500/30 bg-cyan-500/5 text-cyan-400" : "border-border/12 bg-card/5 hover:border-border/35 hover:bg-card/20"}`}>
+                <div key={post.slug} className={`group relative flex min-h-[64px] items-center gap-[12px] rounded-md border px-[12px] py-[10px] transition-all sm:px-[14px] ${selectedSlugs.has(post.slug) ? "border-cyan-500/30 bg-cyan-500/5 text-cyan-400" : "border-border/12 bg-background/20 hover:border-border/35 hover:bg-card/16"}`}>
                   
                   {/* 复选框 */}
-                  <button onClick={() => toggleSelect(post.slug)} className={`shrink-0 transition-colors ${selectedSlugs.has(post.slug) ? "text-cyan-400" : "text-muted-foreground/20 group-hover:text-muted-foreground/40"}`}>
+                  <button onClick={() => toggleSelect(post.slug)} className={`flex h-[36px] w-[36px] shrink-0 items-center justify-center rounded-md transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${selectedSlugs.has(post.slug) ? "text-cyan-400" : "text-muted-foreground/25 group-hover:text-muted-foreground/50"}`} aria-label={`选择 ${post.title}`}>
                     {selectedSlugs.has(post.slug) ? <CheckSquare className="h-[14px] w-[14px]" /> : <Square className="h-[14px] w-[14px]" />}
                   </button>
 
@@ -241,7 +247,7 @@ export function AdminDashboard() {
 
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-[6px] mb-[3px]">
-                      <Link href={`/admin/editor/${post.slug}`} className="text-[14px] font-medium text-foreground/85 truncate hover:text-cyan-400 transition-colors">{post.title}</Link>
+                      <Link href={`/admin/editor/${post.slug}`} className="truncate text-[14px] font-medium text-foreground/85 transition-colors hover:text-cyan-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">{post.title}</Link>
                       {post.pinned && <Badge variant="outline" className="h-[16px] rounded-[3px] px-[4px] text-[9px] font-medium text-amber-500/80 border-amber-500/20 bg-amber-500/5">置顶</Badge>}
                     </div>
                     <div className="flex items-center gap-[8px] text-[11px] text-muted-foreground/30">
@@ -252,14 +258,14 @@ export function AdminDashboard() {
                   </div>
 
                   {/* 操作按钮 — hover 显现 */}
-                  <div className="flex items-center gap-[2px] shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <a href={`/posts/${post.slug}`} target="_blank" title="预览" className="flex h-[28px] w-[28px] items-center justify-center rounded-md text-muted-foreground/30 hover:text-cyan-400 hover:bg-cyan-400/8 transition-all">
+                  <div className="flex shrink-0 items-center gap-[2px] opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
+                    <a href={`/posts/${post.slug}`} target="_blank" title="预览" aria-label={`预览 ${post.title}`} className="flex h-[36px] w-[36px] items-center justify-center rounded-md text-muted-foreground/35 transition-all hover:bg-cyan-400/8 hover:text-cyan-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
                       <ExternalLink className="h-[12px] w-[12px]" />
                     </a>
-                    <Link href={`/admin/editor/${post.slug}`} title="编辑" className="flex h-[28px] w-[28px] items-center justify-center rounded-md text-muted-foreground/30 hover:text-amber-400 hover:bg-amber-400/8 transition-all">
+                    <Link href={`/admin/editor/${post.slug}`} title="编辑" aria-label={`编辑 ${post.title}`} className="flex h-[36px] w-[36px] items-center justify-center rounded-md text-muted-foreground/35 transition-all hover:bg-amber-400/8 hover:text-amber-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
                       <Edit className="h-[12px] w-[12px]" />
                     </Link>
-                    <button onClick={() => handleDelete(post.slug, post.title)} disabled={deleting === post.slug} title="删除" className="flex h-[28px] w-[28px] items-center justify-center rounded-md text-muted-foreground/30 hover:text-red-400 hover:bg-red-400/8 transition-all disabled:opacity-30">
+                    <button onClick={() => handleDelete(post.slug, post.title)} disabled={deleting === post.slug} title="删除" aria-label={`删除 ${post.title}`} className="flex h-[36px] w-[36px] items-center justify-center rounded-md text-muted-foreground/35 transition-all hover:bg-red-400/8 hover:text-red-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:opacity-30">
                       <Trash2 className={`h-[12px] w-[12px] ${deleting === post.slug ? "animate-pulse" : ""}`} />
                     </button>
                   </div>
@@ -297,9 +303,9 @@ export function AdminDashboard() {
             const scoreBorder = score >= 90 ? "border-emerald-500/20" : score >= 70 ? "border-amber-500/20" : "border-red-500/20";
 
             return (
-              <div className={`rounded-xl border ${scoreBorder} ${scoreBg} p-[14px]`}>
+              <div className={`rounded-md border ${scoreBorder} ${scoreBg} p-[14px]`}>
                 <div className="flex items-center justify-between mb-[10px]">
-                  <h3 className="text-[10px] font-medium text-muted-foreground/40 uppercase tracking-wider flex items-center gap-[4px]">
+                  <h3 className="flex items-center gap-[4px] text-[10px] font-medium tracking-normal text-muted-foreground/45">
                     <Globe className="h-[10px] w-[10px] text-cyan-400/50" />SEO 健康
                   </h3>
                   <span className={`text-[18px] font-bold ${scoreColor}`}>{score}%</span>
@@ -340,7 +346,7 @@ export function AdminDashboard() {
           {allTags.length > 0 && (
             <div>
               <div className="flex items-center justify-between mb-[8px]">
-                <h3 className="text-[10px] font-medium text-muted-foreground/30 uppercase tracking-wider">标签</h3>
+                <h3 className="text-[10px] font-medium tracking-normal text-muted-foreground/35">标签</h3>
                 {allTags.length > 8 && (
                   <button onClick={() => setTagExpanded(!tagExpanded)} className="text-[10px] text-cyan-400/60 hover:text-cyan-400 transition-colors">
                     {tagExpanded ? "收起" : `+${allTags.length - 8}`}
@@ -352,7 +358,7 @@ export function AdminDashboard() {
                   const count = posts.filter((p) => p.tags.includes(tag)).length;
                   return (
                     <button key={tag} onClick={() => setSelectedTag(selectedTag === tag ? "" : tag)}
-                      className={`inline-flex items-center gap-[4px] h-[24px] px-[8px] rounded-md text-[11px] transition-all ${
+                    className={`inline-flex min-h-[32px] items-center gap-[4px] rounded-md px-[8px] text-[11px] transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${
                         selectedTag === tag
                           ? "bg-cyan-500/12 text-cyan-400 font-medium"
                           : "text-muted-foreground/40 hover:text-foreground/70 hover:bg-card/30"
@@ -369,7 +375,7 @@ export function AdminDashboard() {
           {/* 热门文章 */}
           {viewStats && viewStats.topPosts.length > 0 && (
             <div>
-              <h3 className="mb-[8px] text-[10px] font-medium text-muted-foreground/30 uppercase tracking-wider flex items-center gap-[4px]">
+              <h3 className="mb-[8px] flex items-center gap-[4px] text-[10px] font-medium tracking-normal text-muted-foreground/35">
                 <BarChart3 className="h-[10px] w-[10px] text-amber-500/40" />热门
               </h3>
               <div className="space-y-[2px]">

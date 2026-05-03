@@ -357,6 +357,7 @@ app.get("/api/settings/public", async (c) => {
     github_url: all.github_url || "",
     twitter_url: all.twitter_url || "",
     email: all.email || "",
+    social_links: all.social_links || "",
     rss_enabled: all.rss_enabled || "true",
     custom_header: all.custom_header || "",
     custom_footer: all.custom_footer || "",

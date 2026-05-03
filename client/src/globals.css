@@ -137,12 +137,18 @@
   }
   body {
     @apply bg-background text-foreground;
-    font-size: 15px;
+    font-size: 16px;
     line-height: 1.8;
     letter-spacing: 0;
     outline: none;
+    overflow-x: hidden;
     -webkit-overflow-scrolling: touch;
     -webkit-tap-highlight-color: transparent;
+    background-image:
+      linear-gradient(to right, color-mix(in oklch, var(--border) 18%, transparent) 1px, transparent 1px),
+      linear-gradient(to bottom, color-mix(in oklch, var(--border) 16%, transparent) 1px, transparent 1px);
+    background-size: 96px 96px;
+    background-position: center top;
   }
   html {
     @apply font-sans;
@@ -179,6 +185,13 @@
   }
   .scrollbar-none::-webkit-scrollbar {
     display: none;
+  }
+  .hero-grid {
+    background-image:
+      linear-gradient(to right, color-mix(in oklch, var(--border) 34%, transparent) 1px, transparent 1px),
+      linear-gradient(to bottom, color-mix(in oklch, var(--border) 28%, transparent) 1px, transparent 1px);
+    background-size: 56px 56px;
+    mask-image: linear-gradient(to bottom, black 0%, transparent 72%);
   }
 }
 
@@ -255,13 +268,24 @@
   animation: fade-in-up 0.8s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+  }
+}
+
 /* ======= 组件 Hover 微动效增强 ======= */
 .card-hover {
   transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.4s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.4s ease;
 }
 .card-hover:hover {
-  transform: translateY(-4px) scale(1.01);
-  box-shadow: 0 16px 40px -10px rgba(0, 0, 0, 0.2);
+  transform: translateY(-2px);
+  box-shadow: 0 12px 32px -18px rgba(0, 0, 0, 0.28);
 }
 
 /* 链接下划线展开动画 */
@@ -287,11 +311,12 @@
    基于工业级排版规范，中文零字距，严格模数间距
    ───────────────────────────────────────────── */
 .prose-monolith {
-  font-size: 15px;
+  font-size: 16px;
   line-height: 1.9;
-  letter-spacing: 0.012em;
+  letter-spacing: 0;
   color: oklch(0.85 0 0);
-  word-spacing: 0.02em;
+  word-spacing: 0;
+  overflow-wrap: anywhere;
 }
 
 /* 标题 */
@@ -631,7 +656,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 4px 8px;
+  min-height: 32px;
+  padding: 4px 10px;
   gap: 5px;
   border-radius: 6px;
   border: 1px solid oklch(1 0 0 / 8%);
@@ -1111,7 +1137,8 @@
   display: block;
   width: 100%;
   text-align: left;
-  padding: 5px 12px;
+  min-height: 32px;
+  padding: 7px 12px;
   font-size: 12px;
   line-height: 1.5;
   color: oklch(0.55 0 0);
@@ -1134,6 +1161,11 @@
   border-left-color: oklch(1 0 0 / 12%);
 }
 
+.toc-item:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
 .toc-active {
   color: oklch(0.85 0.1 220) !important;
   border-left-color: oklch(0.65 0.18 220) !important;
@@ -1146,6 +1178,22 @@
 .toc-level-1 { padding-left: 24px; font-size: 11.5px; }
 .toc-level-2 { padding-left: 36px; font-size: 11px; }
 
+:root[data-theme="light"] .toc-item {
+  color: oklch(0.42 0 0);
+}
+
+:root[data-theme="light"] .toc-item:hover {
+  color: oklch(0.18 0 0);
+  background: oklch(0 0 0 / 4%);
+  border-left-color: oklch(0 0 0 / 14%);
+}
+
+:root[data-theme="light"] .toc-active {
+  color: oklch(0.36 0.15 250) !important;
+  background: oklch(0.55 0.15 250 / 8%) !important;
+  border-left-color: oklch(0.50 0.17 250) !important;
+}
+
 /* 标题锚点偏移（避免被顶部导航遮挡） */
 .prose-monolith h2[id],
 .prose-monolith h3[id],
@@ -1153,7 +1201,7 @@
   scroll-margin-top: 80px;
 }
 
-/* 亮色模式已经被完全移除 (Light mode removed) */
+/* 亮色模式 TOC 覆盖与正文覆盖在上方集中维护 */
 
 /* ── 系列导航组件 ──────────────────────────── */
 
@@ -1708,7 +1756,7 @@
     font-family: var(--rm-font, inherit);
     font-size: var(--rm-size, 17px);
     line-height: var(--rm-line-height, 2.0);
-    letter-spacing: 0.01em;
+    letter-spacing: 0;
     transition: font-size 0.2s ease, line-height 0.2s ease;
   }
   

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { Link } from "wouter";
 import { Hero } from "@/components/hero";
 import { ArticleCard } from "@/components/article-card";
 
@@ -6,7 +7,7 @@ import { Separator } from "@/components/ui/separator";
 import { fetchPosts, fetchCategories, type PostMeta, type CategoryInfo } from "@/lib/api";
 import { AnimateIn } from "@/hooks/use-animate";
 import { SeoHead } from "@/components/seo-head";
-import { ExternalLink, Mail, Rss, Eye, FolderOpen, Hash, ChevronDown } from "lucide-react";
+import { ExternalLink, Mail, Rss, Eye, FolderOpen, Hash, ChevronDown, Link2 } from "lucide-react";
 
 type PublicSettings = {
   site_title: string;
@@ -19,6 +20,7 @@ type PublicSettings = {
   github_url: string;
   twitter_url: string;
   email: string;
+  social_links: string;
   rss_enabled: string;
 };
 
@@ -28,15 +30,91 @@ type TrafficData = {
   chart: { date: string; count: number }[];
 };
 
+type SocialIcon = "github" | "x" | "mail" | "rss" | "link";
+
+type SocialLinkConfig = {
+  id: string;
+  label: string;
+  url: string;
+  icon: SocialIcon;
+  enabled: boolean;
+};
+
+const SOCIAL_ICON_MAP: Record<SocialIcon, React.ElementType> = {
+  github: ExternalLink,
+  x: ExternalLink,
+  mail: Mail,
+  rss: Rss,
+  link: Link2,
+};
+
+function isSocialIcon(value: unknown): value is SocialIcon {
+  return typeof value === "string" && ["github", "x", "mail", "rss", "link"].includes(value);
+}
+
+function parseSocialLinks(value: string): SocialLinkConfig[] {
+  if (!value.trim()) return [];
+  try {
+    const parsed: unknown = JSON.parse(value);
+    if (!Array.isArray(parsed)) return [];
+
+    return parsed
+      .filter((item): item is Record<string, unknown> => typeof item === "object" && item !== null)
+      .map((item, index) => ({
+        id: typeof item.id === "string" ? item.id : `social-${index}`,
+        label: typeof item.label === "string" ? item.label : "",
+        url: typeof item.url === "string" ? item.url : "",
+        icon: isSocialIcon(item.icon) ? item.icon : "link",
+        enabled: typeof item.enabled === "boolean" ? item.enabled : true,
+      }))
+      .filter((link) => link.enabled && link.label.trim() && link.url.trim());
+  } catch {
+    return [];
+  }
+}
+
+function normalizeSocialHref(link: SocialLinkConfig) {
+  const url = link.url.trim();
+  if (link.icon === "mail" && !url.startsWith("mailto:")) return `mailto:${url}`;
+  if (link.icon === "rss" && !url) return "/rss.xml";
+  return url;
+}
+
+function getPublicSocialLinks(settings: PublicSettings | null): { icon: React.ElementType; href: string; label: string }[] {
+  if (!settings) return [];
+
+  const configuredLinks = settings.social_links.trim() ? parseSocialLinks(settings.social_links) : [];
+  const legacyLinks: SocialLinkConfig[] = [];
+  if (settings.github_url) legacyLinks.push({ id: "legacy-github", label: "GitHub", url: settings.github_url, icon: "github", enabled: true });
+  if (settings.twitter_url) legacyLinks.push({ id: "legacy-x", label: "X", url: settings.twitter_url, icon: "x", enabled: true });
+  if (settings.email) legacyLinks.push({ id: "legacy-email", label: "邮箱", url: settings.email, icon: "mail", enabled: true });
+
+  const sourceLinks = configuredLinks.length > 0 || settings.social_links.trim() ? configuredLinks : legacyLinks;
+
+  const links = sourceLinks.map((link) => ({
+    icon: SOCIAL_ICON_MAP[link.icon] || ExternalLink,
+    href: normalizeSocialHref(link),
+    label: link.label.trim(),
+  }));
+
+  if (links.length > 0 && settings.rss_enabled !== "false" && !links.some((link) => link.href === "/rss.xml")) {
+    links.push({ icon: Rss, href: "/rss.xml", label: "RSS" });
+  }
+
+  return links;
+}
+
 /* ── 紧凑标签云 ── */
 const TAG_VISIBLE = 15;
+const CATEGORY_VISIBLE = 5;
+
 function TagCloud({ tags, maxCount }: { tags: [string, number][]; maxCount: number }) {
   const [expanded, setExpanded] = useState(false);
   const hasMore = tags.length > TAG_VISIBLE;
   const visible = expanded ? tags : tags.slice(0, TAG_VISIBLE);
   return (
-    <div className="rounded-lg border border-border/40 bg-card/30 p-[20px]">
-      <h3 className="mb-[12px] text-[13px] font-medium uppercase tracking-[0.06em] text-muted-foreground/60 flex items-center gap-[5px]">
+    <div className="rounded-md border border-border/25 bg-background/25 p-[18px]">
+      <h3 className="mb-[12px] flex items-center gap-[6px] text-[13px] font-medium tracking-normal text-muted-foreground/60">
         <Hash className="h-[12px] w-[12px]" />
         标签
         <span className="ml-auto text-[10px] font-mono text-muted-foreground/25 normal-case tracking-normal">{tags.length}</span>
@@ -45,13 +123,13 @@ function TagCloud({ tags, maxCount }: { tags: [string, number][]; maxCount: numb
         {visible.map(([tag, count]) => {
           // 频率归一化 0~1 映射透明度与字号
           const ratio = maxCount > 1 ? (count - 1) / (maxCount - 1) : 0;
-          const opacity = 0.35 + ratio * 0.55; // 0.35 ~ 0.90
+          const weight = 42 + ratio * 44; // 42% ~ 86%
           const size = 11 + ratio * 3; // 11px ~ 14px
           return (
             <span
               key={tag}
               className="cursor-pointer whitespace-nowrap transition-colors duration-200 hover:text-foreground"
-              style={{ fontSize: `${size}px`, color: `oklch(0.85 0.01 240 / ${opacity})` }}
+              style={{ fontSize: `${size}px`, color: `color-mix(in oklch, var(--foreground) ${weight}%, var(--muted-foreground))` }}
               title={`${tag}（${count} 篇）`}
             >
               {tag}
@@ -62,9 +140,48 @@ function TagCloud({ tags, maxCount }: { tags: [string, number][]; maxCount: numb
       {hasMore && !expanded && (
         <button
           onClick={() => setExpanded(true)}
-          className="mt-[8px] inline-flex items-center gap-[3px] text-[11px] text-muted-foreground/30 transition-colors hover:text-muted-foreground/60"
+          className="mt-[8px] inline-flex min-h-[32px] items-center gap-[4px] rounded-md text-[11px] text-muted-foreground/40 transition-colors hover:text-muted-foreground/75 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
         >
           展开全部 <ChevronDown className="h-[11px] w-[11px]" />
+        </button>
+      )}
+    </div>
+  );
+}
+
+function CategoryList({ categories }: { categories: CategoryInfo[] }) {
+  const [expanded, setExpanded] = useState(false);
+  const hasMore = categories.length > CATEGORY_VISIBLE;
+  const visibleCategories = expanded ? categories : categories.slice(0, CATEGORY_VISIBLE);
+
+  return (
+    <div className="rounded-md border border-border/25 bg-background/25 p-[18px]">
+      <h3 className="mb-[12px] flex items-center gap-[6px] text-[13px] font-medium tracking-normal text-muted-foreground/60">
+        <FolderOpen className="h-[13px] w-[13px]" />
+        分类
+        <span className="ml-auto text-[10px] font-mono text-muted-foreground/25">{categories.length}</span>
+      </h3>
+      <div className={`space-y-[4px] ${expanded && categories.length > 8 ? "max-h-[280px] overflow-y-auto pr-[4px]" : ""}`}>
+        {visibleCategories.map((cat) => (
+          <Link
+            key={cat.name}
+            href={`/archive?category=${encodeURIComponent(cat.name)}`}
+            className="group flex min-h-[44px] items-center justify-between rounded-md px-[8px] py-[6px] transition-colors hover:bg-accent/45 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring sm:min-h-[36px]"
+          >
+            <span className="min-w-0 truncate text-[12px] text-muted-foreground transition-colors group-hover:text-foreground">{cat.name}</span>
+            <span className="ml-[12px] shrink-0 rounded-[4px] bg-foreground/[0.04] px-[6px] py-[2px] text-[10px] font-mono text-muted-foreground/35">{cat.count}</span>
+          </Link>
+        ))}
+      </div>
+      {hasMore && (
+        <button
+          type="button"
+          onClick={() => setExpanded((value) => !value)}
+          aria-expanded={expanded}
+          className="mt-[10px] inline-flex min-h-[36px] w-full items-center justify-center gap-[4px] rounded-md border border-border/15 text-[11px] text-muted-foreground/50 transition-colors hover:bg-accent/35 hover:text-muted-foreground/80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+        >
+          {expanded ? "收起分类" : `展开 ${categories.length - CATEGORY_VISIBLE} 个更多分类`}
+          <ChevronDown className={`h-[11px] w-[11px] transition-transform ${expanded ? "rotate-180" : ""}`} />
         </button>
       )}
     </div>
@@ -144,21 +261,25 @@ export function HomePage() {
   const authorBio = settings?.author_bio || "热衷于前端架构、设计系统与边缘计算。相信技术应当服务于人，而非反过来。";
   const authorAvatar = settings?.author_avatar || "";
 
-  // 社交链接（只在有实质性社交信息时显示此行）
-  const socialLinks: { icon: React.ElementType; href: string; label: string }[] = [];
-  if (settings?.github_url) socialLinks.push({ icon: ExternalLink, href: settings.github_url, label: "GitHub" });
-  if (settings?.email) socialLinks.push({ icon: Mail, href: `mailto:${settings.email}`, label: "邮箱" });
-  if (socialLinks.length > 0 && settings?.rss_enabled !== "false") socialLinks.push({ icon: Rss, href: "/rss.xml", label: "RSS" });
+  // 社交链接（优先读取新版可扩展列表，旧字段作为兼容回退）
+  const socialLinks = getPublicSocialLinks(settings);
 
   return (
     <div className="flex flex-col">
       <SeoHead url="/" />
       <Hero />
-      <Separator className="bg-border/30" />
-      <div className="grid grid-cols-1 gap-[32px] py-[40px] lg:grid-cols-[1fr_280px] lg:gap-[40px]">
+      <div className="grid grid-cols-1 gap-[32px] py-[36px] lg:grid-cols-[minmax(0,1fr)_260px] lg:gap-[44px]">
         <section>
           <AnimateIn>
-            <h2 className="mb-[24px] text-[14px] font-medium uppercase tracking-[0.08em] text-muted-foreground/60">最新文章</h2>
+            <div id="latest-posts" className="mb-[24px] flex flex-col gap-[8px] border-l border-border/50 pl-[14px] sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <p className="text-[12px] font-medium uppercase tracking-[0.08em] text-muted-foreground/60">Latest Posts</p>
+                <h2 className="mt-[4px] text-[24px] font-semibold tracking-[-0.02em] text-foreground">最新文章</h2>
+              </div>
+              {!loading && (
+                <span className="text-[13px] text-muted-foreground/60">{posts.length} 篇可读内容</span>
+              )}
+            </div>
           </AnimateIn>
           {loading ? (
             <div className="flex flex-col gap-[16px]">
@@ -168,20 +289,29 @@ export function HomePage() {
             </div>
           ) : (
             <div className="flex flex-col gap-[16px]">
-              {posts.map((post, i) => (
-                <AnimateIn key={post.slug} delay={`delay-${Math.min(i, 6)}`}>
-                  <ArticleCard post={post} />
-                </AnimateIn>
-              ))}
+              {posts.length > 0 ? (
+                posts.map((post, i) => (
+                  <AnimateIn key={post.slug} delay={`delay-${Math.min(i, 6)}`}>
+                    <ArticleCard post={post} />
+                  </AnimateIn>
+                ))
+              ) : (
+                <div className="rounded-md border border-dashed border-border/25 bg-background/20 px-[20px] py-[52px] text-center">
+                  <p className="text-[15px] font-medium text-foreground/80">还没有发布文章</p>
+                  <p className="mx-auto mt-[8px] max-w-[360px] text-[13px] leading-[1.7] text-muted-foreground/60">
+                    本地数据库初始化后，最新文章会直接出现在这里。
+                  </p>
+                </div>
+              )}
             </div>
           )}
         </section>
 
-        <aside className="hidden lg:block">
-          <div className="sticky top-[72px] flex flex-col gap-[24px] mt-[42px]">
+        <aside className="block">
+          <div className="grid gap-[16px] sm:grid-cols-2 lg:sticky lg:top-[72px] lg:mt-[58px] lg:flex lg:flex-col lg:gap-[18px]">
             {/* ── 博主名片 ── */}
             <AnimateIn animation="animate-fade-in" delay="delay-2">
-              <div className="rounded-lg border border-border/40 bg-card/30 p-[20px]">
+              <div className="rounded-md border border-border/25 bg-background/25 p-[18px]">
                 <div className="mb-[12px] flex items-center gap-[12px]">
                   {authorAvatar ? (
                     <img
@@ -211,7 +341,8 @@ export function HomePage() {
                         target={link.href.startsWith("http") ? "_blank" : undefined}
                         rel={link.href.startsWith("http") ? "noopener noreferrer" : undefined}
                         title={link.label}
-                        className="flex h-[28px] w-[28px] items-center justify-center rounded-md text-muted-foreground/40 transition-colors duration-200 hover:bg-accent hover:text-foreground"
+                        aria-label={link.label}
+                        className="flex h-[44px] w-[44px] items-center justify-center rounded-md text-muted-foreground/45 transition-colors duration-200 hover:bg-accent/45 hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring sm:h-[32px] sm:w-[32px]"
                       >
                         <link.icon className="h-[14px] w-[14px]" />
                       </a>
@@ -233,28 +364,15 @@ export function HomePage() {
             {/* ── 分类（无分类时隐藏） ── */}
             {categories.length > 0 && (
               <AnimateIn animation="animate-fade-in" delay="delay-3">
-                <div className="rounded-lg border border-border/40 bg-card/30 p-[20px]">
-                  <h3 className="mb-[12px] text-[13px] font-medium uppercase tracking-[0.06em] text-muted-foreground/60 flex items-center gap-[6px]">
-                    <FolderOpen className="h-[13px] w-[13px]" />
-                    分类
-                  </h3>
-                  <div className="space-y-[6px]">
-                    {categories.map((cat) => (
-                      <div key={cat.name} className="flex items-center justify-between py-[3px] px-[6px] rounded-md hover:bg-accent/20 transition-colors cursor-pointer group">
-                        <span className="text-[12px] text-muted-foreground group-hover:text-foreground transition-colors">{cat.name}</span>
-                        <span className="text-[10px] font-mono text-muted-foreground/30">{cat.count}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+                <CategoryList categories={categories} />
               </AnimateIn>
             )}
 
             {/* ── 访问趋势 ── */}
             <AnimateIn animation="animate-fade-in" delay="delay-4">
-              <div className="rounded-lg border border-border/40 bg-card/30 p-[20px]">
+              <div className="rounded-md border border-border/25 bg-background/25 p-[18px]">
                 <div className="flex items-center justify-between mb-[12px]">
-                  <h3 className="text-[13px] font-medium uppercase tracking-[0.06em] text-muted-foreground/60">访问趋势</h3>
+                  <h3 className="text-[13px] font-medium tracking-normal text-muted-foreground/60">访问趋势</h3>
                   <span className="text-[10px] text-muted-foreground/20">14 日</span>
                 </div>
                 {traffic?.chart && traffic.chart.some((d) => d.count > 0) ? (
@@ -276,9 +394,9 @@ export function HomePage() {
 
             {/* ── 技术栈 ── */}
             <AnimateIn animation="animate-fade-in" delay="delay-5">
-              <div className="rounded-lg border border-border/40 bg-card/30 p-[20px]">
-                <h3 className="mb-[12px] text-[13px] font-medium uppercase tracking-[0.06em] text-muted-foreground/60">技术栈</h3>
-                <div className="flex flex-col gap-[7px] text-[13px]">
+              <div className="rounded-md border border-border/25 bg-background/25 p-[18px]">
+                <h3 className="mb-[12px] text-[13px] font-medium tracking-normal text-muted-foreground/60">技术栈</h3>
+                <div className="flex flex-col gap-[8px] text-[13px]">
                   <div className="flex justify-between"><span className="text-muted-foreground/70">前端</span><span className="font-medium text-foreground">React 19</span></div>
                   <Separator className="bg-border/15" />
                   <div className="flex justify-between"><span className="text-muted-foreground/70">构建</span><span className="font-medium text-foreground">Vite 6</span></div>

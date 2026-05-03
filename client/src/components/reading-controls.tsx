@@ -86,12 +86,13 @@ export function ReadingControls({
     >
       {/* 选项面板 (Popover) */}
       {isOpen && (
-        <div className="w-[280px] origin-bottom-right rounded-2xl border border-border/30 bg-card/80 p-[20px] shadow-2xl backdrop-blur-xl animate-scale-in">
+        <div className="w-[280px] origin-bottom-right rounded-md border border-border/30 bg-card/88 p-[18px] shadow-2xl backdrop-blur-xl animate-scale-in">
           <div className="mb-[16px] flex items-center justify-between">
-            <span className="text-[14px] font-medium tracking-wide">阅读偏好</span>
+            <span className="text-[14px] font-medium tracking-normal">阅读偏好</span>
             <button
               onClick={() => setIsOpen(false)}
-              className="rounded-full p-[4px] text-muted-foreground/60 transition-colors hover:bg-accent hover:text-foreground"
+              className="flex h-[36px] w-[36px] items-center justify-center rounded-md text-muted-foreground/60 transition-colors hover:bg-accent hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+              aria-label="关闭阅读偏好"
             >
               <X className="h-[14px] w-[14px]" />
             </button>
@@ -104,22 +105,22 @@ export function ReadingControls({
               <div className="grid grid-cols-4 gap-[8px]">
                 <button
                   onClick={() => updatePreference("theme", "light")}
-                  className={`flex h-[36px] items-center justify-center rounded-lg border bg-[#f8f9fa] text-[#333] transition-all hover:border-[#aaa] ${preferences.theme === "light" ? "border-cyan-500 shadow-[0_0_0_1px_theme(colors.cyan.500)]" : "border-transparent"}`}
+                  className={`flex h-[44px] items-center justify-center rounded-md border bg-[#f8f9fa] text-[#333] transition-all hover:border-[#aaa] ${preferences.theme === "light" ? "border-cyan-500 shadow-[0_0_0_1px_theme(colors.cyan.500)]" : "border-transparent"}`}
                   title="白昼"
                 ><Sun className="h-[14px] w-[14px]" /></button>
                 <button
                   onClick={() => updatePreference("theme", "sepia")}
-                  className={`flex h-[36px] items-center justify-center rounded-lg border bg-[#f4ece3] text-[#5b4a3a] transition-all hover:border-[#d4c6b3] ${preferences.theme === "sepia" ? "border-amber-500 shadow-[0_0_0_1px_theme(colors.amber.500)]" : "border-transparent"}`}
+                  className={`flex h-[44px] items-center justify-center rounded-md border bg-[#f4ece3] text-[#5b4a3a] transition-all hover:border-[#d4c6b3] ${preferences.theme === "sepia" ? "border-amber-500 shadow-[0_0_0_1px_theme(colors.amber.500)]" : "border-transparent"}`}
                   title="羊皮纸"
                 ><BookOpen className="h-[14px] w-[14px]" /></button>
                 <button
                   onClick={() => updatePreference("theme", "dark")}
-                  className={`flex h-[36px] items-center justify-center rounded-lg border bg-[#1a1a1c] text-[#e0e0e0] transition-all hover:border-[#444] ${preferences.theme === "dark" ? "border-cyan-500 shadow-[0_0_0_1px_theme(colors.cyan.500)]" : "border-transparent"}`}
+                  className={`flex h-[44px] items-center justify-center rounded-md border bg-[#1a1a1c] text-[#e0e0e0] transition-all hover:border-[#444] ${preferences.theme === "dark" ? "border-cyan-500 shadow-[0_0_0_1px_theme(colors.cyan.500)]" : "border-transparent"}`}
                   title="深渊"
                 ><Moon className="h-[14px] w-[14px]" /></button>
                 <button
                   onClick={() => updatePreference("theme", "system")}
-                  className={`flex h-[36px] items-center justify-center rounded-lg border bg-accent/20 text-foreground transition-all hover:bg-accent/40 ${preferences.theme === "system" ? "border-cyan-500 shadow-[0_0_0_1px_theme(colors.cyan.500)]" : "border-transparent"}`}
+                  className={`flex h-[44px] items-center justify-center rounded-md border bg-accent/20 text-foreground transition-all hover:bg-accent/40 ${preferences.theme === "system" ? "border-cyan-500 shadow-[0_0_0_1px_theme(colors.cyan.500)]" : "border-transparent"}`}
                   title="跟随系统"
                 ><Monitor className="h-[14px] w-[14px]" /></button>
               </div>
@@ -131,13 +132,13 @@ export function ReadingControls({
               <div className="grid grid-cols-2 gap-[8px]">
                 <button
                   onClick={() => updatePreference("fontFamily", "sans")}
-                  className={`flex h-[36px] items-center justify-center rounded-lg border bg-accent/10 transition-all hover:bg-accent/30 ${preferences.fontFamily === "sans" ? "border-cyan-500 text-cyan-400" : "border-border/30 text-muted-foreground"}`}
+                  className={`flex h-[44px] items-center justify-center rounded-md border bg-accent/10 transition-all hover:bg-accent/30 ${preferences.fontFamily === "sans" ? "border-cyan-500 text-cyan-400" : "border-border/30 text-muted-foreground"}`}
                 >
                   <span className="font-sans">无衬线体</span>
                 </button>
                 <button
                   onClick={() => updatePreference("fontFamily", "serif")}
-                  className={`flex h-[36px] items-center justify-center rounded-lg border bg-accent/10 transition-all hover:bg-accent/30 ${preferences.fontFamily === "serif" ? "border-cyan-500 text-cyan-400" : "border-border/30 text-muted-foreground"}`}
+                  className={`flex h-[44px] items-center justify-center rounded-md border bg-accent/10 transition-all hover:bg-accent/30 ${preferences.fontFamily === "serif" ? "border-cyan-500 text-cyan-400" : "border-border/30 text-muted-foreground"}`}
                 >
                   <span className="font-serif">衬线体</span>
                 </button>
@@ -149,22 +150,22 @@ export function ReadingControls({
               <span className="text-[12px] text-muted-foreground/60">排版 (A: {preferences.fontSize} / H: {preferences.lineHeight.toFixed(1)})</span>
               <div className="grid grid-cols-2 gap-[16px]">
                 {/* 字号 */}
-                <div className="flex h-[36px] items-center justify-between rounded-lg border border-border/30 bg-accent/10 px-[12px]">
-                  <button onClick={() => updatePreference("fontSize", Math.max(14, preferences.fontSize - 1))} className="text-muted-foreground hover:text-foreground">
+                <div className="flex h-[44px] items-center justify-between rounded-md border border-border/30 bg-accent/10 px-[12px]">
+                  <button onClick={() => updatePreference("fontSize", Math.max(14, preferences.fontSize - 1))} className="flex h-[36px] w-[36px] items-center justify-center rounded-md text-muted-foreground hover:bg-accent/30 hover:text-foreground">
                     <Minus className="h-[12px] w-[12px]" />
                   </button>
                   <Type className="h-[14px] w-[14px] text-muted-foreground/50" />
-                  <button onClick={() => updatePreference("fontSize", Math.min(24, preferences.fontSize + 1))} className="text-muted-foreground hover:text-foreground">
+                  <button onClick={() => updatePreference("fontSize", Math.min(24, preferences.fontSize + 1))} className="flex h-[36px] w-[36px] items-center justify-center rounded-md text-muted-foreground hover:bg-accent/30 hover:text-foreground">
                     <Plus className="h-[12px] w-[12px]" />
                   </button>
                 </div>
                 {/* 行距 */}
-                <div className="flex h-[36px] items-center justify-between rounded-lg border border-border/30 bg-accent/10 px-[12px]">
-                  <button onClick={() => updatePreference("lineHeight", Math.max(1.4, Number((preferences.lineHeight - 0.1).toFixed(1))))} className="text-muted-foreground hover:text-foreground">
+                <div className="flex h-[44px] items-center justify-between rounded-md border border-border/30 bg-accent/10 px-[12px]">
+                  <button onClick={() => updatePreference("lineHeight", Math.max(1.4, Number((preferences.lineHeight - 0.1).toFixed(1))))} className="flex h-[36px] w-[36px] items-center justify-center rounded-md text-muted-foreground hover:bg-accent/30 hover:text-foreground">
                     <Minus className="h-[12px] w-[12px]" />
                   </button>
                   <span className="text-[10px] uppercase font-mono tracking-widest text-muted-foreground/50">Hgt</span>
-                  <button onClick={() => updatePreference("lineHeight", Math.min(3.0, Number((preferences.lineHeight + 0.1).toFixed(1))))} className="text-muted-foreground hover:text-foreground">
+                  <button onClick={() => updatePreference("lineHeight", Math.min(3.0, Number((preferences.lineHeight + 0.1).toFixed(1))))} className="flex h-[36px] w-[36px] items-center justify-center rounded-md text-muted-foreground hover:bg-accent/30 hover:text-foreground">
                     <Plus className="h-[12px] w-[12px]" />
                   </button>
                 </div>
@@ -174,12 +175,12 @@ export function ReadingControls({
             {/* 专注宽度 */}
             <div className="space-y-[8px]">
               <span className="text-[12px] text-muted-foreground/60">阅读区宽度</span>
-              <div className="flex h-[36px] items-center justify-between rounded-lg border border-border/30 bg-accent/10 px-[12px]">
-                <button title="收窄" onClick={() => updatePreference("maxWidth", Math.max(500, preferences.maxWidth - 50))} className="text-muted-foreground hover:text-foreground">
+              <div className="flex h-[44px] items-center justify-between rounded-md border border-border/30 bg-accent/10 px-[12px]">
+                <button title="收窄" onClick={() => updatePreference("maxWidth", Math.max(500, preferences.maxWidth - 50))} className="flex h-[36px] w-[36px] items-center justify-center rounded-md text-muted-foreground hover:bg-accent/30 hover:text-foreground">
                   <Minus className="h-[12px] w-[12px]" />
                 </button>
                 <span className="text-[11px] font-mono text-muted-foreground/80">{preferences.maxWidth}px</span>
-                <button title="变宽" onClick={() => updatePreference("maxWidth", Math.min(1200, preferences.maxWidth + 50))} className="text-muted-foreground hover:text-foreground">
+                <button title="变宽" onClick={() => updatePreference("maxWidth", Math.min(1200, preferences.maxWidth + 50))} className="flex h-[36px] w-[36px] items-center justify-center rounded-md text-muted-foreground hover:bg-accent/30 hover:text-foreground">
                   <Plus className="h-[12px] w-[12px]" />
                 </button>
               </div>
