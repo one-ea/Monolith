@@ -8,6 +8,11 @@ node_modules/
 # ────────────────────── 构建产出（不推送）──────────────────────
 dist/
 .wrangler/
+.cache/
+.vite/
+coverage/
+playwright-report/
+test-results/
 
 # ────────────────────── 环境变量与密钥（绝不推送）──────────────────
 # 所有 .env 文件都可能含密钥，禁止推送
@@ -17,6 +22,7 @@ dist/
 
 # Wrangler 本地密钥（含 ADMIN_PASSWORD / JWT_SECRET 等）
 .dev.vars
+.dev.vars.*
 
 # ────────────────────── 系统与编辑器临时文件（不推送）──────────────
 .DS_Store
@@ -31,15 +37,15 @@ Thumbs.db
 *.code-workspace
 
 # ────────────────────── AI 工具私有数据（绝不推送）──────────────────
-# 通用记忆库（Aider / Cline / 其他）
+# 通用记忆库（Aider / Cline / Serena / 其他）
 .agents/
+.serena/
 
-# Trae 项目私有数据：memory/ 含密码教训、PAT 用法、踩坑记录等敏感信息
-# rules/ skills/ 也仅供本机女仆使用，不入仓库
-.trae/
+# Codex 项目私有 AI 上下文与本机配置，不入仓库
+.codex/
+scripts/maintain-codex-context.mjs
 
 # 各家 AI 编辑器的项目入口与全局配置（含个人偏好/上下文，不入仓库）
-CLAUDE.md
 GEMINI.md
 AGENTS.md
 opencode.json
@@ -51,6 +57,9 @@ opencode.json
 # ────────────────────── 日志与调试产物（不推送）──────────────────
 *.log
 npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
 
 # ────────────────────── 测试与临时输出（不推送）──────────────────
 tmp/
@@ -61,6 +70,8 @@ tests/output/
 # ✅ package-lock.json    — 锁定依赖版本，CI 的 npm ci 依赖它
 # ✅ client/functions/    — Pages Functions 反向代理，漏掉则 /api/* 回退为首页 HTML
 # ✅ scripts/             — 部署脚本 (deploy-cloudflare.mjs)
+# ✅ scripts/reconcile-d1-schema.mjs — 部署前 D1 schema 兼容补齐
+# ✅ server/src/migrations/ — D1 正式迁移，生产 schema 入口
 # ✅ .github/             — CI/CD workflows、Issue/PR 模板、分支保护
 # ✅ .coderabbit.yaml     — CodeRabbit 代码审查配置
 # ✅ SECURITY.md          — 安全政策

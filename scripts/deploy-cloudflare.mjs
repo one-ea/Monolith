@@ -56,16 +56,17 @@ function parseArgs(argv) {
   return options;
 }
 
-function runStep(title, command, args, extra = {}) {
-  console.log(`\n==> ${title}`);
-  const result = spawnSync(command, args, {
+function runResult(command, args, extra = {}) {
+  return spawnSync(command, args, {
     cwd: extra.cwd || projectRoot,
-    stdio: extra.input ? ["pipe", "inherit", "inherit"] : "inherit",
+    stdio: extra.stdio || (extra.input ? ["pipe", "inherit", "inherit"] : "inherit"),
     input: extra.input,
     encoding: "utf8",
     shell: SHELL,
   });
+}
 
+function failStep(title, command, result) {
   if (result.error) {
     console.error(`\n[error] 步骤 "${title}" 启动失败：${result.error.message}`);
     if (result.error.code === "ENOENT") {
@@ -75,33 +76,30 @@ function runStep(title, command, args, extra = {}) {
     process.exit(1);
   }
 
-  if (result.status !== 0) {
-    const code = result.status === null ? "signal/null" : result.status;
-    console.error(`\n[error] 步骤 "${title}" 失败 (exit code ${code})。`);
-    if (result.signal) console.error(`[hint] 子进程被信号中断：${result.signal}`);
-    process.exit(typeof result.status === "number" ? result.status : 1);
+  const code = result.status === null ? "signal/null" : result.status;
+  console.error(`\n[error] 步骤 "${title}" 失败 (exit code ${code})。`);
+  if (result.signal) console.error(`[hint] 子进程被信号中断：${result.signal}`);
+  process.exit(typeof result.status === "number" ? result.status : 1);
+}
+
+function runStep(title, command, args, extra = {}) {
+  console.log(`\n==> ${title}`);
+  const result = runResult(command, args, extra);
+
+  if (result.error || result.status !== 0) {
+    failStep(title, command, result);
   }
 }
 
 function runCapture(title, command, args) {
   console.log(`\n==> ${title}`);
-  const result = spawnSync(command, args, {
-    cwd: projectRoot,
-    encoding: "utf8",
-    shell: SHELL,
-  });
+  const result = runResult(command, args, { stdio: "pipe" });
 
   if (result.stdout) process.stdout.write(result.stdout);
   if (result.stderr) process.stderr.write(result.stderr);
 
-  if (result.error) {
-    console.error(`\n[error] 步骤 "${title}" 启动失败：${result.error.message}`);
-    process.exit(1);
-  }
-
-  if (result.status !== 0) {
-    console.error(`\n[error] 步骤 "${title}" 失败 (exit code ${result.status})。`);
-    process.exit(result.status || 1);
+  if (result.error || result.status !== 0) {
+    failStep(title, command, result);
   }
 
   return `${result.stdout || ""}\n${result.stderr || ""}`;
@@ -176,6 +174,28 @@ function resolvePagesEnv(branch) {
   return branch === "main" ? "production" : "preview";
 }
 
+function ensurePagesProject(projectName, branch) {
+  console.log(`[info] 未发现 Pages 项目 "${projectName}"，将自动创建（生产分支：${branch}）。`);
+  runStep(
+    `创建 Cloudflare Pages 项目 "${projectName}"`,
+    "npx",
+    [
+      "wrangler",
+      "pages",
+      "project",
+      "create",
+      projectName,
+      "--production-branch",
+      branch,
+    ],
+  );
+}
+
+function shouldCreatePagesProject(result) {
+  const output = `${result.stdout || ""}\n${result.stderr || ""}`.toLowerCase();
+  return output.includes("not found") || output.includes("does not exist") || output.includes("404");
+}
+
 function printPrerequisiteHints() {
   if (!process.env.CLOUDFLARE_API_TOKEN) {
     console.warn("[warn] 未检测到 CLOUDFLARE_API_TOKEN，当前依赖本机 wrangler 已登录状态。");
@@ -197,6 +217,11 @@ if (!options.skipMigrate) {
     "npx",
     ["wrangler", "d1", "migrations", "apply", "monolith-db", "--remote"],
     { cwd: `${projectRoot}/server`, input: "y\n" },
+  );
+  runStep(
+    "补齐远程 D1 schema 兼容列",
+    "node",
+    ["scripts/reconcile-d1-schema.mjs", "--remote"],
   );
 }
 
@@ -226,12 +251,33 @@ if (!options.skipClient) {
 
   const pagesEnv = resolvePagesEnv(options.branch);
 
-  runStep(
-    "写入 Cloudflare Pages 的 API_BASE",
-    "npx",
-    ["wrangler", "pages", "secret", "put", "API_BASE", "--project-name", options.pagesProject, "--env", pagesEnv],
-    { input: `${options.apiBase}\n` }
-  );
+  const pagesSecretArgs = [
+    "wrangler",
+    "pages",
+    "secret",
+    "put",
+    "API_BASE",
+    "--project-name",
+    options.pagesProject,
+    "--env",
+    pagesEnv,
+  ];
+  console.log(`\n==> 写入 Cloudflare Pages 的 API_BASE`);
+  let pagesSecret = runResult("npx", pagesSecretArgs, { input: `${options.apiBase}\n` });
+
+  if (pagesSecret.error || pagesSecret.status !== 0) {
+    if (!shouldCreatePagesProject(pagesSecret)) {
+      failStep("写入 Cloudflare Pages 的 API_BASE", "npx", pagesSecret);
+    }
+    console.warn("[warn] Pages 项目不存在，创建后重试 API_BASE 写入。");
+    ensurePagesProject(options.pagesProject, options.branch);
+    console.log(`\n==> 重试写入 Cloudflare Pages 的 API_BASE`);
+    pagesSecret = runResult("npx", pagesSecretArgs, { input: `${options.apiBase}\n` });
+  }
+
+  if (pagesSecret.error || pagesSecret.status !== 0) {
+    failStep("写入 Cloudflare Pages 的 API_BASE", "npx", pagesSecret);
+  }
 
   runStep("构建前端", "npm", ["run", "build"]);
   runStep("部署 Cloudflare Pages 前端", "npx", [

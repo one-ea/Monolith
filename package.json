@@ -14,6 +14,8 @@
     "deploy:server": "npm -w monolith-server run deploy",
     "deploy:client": "node -e \"const {spawnSync}=require('node:child_process'); const result=spawnSync('npx',['wrangler','pages','deploy','dist','--project-name','monolith-client','--branch','main','--commit-dirty=true'],{cwd:'client',stdio:'inherit',shell:process.platform==='win32'}); process.exit(result.status ?? 1);\"",
     "deploy:cloudflare": "node scripts/deploy-cloudflare.mjs",
+    "db:reconcile:d1:local": "node scripts/reconcile-d1-schema.mjs --local",
+    "db:reconcile:d1:remote": "node scripts/reconcile-d1-schema.mjs --remote",
     "db:migrate:local": "npm -w monolith-server run db:migrate:local",
     "db:migrate:remote": "npm -w monolith-server run db:migrate:remote",
     "db:seed:local": "npm -w monolith-server run db:seed:local",

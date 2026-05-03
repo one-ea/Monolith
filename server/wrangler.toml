@@ -8,6 +8,8 @@ compatibility_flags = ["nodejs_compat"]
 BLOG_NAME = "Monolith"
 # 对外公开域名（用于 sitemap.xml / robots.txt 的绝对 URL）
 SITE_ORIGIN = "https://monolith-client.pages.dev"
+# 运行时默认不做建表/补列；部署流程负责迁移与 schema reconcile。
+AUTO_SCHEMA_MIGRATION = "false"
 
 # D1 数据库绑定
 [[d1_databases]]
