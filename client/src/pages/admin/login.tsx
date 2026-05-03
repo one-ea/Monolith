@@ -57,7 +57,7 @@ export function AdminLogin() {
             autoComplete="current-password"
             aria-label="管理员密码"
             autoFocus
-            className="h-[40px] rounded-md border border-border/60 bg-background/50 px-[12px] text-[14px] text-foreground placeholder:text-muted-foreground/40 outline-none focus:border-foreground/30 transition-colors"
+            className="h-[40px] rounded-md border border-border/60 bg-background/50 px-[12px] pr-[48px] text-[14px] text-foreground placeholder:text-muted-foreground/40 outline-none focus:border-foreground/30 transition-colors"
           />
           {error && <p className="text-[13px] text-destructive">{error}</p>}
           <button

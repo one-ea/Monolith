@@ -132,11 +132,6 @@
   * {
     @apply border-border;
   }
-  html {
-    @media (min-width: 1024px) {
-      zoom: 1.15;
-    }
-  }
   *:focus-visible {
     @apply outline-ring/50;
   }

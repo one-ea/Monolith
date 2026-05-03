@@ -127,7 +127,7 @@ export function AdminGate({
                 placeholder="输入密码"
                 autoComplete="current-password"
                 aria-label="管理员密码"
-                className="h-[40px] w-full rounded-lg border border-border/40 bg-background/50 px-[14px] text-[14px] text-foreground placeholder:text-muted-foreground/30 outline-none focus:border-foreground/25 focus:ring-1 focus:ring-foreground/10 transition-all"
+                className="h-[40px] w-full rounded-lg border border-border/40 bg-background/50 px-[14px] pr-[48px] text-[14px] text-foreground placeholder:text-muted-foreground/30 outline-none focus:border-foreground/25 focus:ring-1 focus:ring-foreground/10 transition-all"
               />
 
               {error && (
