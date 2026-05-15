@@ -88,6 +88,11 @@ export function AdminLayout({ children }: AdminLayoutProps) {
       .filter((group) => group.items.length > 0);
   }, [navQuery]);
 
+  const currentTitle =
+    navGroups.flatMap((group) => group.items).find((item) =>
+      item.href === "/admin" ? location === "/admin" : location.startsWith(item.href)
+    )?.label || "管理后台";
+
   const SidebarFooter = () => (
     <div className="space-y-[2px] border-t border-border/20 p-[12px]">
       <div className="flex min-h-[44px] items-center justify-between px-[12px] py-[8px]">
