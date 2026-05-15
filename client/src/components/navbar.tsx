@@ -63,7 +63,7 @@ export function Navbar() {
             onDoubleClick={handleLogoDoubleClick}
           >
             <div className="relative flex h-[32px] w-[20px] items-center justify-center">
-              <div className="absolute inset-0 rounded-[3px] bg-gradient-to-b from-foreground/90 to-foreground/60 transition-all duration-500 group-hover:from-cyan-400 group-hover:to-blue-600 group-hover:shadow-[0_0_20px_rgba(34,211,238,0.3)]" />
+              <div className="absolute inset-0 rounded-[3px] bg-gradient-to-b from-foreground/90 to-foreground/44 transition-all duration-300 group-hover:from-foreground group-hover:to-foreground/62" />
             </div>
             <span className="text-[18px] font-semibold tracking-[-0.03em] text-foreground">
               Monolith

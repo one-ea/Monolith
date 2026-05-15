@@ -105,7 +105,7 @@ export function ReadingControls({
               <div className="grid grid-cols-4 gap-[8px]">
                 <button
                   onClick={() => updatePreference("theme", "light")}
-                  className={`flex h-[44px] items-center justify-center rounded-md border bg-[#f8f9fa] text-[#333] transition-all hover:border-[#aaa] ${preferences.theme === "light" ? "border-cyan-500 shadow-[0_0_0_1px_theme(colors.cyan.500)]" : "border-transparent"}`}
+                  className={`flex h-[44px] items-center justify-center rounded-md border bg-[#f8f9fa] text-[#333] transition-all hover:border-[#aaa] ${preferences.theme === "light" ? "border-foreground ring-1 ring-foreground/55" : "border-transparent"}`}
                   title="白昼"
                 ><Sun className="h-[14px] w-[14px]" /></button>
                 <button
@@ -115,12 +115,12 @@ export function ReadingControls({
                 ><BookOpen className="h-[14px] w-[14px]" /></button>
                 <button
                   onClick={() => updatePreference("theme", "dark")}
-                  className={`flex h-[44px] items-center justify-center rounded-md border bg-[#1a1a1c] text-[#e0e0e0] transition-all hover:border-[#444] ${preferences.theme === "dark" ? "border-cyan-500 shadow-[0_0_0_1px_theme(colors.cyan.500)]" : "border-transparent"}`}
+                  className={`flex h-[44px] items-center justify-center rounded-md border bg-[#1a1a1c] text-[#e0e0e0] transition-all hover:border-[#444] ${preferences.theme === "dark" ? "border-foreground ring-1 ring-foreground/55" : "border-transparent"}`}
                   title="深渊"
                 ><Moon className="h-[14px] w-[14px]" /></button>
                 <button
                   onClick={() => updatePreference("theme", "system")}
-                  className={`flex h-[44px] items-center justify-center rounded-md border bg-accent/20 text-foreground transition-all hover:bg-accent/40 ${preferences.theme === "system" ? "border-cyan-500 shadow-[0_0_0_1px_theme(colors.cyan.500)]" : "border-transparent"}`}
+                  className={`flex h-[44px] items-center justify-center rounded-md border bg-accent/20 text-foreground transition-all hover:bg-accent/40 ${preferences.theme === "system" ? "border-foreground ring-1 ring-foreground/55" : "border-transparent"}`}
                   title="跟随系统"
                 ><Monitor className="h-[14px] w-[14px]" /></button>
               </div>
@@ -132,13 +132,13 @@ export function ReadingControls({
               <div className="grid grid-cols-2 gap-[8px]">
                 <button
                   onClick={() => updatePreference("fontFamily", "sans")}
-                  className={`flex h-[44px] items-center justify-center rounded-md border bg-accent/10 transition-all hover:bg-accent/30 ${preferences.fontFamily === "sans" ? "border-cyan-500 text-cyan-400" : "border-border/30 text-muted-foreground"}`}
+                  className={`flex h-[44px] items-center justify-center rounded-md border bg-accent/10 transition-all hover:bg-accent/30 ${preferences.fontFamily === "sans" ? "border-foreground/50 text-foreground" : "border-border/30 text-muted-foreground"}`}
                 >
                   <span className="font-sans">无衬线体</span>
                 </button>
                 <button
                   onClick={() => updatePreference("fontFamily", "serif")}
-                  className={`flex h-[44px] items-center justify-center rounded-md border bg-accent/10 transition-all hover:bg-accent/30 ${preferences.fontFamily === "serif" ? "border-cyan-500 text-cyan-400" : "border-border/30 text-muted-foreground"}`}
+                  className={`flex h-[44px] items-center justify-center rounded-md border bg-accent/10 transition-all hover:bg-accent/30 ${preferences.fontFamily === "serif" ? "border-foreground/50 text-foreground" : "border-border/30 text-muted-foreground"}`}
                 >
                   <span className="font-serif">衬线体</span>
                 </button>
@@ -193,7 +193,7 @@ export function ReadingControls({
       <div className="flex flex-col items-center gap-[12px] rounded-full border border-border/30 bg-card/60 p-[6px] shadow-lg backdrop-blur-xl transition-all hover:bg-card/80 hover:shadow-xl hover:border-border/50">
         <button
           onClick={() => setIsOpen(!isOpen)}
-          className={`flex h-[40px] w-[40px] items-center justify-center rounded-full transition-all ${isOpen ? "bg-cyan-500 text-white shadow-cyan-500/20" : "bg-transparent text-foreground hover:bg-accent/40"}`}
+          className={`flex h-[40px] w-[40px] items-center justify-center rounded-full transition-all ${isOpen ? "bg-foreground text-background" : "bg-transparent text-foreground hover:bg-accent/40"}`}
           title="排版设置"
         >
           <Settings className={`h-[18px] w-[18px] ${isOpen ? "rotate-90 transition-transform duration-300" : ""}`} />

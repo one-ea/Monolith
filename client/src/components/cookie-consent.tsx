@@ -41,8 +41,14 @@ export function CookieConsent() {
   return (
     <div className="fixed bottom-0 left-0 right-0 z-[9999] p-[12px] animate-fade-in">
       <div className="mx-auto flex max-w-[720px] flex-col items-start gap-[12px] rounded-md border border-border/30 bg-card/95 px-[20px] py-[16px] shadow-lg shadow-black/20 backdrop-blur-md sm:flex-row sm:items-center">
-        <div className="flex-1 text-[13px] text-muted-foreground/80 leading-[1.6]">
-          本站使用 Cookie 进行访问统计与第三方脚本加载。继续访问即表示您同意我们的{" "}
+        <div className="min-w-0 flex-1 text-[13px] leading-[1.6] text-muted-foreground/80">
+          <span className="hidden sm:inline">
+            本站使用 Cookie 进行访问统计与第三方脚本加载。继续访问即表示您同意我们的{" "}
+          </span>
+          <span className="sm:hidden">
+            <span className="block">本站使用 Cookie 进行访问统计。</span>
+            <span className="block">继续访问即表示您同意 </span>
+          </span>
           <a href="/privacy" className="text-foreground/70 underline underline-offset-2 hover:text-foreground transition-colors">隐私政策</a>。
         </div>
         <div className="flex shrink-0 gap-[8px]">

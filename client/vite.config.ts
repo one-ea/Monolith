@@ -43,7 +43,7 @@ export default defineConfig({
             }
           },
           {
-            urlPattern: /\/api\//i,
+            urlPattern: /\/api\/(?!auth\/|admin\/).*/i,
             handler: "NetworkFirst",
             options: {
               cacheName: "monolith-api",

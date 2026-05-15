@@ -71,7 +71,12 @@ app.use("*", async (c, next) => {
   const path = c.req.path;
   
   // 排除非 GET 请求、后台接口、以及请求失败的情况
-  if (c.req.method !== "GET" || c.res.status !== 200 || path.startsWith("/api/admin")) return;
+  if (
+    c.req.method !== "GET"
+    || c.res.status !== 200
+    || path.startsWith("/api/admin")
+    || path.startsWith("/api/auth")
+  ) return;
   
   // 仅对未设置 Cache-Control 的 /api/ 开始的公开端点设置缓存
   if (path.startsWith("/api/") && !c.res.headers.has("Cache-Control")) {
@@ -504,6 +509,7 @@ const LOGIN_RATE_WINDOW = 15 * 60 * 1000; // 15 分钟窗口
 
 // 登录
 app.post("/api/auth/login", async (c) => {
+  c.header("Cache-Control", "no-store");
   const ip = c.req.header("CF-Connecting-IP") || c.req.header("X-Forwarded-For") || "unknown";
 
   // 速率限制
@@ -519,7 +525,6 @@ app.post("/api/auth/login", async (c) => {
   }
 
   const body = await c.req.json<{ password: string }>();
-
   if (!body.password || body.password !== c.env.ADMIN_PASSWORD) {
     return c.json({ error: "密码错误" }, 401);
   }
@@ -539,6 +544,7 @@ app.post("/api/auth/login", async (c) => {
 
 // 验证当前登录状态
 app.get("/api/auth/me", async (c) => {
+  c.header("Cache-Control", "no-store");
   const authHeader = c.req.header("Authorization");
   if (!authHeader?.startsWith("Bearer ")) {
     return c.json({ authenticated: false });

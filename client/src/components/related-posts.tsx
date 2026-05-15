@@ -42,7 +42,7 @@ export function RelatedPosts({ currentSlug, currentTags }: RelatedPostsProps) {
 
   return (
     <section className="mt-[48px] animate-fade-in">
-      <h2 className="mb-[20px] text-[14px] font-medium text-muted-foreground/50 uppercase tracking-wider flex items-center gap-[8px]">
+      <h2 className="mb-[20px] flex items-center gap-[8px] text-[14px] font-medium uppercase tracking-normal text-muted-foreground/50">
         <span className="h-[1px] flex-1 bg-border/20" />
         相关推荐
         <span className="h-[1px] flex-1 bg-border/20" />
@@ -56,7 +56,7 @@ export function RelatedPosts({ currentSlug, currentTags }: RelatedPostsProps) {
             className="group relative flex flex-col rounded-xl border border-border/15 bg-card/5 p-[16px] hover:border-border/35 hover:bg-card/20 transition-all duration-300"
           >
             {/* 顶部渐变装饰条 */}
-            <div className={`mb-[12px] h-[2px] w-[32px] rounded-full bg-gradient-to-r ${post.coverColor || "from-gray-500/30 to-gray-600/30"} group-hover:w-[48px] transition-all duration-300`} />
+            <div className={`mb-[12px] h-[2px] w-[32px] rounded-full bg-gradient-to-r ${post.coverColor || "from-gray-500/30 to-gray-600/30"} grayscale transition-all duration-300 group-hover:w-[48px]`} />
 
             {/* 标签 */}
             <div className="mb-[8px] flex flex-wrap gap-[4px]">
@@ -73,7 +73,7 @@ export function RelatedPosts({ currentSlug, currentTags }: RelatedPostsProps) {
             </h3>
 
             {/* 底部箭头 */}
-            <div className="mt-[12px] flex items-center text-[11px] text-muted-foreground/30 group-hover:text-cyan-400/70 transition-colors">
+            <div className="mt-[12px] flex items-center text-[11px] text-muted-foreground/30 transition-colors group-hover:text-foreground/70">
               阅读全文
               <ArrowRight className="ml-[4px] h-[10px] w-[10px] translate-x-0 group-hover:translate-x-[3px] transition-transform" />
             </div>

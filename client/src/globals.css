@@ -1,3 +1,4 @@
+@import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@450;500;600;700&family=Work+Sans:wght@400;500;600;700&display=swap");
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
@@ -9,9 +10,9 @@
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   /* 调用苹果原厂 SF Pro / 苹方 fallback 魔法 */
-  --font-sans: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, "Noto Sans SC", sans-serif;
-  --font-mono: ui-monospace, "SF Mono", "Cascadia Code", "Fira Code", Consolas, monospace;
-  --font-heading: var(--font-sans);
+  --font-sans: "Work Sans", -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, "Noto Sans SC", sans-serif;
+  --font-mono: "Space Grotesk", ui-monospace, "SF Mono", "Cascadia Code", "Fira Code", Consolas, monospace;
+  --font-heading: "Space Grotesk", var(--font-sans);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -146,8 +147,8 @@
     -webkit-overflow-scrolling: touch;
     -webkit-tap-highlight-color: transparent;
     background-image:
-      linear-gradient(to right, color-mix(in oklch, var(--border) 18%, transparent) 1px, transparent 1px),
-      linear-gradient(to bottom, color-mix(in oklch, var(--border) 16%, transparent) 1px, transparent 1px);
+      linear-gradient(to right, color-mix(in oklch, var(--border) 12%, transparent) 1px, transparent 1px),
+      linear-gradient(to bottom, color-mix(in oklch, var(--border) 10%, transparent) 1px, transparent 1px);
     background-size: 96px 96px;
     background-position: center top;
   }
@@ -1092,7 +1093,7 @@
   top: 0;
   left: 0;
   height: 2px;
-  background: linear-gradient(90deg, oklch(0.65 0.18 220), oklch(0.7 0.2 200));
+  background: linear-gradient(90deg, color-mix(in oklch, var(--foreground) 55%, transparent), color-mix(in oklch, var(--foreground) 82%, transparent));
   z-index: 100;
   transition: width 80ms linear;
   pointer-events: none;

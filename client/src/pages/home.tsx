@@ -158,7 +158,7 @@ function TagCloud({ tags, maxCount }: { tags: [string, number][]; maxCount: numb
           onClick={() => setExpanded(true)}
           className="mt-[8px] inline-flex min-h-[32px] items-center gap-[4px] rounded-md text-[11px] text-muted-foreground/40 transition-colors hover:text-muted-foreground/75 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
         >
-          展开全部 <ChevronDown className="h-[11px] w-[11px]" />
+          展开全部 <ChevronDown className="h-[12px] w-[12px]" />
         </button>
       )}
     </div>
@@ -173,7 +173,7 @@ function CategoryList({ categories }: { categories: CategoryInfo[] }) {
   return (
     <div className="rounded-md border border-border/25 bg-background/25 p-[18px]">
       <h3 className="mb-[12px] flex items-center gap-[6px] text-[13px] font-medium tracking-normal text-muted-foreground/60">
-        <FolderOpen className="h-[13px] w-[13px]" />
+        <FolderOpen className="h-[14px] w-[14px]" />
         分类
         <span className="ml-auto text-[10px] font-mono text-muted-foreground/25">{categories.length}</span>
       </h3>
@@ -197,7 +197,7 @@ function CategoryList({ categories }: { categories: CategoryInfo[] }) {
           className="mt-[10px] inline-flex min-h-[36px] w-full items-center justify-center gap-[4px] rounded-md border border-border/15 text-[11px] text-muted-foreground/50 transition-colors hover:bg-accent/35 hover:text-muted-foreground/80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
         >
           {expanded ? "收起分类" : `展开 ${categories.length - CATEGORY_VISIBLE} 个更多分类`}
-          <ChevronDown className={`h-[11px] w-[11px] transition-transform ${expanded ? "rotate-180" : ""}`} />
+          <ChevronDown className={`h-[12px] w-[12px] transition-transform ${expanded ? "rotate-180" : ""}`} />
         </button>
       )}
     </div>
@@ -279,12 +279,47 @@ export function HomePage() {
 
   // 社交链接（优先读取新版可扩展列表，旧字段作为兼容回退）
   const socialLinks = getPublicSocialLinks(settings);
+  const latestPost = posts[0];
 
   return (
     <div className="flex flex-col">
       <SeoHead url="/" />
       <Hero />
-      <div className="grid grid-cols-1 gap-[32px] py-[36px] lg:grid-cols-[minmax(0,1fr)_260px] lg:gap-[44px]">
+      <div className="grid grid-cols-1 gap-[16px] border-b border-border/18 py-[18px] sm:grid-cols-3">
+        {[
+          { label: "文章", value: loading ? "..." : posts.length.toString(), detail: "可读内容" },
+          { label: "标签", value: loading ? "..." : sortedTags.length.toString(), detail: "主题索引" },
+          { label: "浏览", value: traffic?.totalViews?.toLocaleString() ?? "...", detail: "累计访问" },
+        ].map((item) => (
+          <div key={item.label} className="rounded-md border border-border/18 bg-background/28 px-[16px] py-[14px]">
+            <p className="font-mono text-[11px] text-muted-foreground/38">{item.label}</p>
+            <div className="mt-[8px] flex items-end justify-between gap-[12px]">
+              <span className="font-heading text-[28px] font-semibold leading-none tracking-[-0.03em] text-foreground/90">{item.value}</span>
+              <span className="text-[12px] text-muted-foreground/45">{item.detail}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+      {latestPost && (
+        <AnimateIn>
+          <Link
+            href={`/posts/${latestPost.slug}`}
+            className="group mt-[28px] grid rounded-md border border-border/20 bg-card/[0.12] p-[18px] transition-all duration-300 hover:-translate-y-[2px] hover:border-border/45 hover:bg-card/[0.18] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring md:grid-cols-[120px_minmax(0,1fr)_auto] md:items-center md:gap-[22px]"
+          >
+            <div className="font-mono text-[11px] uppercase text-muted-foreground/42">Latest</div>
+            <div className="min-w-0">
+              <h2 className="mt-[6px] font-heading text-[22px] font-semibold leading-tight tracking-[-0.02em] text-foreground md:mt-0 md:text-[26px]">
+                {latestPost.title}
+              </h2>
+              <p className="mt-[8px] line-clamp-2 text-[14px] leading-[1.7] text-muted-foreground/72">{latestPost.excerpt}</p>
+            </div>
+            <span className="mt-[14px] inline-flex min-h-[36px] items-center gap-[6px] text-[13px] text-muted-foreground/55 transition-colors group-hover:text-foreground md:mt-0">
+              继续阅读 <ExternalLink className="h-[14px] w-[14px]" />
+            </span>
+          </Link>
+        </AnimateIn>
+      )}
+      <div className="grid grid-cols-1 gap-[32px] py-[36px] lg:grid-cols-[minmax(0,1fr)_280px] lg:gap-[44px]">
         <section>
           <AnimateIn>
             <div id="latest-posts" className="mb-[24px] flex flex-col gap-[8px] border-l border-border/50 pl-[14px] sm:flex-row sm:items-end sm:justify-between">
@@ -336,7 +371,7 @@ export function HomePage() {
                       className="h-[40px] w-[40px] rounded-full object-cover border border-border/30"
                     />
                   ) : (
-                    <div className="flex h-[40px] w-[40px] items-center justify-center rounded-full bg-gradient-to-br from-blue-500/30 to-cyan-500/30 text-[15px] font-semibold text-foreground">
+                    <div className="flex h-[40px] w-[40px] items-center justify-center rounded-full border border-border/25 bg-foreground/[0.06] text-[15px] font-semibold text-foreground">
                       {authorName.charAt(0).toUpperCase()}
                     </div>
                   )}
@@ -401,7 +436,7 @@ export function HomePage() {
                   </>
                 ) : (
                   <div className="flex items-center gap-[6px] py-[8px]">
-                    <Eye className="h-[13px] w-[13px] text-muted-foreground/15" />
+                    <Eye className="h-[14px] w-[14px] text-muted-foreground/15" />
                     <span className="text-[12px] text-muted-foreground/20">暂无访问数据</span>
                   </div>
                 )}

@@ -12,6 +12,7 @@ export interface FrontmatterData {
   draft: boolean;
   slug: string;
   excerpt: string;
+  coverImage: string;
   [key: string]: unknown;
 }
 
@@ -82,6 +83,7 @@ function createEmptyFrontmatter(): FrontmatterData {
     draft: false,
     slug: "",
     excerpt: "",
+    coverImage: "",
   };
 }
 
@@ -179,6 +181,14 @@ function parseYamlFrontmatter(yaml: string): FrontmatterData {
       case "description":
         result.excerpt = value;
         break;
+      case "cover":
+      case "cover_image":
+      case "coverimage":
+      case "thumbnail":
+      case "banner":
+      case "image":
+        result.coverImage = value;
+        break;
       case "tags":
         // 可能是单个值
         if (value) result.tags.push(value);
@@ -241,6 +251,14 @@ function parseTomlFrontmatter(toml: string): FrontmatterData {
       case "description":
       case "summary":
         result.excerpt = value;
+        break;
+      case "cover":
+      case "cover_image":
+      case "coverimage":
+      case "thumbnail":
+      case "banner":
+      case "image":
+        result.coverImage = value;
         break;
     }
   }

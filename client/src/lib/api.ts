@@ -151,6 +151,7 @@ function authHeaders(): HeadersInit {
 export async function login(password: string): Promise<string> {
   const res = await fetch(`${API_BASE}/api/auth/login`, {
     method: "POST",
+    cache: "no-store",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ password }),
   });
@@ -163,6 +164,7 @@ export async function login(password: string): Promise<string> {
 export async function checkAuth(): Promise<boolean> {
   try {
     const res = await fetch(`${API_BASE}/api/auth/me`, {
+      cache: "no-store",
       headers: authHeaders(),
     });
     const data = await res.json();

@@ -9,9 +9,12 @@ export interface ImportedPost {
   title: string;
   content: string;
   excerpt: string;
+  coverImage?: string;
   published: boolean;
   pinned: boolean;
   listed: boolean;
+  publishAt?: string | null;
+  category?: string;
   tags: string[];
 }
 

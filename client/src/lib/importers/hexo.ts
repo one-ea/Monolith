@@ -32,6 +32,7 @@ async function convertHexoFiles(files: File[]): Promise<ImportResult> {
     if (!content.trim() && !frontmatter.title) continue; // 跳过空文件
 
     // 合并 tags 和 categories
+    const category = frontmatter.categories[0] || "";
     const tags = [
       ...new Set([...frontmatter.tags, ...frontmatter.categories]),
     ];
@@ -49,9 +50,12 @@ async function convertHexoFiles(files: File[]): Promise<ImportResult> {
       title: frontmatter.title || slug,
       content,
       excerpt: frontmatter.excerpt,
+      coverImage: frontmatter.coverImage || undefined,
       published: !frontmatter.draft,
       pinned: false,
       listed: true,
+      publishAt: normalizePublishAt(frontmatter.date),
+      category,
       tags,
     });
   }
@@ -65,7 +69,7 @@ async function convertHexoFiles(files: File[]): Promise<ImportResult> {
       platform: "Hexo",
       postCount: posts.length,
       tagCount: tagNames.length,
-      categoryCount: 0,
+      categoryCount: new Set(posts.map((post) => post.category).filter(Boolean)).size,
       commentCount: 0,
       postTitles: posts
         .slice(0, 20)
@@ -90,3 +94,10 @@ export const hexoPlatform: PlatformInfo = {
   color: "blue",
   parse: convertHexoFiles,
 };
+
+function normalizePublishAt(date: string): string | null {
+  if (!date) return null;
+  const normalized = date.includes("T") ? date : date.replace(" ", "T");
+  const parsed = new Date(normalized);
+  return Number.isNaN(parsed.getTime()) ? date : parsed.toISOString();
+}

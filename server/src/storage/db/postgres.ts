@@ -724,12 +724,18 @@ export class PostgresAdapter implements IDatabase {
               listed: post.listed ?? true,
               pinned: post.pinned ?? false,
               publishAt: post.publishAt ? sql`${post.publishAt}::timestamptz` : null,
+              seriesSlug: post.seriesSlug || null,
+              category: post.category || "",
+              seriesOrder: post.seriesOrder ?? 0,
               updatedAt: sql`NOW()`,
             }).where(eq(pgPosts.slug, post.slug));
+            if (post.tags !== undefined) {
+              await this.syncPostTags(existing[0].id, post.tags);
+            }
             imported.posts++;
           }
         } else {
-          await this.db.insert(pgPosts).values({
+          const [created] = await this.db.insert(pgPosts).values({
             slug: post.slug,
             title: post.title,
             content: post.content,
@@ -740,7 +746,13 @@ export class PostgresAdapter implements IDatabase {
             listed: post.listed ?? true,
             pinned: post.pinned ?? false,
             publishAt: post.publishAt ? sql`${post.publishAt}::timestamptz` : null,
-          });
+            seriesSlug: post.seriesSlug || null,
+            category: post.category || "",
+            seriesOrder: post.seriesOrder ?? 0,
+          }).returning({ id: pgPosts.id });
+          if (created && post.tags !== undefined) {
+            await this.syncPostTags(created.id, post.tags);
+          }
           imported.posts++;
         }
       }

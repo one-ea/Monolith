@@ -1,6 +1,6 @@
 {
   "name": "monolith-server",
-  "version": "2.3.2",
+  "version": "2.4.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -8,6 +8,9 @@
     "deploy": "wrangler deploy",
     "db:migrate:local": "wrangler d1 migrations apply monolith-db --local",
     "db:migrate:remote": "wrangler d1 migrations apply monolith-db --remote",
+    "db:reconcile": "npm run db:reconcile:local",
+    "db:reconcile:local": "node ../scripts/reconcile-d1-schema.mjs --local",
+    "db:reconcile:remote": "node ../scripts/reconcile-d1-schema.mjs --remote",
     "db:seed:local": "wrangler d1 execute monolith-db --local --file=src/migrations/0002_seed.sql",
     "db:seed:test-posts:local": "wrangler d1 execute monolith-db --local --file=src/seeds/seed_test_posts.sql",
     "check": "tsc --noEmit",

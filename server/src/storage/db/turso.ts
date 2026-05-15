@@ -695,12 +695,21 @@ export class TursoAdapter implements IDatabase {
               coverColor: post.coverColor || "",
               coverImage: post.coverImage || "",
               published: post.published ?? true,
+              listed: post.listed ?? true,
+              pinned: post.pinned ?? false,
+              publishAt: post.publishAt || null,
+              seriesSlug: post.seriesSlug || null,
+              category: post.category || "",
+              seriesOrder: post.seriesOrder ?? 0,
               updatedAt: new Date().toISOString(),
             }).where(eq(posts.slug, post.slug));
+            if (post.tags !== undefined) {
+              await this.syncPostTags(existing[0].id, post.tags);
+            }
             imported.posts++;
           }
         } else {
-          await this.db.insert(posts).values({
+          const [created] = await this.db.insert(posts).values({
             slug: post.slug,
             title: post.title,
             content: post.content,
@@ -708,9 +717,18 @@ export class TursoAdapter implements IDatabase {
             coverColor: post.coverColor || "",
             coverImage: post.coverImage || "",
             published: post.published ?? true,
+            listed: post.listed ?? true,
+            pinned: post.pinned ?? false,
+            publishAt: post.publishAt || null,
+            seriesSlug: post.seriesSlug || null,
+            category: post.category || "",
+            seriesOrder: post.seriesOrder ?? 0,
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
-          });
+          }).returning({ id: posts.id });
+          if (created && post.tags !== undefined) {
+            await this.syncPostTags(created.id, post.tags);
+          }
           imported.posts++;
         }
       }

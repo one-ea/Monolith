@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { clearToken } from "@/lib/api";
 import {
@@ -14,6 +14,7 @@ import {
   ExternalLink,
   Menu,
   Search,
+  X,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 
@@ -21,9 +22,36 @@ interface AdminLayoutProps {
   children: React.ReactNode;
 }
 
+const NAV_GROUPS = [
+  {
+    title: "内容管理",
+    items: [
+      { href: "/admin", icon: LayoutDashboard, label: "控制台" },
+      { href: "/admin/pages", icon: StickyNote, label: "独立页面" },
+      { href: "/admin/comments", icon: MessageCircle, label: "评论审核" },
+    ],
+  },
+  {
+    title: "资源与数据",
+    items: [
+      { href: "/admin/media", icon: ImageIcon, label: "媒体库" },
+      { href: "/admin/analytics", icon: BarChart3, label: "数据分析" },
+      { href: "/admin/seo", icon: Sparkles, label: "SEO 优化" },
+      { href: "/admin/backup", icon: HardDrive, label: "安全备份" },
+    ],
+  },
+  {
+    title: "系统配置",
+    items: [
+      { href: "/admin/settings", icon: Settings, label: "站点设置" },
+    ],
+  },
+];
+
 export function AdminLayout({ children }: AdminLayoutProps) {
   const [location, setLocation] = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [navQuery, setNavQuery] = useState("");
 
   useEffect(() => {
     if (!mobileMenuOpen) return;
@@ -39,52 +67,33 @@ export function AdminLayout({ children }: AdminLayoutProps) {
     setLocation("/admin/login");
   };
 
-  const navGroups = [
-    {
-      title: "内容管理",
-      items: [
-        { href: "/admin", icon: LayoutDashboard, label: "控制台" },
-        { href: "/admin/pages", icon: StickyNote, label: "独立页面" },
-        { href: "/admin/comments", icon: MessageCircle, label: "评论审核" },
-      ],
-    },
-    {
-      title: "资源与数据",
-      items: [
-        { href: "/admin/media", icon: ImageIcon, label: "媒体库" },
-        { href: "/admin/analytics", icon: BarChart3, label: "数据分析" },
-        { href: "/admin/seo", icon: Sparkles, label: "SEO 优化" },
-        { href: "/admin/backup", icon: HardDrive, label: "安全备份" },
-      ],
-    },
-    {
-      title: "系统配置",
-      items: [
-        { href: "/admin/settings", icon: Settings, label: "站点设置" },
-      ],
-    },
-  ];
-
   const currentTitle =
-    navGroups.flatMap((group) => group.items).find((item) =>
+    NAV_GROUPS.flatMap((group) => group.items).find((item) =>
       item.href === "/admin" ? location === "/admin" : location.startsWith(item.href)
     )?.label || "管理后台";
 
+  const filteredNavGroups = useMemo(() => {
+    const query = navQuery.trim().toLowerCase();
+    if (!query) return NAV_GROUPS;
+
+    return NAV_GROUPS
+      .map((group) => ({
+        ...group,
+        items: group.items.filter((item) =>
+          item.label.toLowerCase().includes(query)
+          || item.href.toLowerCase().includes(query)
+          || group.title.toLowerCase().includes(query)
+        ),
+      }))
+      .filter((group) => group.items.length > 0);
+  }, [navQuery]);
+
   const SidebarFooter = () => (
-    <div className="space-y-[2px] border-t border-border/30 p-[12px]">
+    <div className="space-y-[2px] border-t border-border/20 p-[12px]">
       <div className="flex min-h-[44px] items-center justify-between px-[12px] py-[8px]">
-        <span className="text-[13px] font-medium text-muted-foreground/60">主题</span>
+        <span className="text-[13px] font-medium text-muted-foreground/55">主题</span>
         <ThemeToggle />
       </div>
-      <a
-        href="/"
-        target="_blank"
-        rel="noopener noreferrer"
-        className="flex min-h-[44px] items-center gap-[10px] rounded-md px-[12px] py-[8px] text-[13px] font-medium text-muted-foreground/60 transition-colors hover:bg-muted/40 hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-      >
-        <ExternalLink className="w-[14px] h-[14px]" />
-        查看站点
-      </a>
       <button
         onClick={handleLogout}
         className="flex min-h-[44px] w-full items-center gap-[10px] rounded-md px-[12px] py-[8px] text-[13px] font-medium text-red-500/70 transition-colors hover:bg-red-500/10 hover:text-red-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
@@ -99,22 +108,38 @@ export function AdminLayout({ children }: AdminLayoutProps) {
     <div className="flex flex-col h-full">
       <div className="border-b border-border/25 p-[16px]">
         <Link href="/admin" className="flex items-center gap-[10px] rounded-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring" onClick={() => setMobileMenuOpen(false)}>
-          <div className="flex h-[34px] w-[24px] items-center justify-center rounded-[4px] bg-gradient-to-b from-foreground to-foreground/45 text-[0] shadow-[0_12px_28px_oklch(0_0_0_/_20%)]">
+          <div className="flex h-[34px] w-[24px] items-center justify-center rounded-[4px] bg-gradient-to-b from-foreground/90 to-foreground/35 text-[0] shadow-[0_12px_28px_oklch(0_0_0_/_20%)]">
             M
           </div>
           <div>
-            <span className="block text-[17px] font-semibold tracking-[-0.02em]">Monolith</span>
+            <span className="block font-heading text-[17px] font-semibold tracking-[-0.02em]">Monolith</span>
             <span className="block text-[10px] text-muted-foreground/45">Admin Console</span>
           </div>
         </Link>
-        <div className="mt-[14px] flex min-h-[34px] items-center gap-[8px] rounded-md border border-border/20 bg-background/40 px-[10px] text-[12px] text-muted-foreground/45">
-          <Search className="h-[13px] w-[13px]" />
-          快速定位模块
-        </div>
+        <label className="mt-[14px] flex min-h-[44px] items-center gap-[8px] rounded-md border border-border/25 bg-background/45 px-[12px] text-[13px] text-foreground shadow-[0_8px_24px_oklch(0_0_0_/_10%)] transition-colors focus-within:border-foreground/25 focus-within:bg-background/65 focus-within:ring-1 focus-within:ring-foreground/10">
+          <Search className="h-[15px] w-[15px] shrink-0 text-muted-foreground/70" />
+          <span className="sr-only">快速定位模块</span>
+          <input
+            value={navQuery}
+            onChange={(event) => setNavQuery(event.target.value)}
+            placeholder="搜索模块"
+            className="min-w-0 flex-1 bg-transparent text-[13px] text-foreground outline-none placeholder:text-muted-foreground/65"
+          />
+          {navQuery && (
+            <button
+              type="button"
+              onClick={() => setNavQuery("")}
+              className="flex h-[28px] w-[28px] shrink-0 items-center justify-center rounded-md text-muted-foreground/60 transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+              aria-label="清空模块搜索"
+            >
+              <X className="h-[13px] w-[13px]" />
+            </button>
+          )}
+        </label>
       </div>
 
       <nav className="flex-1 space-y-[18px] overflow-y-auto px-[12px] py-[16px]">
-        {navGroups.map((group) => (
+        {filteredNavGroups.map((group) => (
           <div key={group.title}>
             <h3 className="mb-[6px] px-[12px] text-[10px] font-semibold tracking-normal text-muted-foreground/35">
               {group.title}
@@ -128,14 +153,17 @@ export function AdminLayout({ children }: AdminLayoutProps) {
                   <Link
                     key={item.href}
                     href={item.href}
-                    onClick={() => setMobileMenuOpen(false)}
+                    onClick={() => {
+                      setMobileMenuOpen(false);
+                      setNavQuery("");
+                    }}
                     className={`relative flex min-h-[40px] items-center gap-[10px] rounded-md px-[12px] py-[8px] text-[13px] font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring md:min-h-[36px] ${
                       isActive
-                        ? "bg-foreground text-background shadow-[0_10px_28px_oklch(0_0_0_/_18%)]"
-                        : "text-muted-foreground/55 hover:bg-muted/40 hover:text-foreground"
+                        ? "bg-foreground/92 text-background shadow-[0_10px_28px_oklch(0_0_0_/_18%)]"
+                        : "text-muted-foreground/55 hover:bg-muted/35 hover:text-foreground/85"
                     }`}
                   >
-                    {isActive && <span className="absolute left-[4px] top-1/2 h-[18px] w-[2px] -translate-y-1/2 rounded-full bg-cyan-300" />}
+                    {isActive && <span className="absolute left-[4px] top-1/2 h-[18px] w-[2px] -translate-y-1/2 rounded-full bg-cyan-300/80" />}
                     <item.icon className="w-[14px] h-[14px]" />
                     {item.label}
                   </Link>
@@ -144,6 +172,11 @@ export function AdminLayout({ children }: AdminLayoutProps) {
             </div>
           </div>
         ))}
+        {filteredNavGroups.length === 0 && (
+          <div className="rounded-md border border-border/25 bg-background/35 px-[12px] py-[14px] text-[12px] leading-[1.6] text-muted-foreground/65">
+            没有匹配的模块
+          </div>
+        )}
       </nav>
 
       <SidebarFooter />
@@ -152,7 +185,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
 
   return (
     <div className="h-screen w-full bg-background">
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-[248px] flex-col border-r border-border/30 bg-card/20 backdrop-blur-xl md:flex">
+      <aside className="fixed inset-y-0 left-0 z-30 hidden w-[248px] flex-col border-r border-border/25 bg-background/70 backdrop-blur-xl md:flex">
         <SidebarContent />
       </aside>
 
@@ -202,10 +235,11 @@ export function AdminLayout({ children }: AdminLayoutProps) {
           </div>
         </header>
 
-        <div className="hidden h-[56px] items-center justify-between border-b border-border/25 bg-background/70 px-[24px] backdrop-blur-xl md:flex">
-          <div>
-            <p className="text-[12px] text-muted-foreground/45">Monolith 管理后台</p>
-            <h1 className="text-[18px] font-semibold tracking-[-0.01em]">{currentTitle}</h1>
+        <div className="hidden h-[56px] items-center justify-between border-b border-border/20 bg-background/72 px-[24px] backdrop-blur-xl md:flex">
+          <div className="flex items-center gap-[8px]">
+            <span className="font-heading text-[13px] font-medium text-foreground/90">Monolith 管理后台</span>
+            <span className="text-[12px] text-muted-foreground/25">/</span>
+            <span className="font-heading text-[13px] font-semibold text-foreground/75">{currentTitle}</span>
           </div>
           <div className="flex items-center gap-[8px]">
             <a

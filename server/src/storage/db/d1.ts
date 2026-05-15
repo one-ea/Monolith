@@ -90,11 +90,11 @@ export class D1Adapter implements IDatabase {
     }
 
     if (missingTables.length > 0) {
-      throw new Error(`D1 schema 未就绪，缺少表：${missingTables.join(", ")}。请先运行远程迁移和 schema reconcile。`);
+      throw new Error(`D1 schema 未就绪，缺少表：${missingTables.join(", ")}。请先运行 npm run db:migrate:local（本地）或远程迁移。`);
     }
 
     if (missingColumns.length > 0) {
-      throw new Error(`D1 schema 未就绪，缺少列：${missingColumns.join(", ")}。请先运行 schema reconcile。`);
+      throw new Error(`D1 schema 未就绪，缺少列：${missingColumns.join(", ")}。请先运行 npm run db:reconcile（本地）或 npm run db:reconcile:d1:remote（远程）。`);
     }
   }
 
@@ -742,8 +742,17 @@ export class D1Adapter implements IDatabase {
               coverColor: post.coverColor || "",
               coverImage: post.coverImage || "",
               published: post.published ?? true,
+              listed: post.listed ?? true,
+              pinned: post.pinned ?? false,
+              publishAt: post.publishAt || null,
+              seriesSlug: post.seriesSlug || null,
+              category: post.category || "",
+              seriesOrder: post.seriesOrder ?? 0,
               updatedAt: new Date().toISOString(),
             }).where(eq(posts.slug, post.slug));
+            if (post.tags !== undefined) {
+              await this.syncPostTags(existing[0].id, post.tags);
+            }
             imported.posts++;
           }
         } else {
@@ -758,9 +767,20 @@ export class D1Adapter implements IDatabase {
             listed: post.listed ?? true,
             pinned: post.pinned ?? false,
             publishAt: post.publishAt || null,
+            seriesSlug: post.seriesSlug || null,
+            category: post.category || "",
+            seriesOrder: post.seriesOrder ?? 0,
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
           });
+          const [created] = await this.db
+            .select({ id: posts.id })
+            .from(posts)
+            .where(eq(posts.slug, post.slug))
+            .limit(1);
+          if (created && post.tags !== undefined) {
+            await this.syncPostTags(created.id, post.tags);
+          }
           imported.posts++;
         }
       }

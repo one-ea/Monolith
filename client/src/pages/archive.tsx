@@ -57,14 +57,17 @@ export function ArchivePage() {
   ];
 
   return (
-    <div className="mx-auto w-full max-w-[760px] px-[16px] py-[32px] lg:px-0 lg:py-[56px]">
+    <div className="mx-auto w-full max-w-[900px] px-[16px] py-[32px] lg:px-0 lg:py-[56px]">
       <SeoHead title={archiveTitle} description={archiveDescription} url={archiveUrl} breadcrumbs={breadcrumbs} />
-      <div className="animate-fade-in-up">
-        <h1 className="text-[24px] sm:text-[28px] font-semibold tracking-[-0.02em]">{archiveTitle}</h1>
-        <div className="mt-[8px] flex flex-col gap-[8px] sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-[14px] text-muted-foreground">{archiveDescription}</p>
+      <div className="animate-fade-in-up rounded-md border border-border/20 bg-background/30 p-[18px] sm:p-[22px]">
+        <p className="font-mono text-[11px] uppercase text-muted-foreground/42">Archive Index</p>
+        <div className="mt-[10px] flex flex-col gap-[14px] sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h1 className="font-heading text-[28px] font-semibold tracking-[-0.03em] sm:text-[36px]">{archiveTitle}</h1>
+            <p className="mt-[8px] text-[14px] leading-[1.7] text-muted-foreground">{archiveDescription}</p>
+          </div>
           {selectedCategory && (
-            <Link href="/archive" className="inline-flex min-h-[36px] items-center rounded-md border border-border/20 px-[10px] text-[12px] text-muted-foreground/70 transition-colors hover:bg-accent/35 hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
+            <Link href="/archive" className="inline-flex min-h-[40px] items-center justify-center rounded-md border border-border/20 px-[12px] text-[12px] text-muted-foreground/70 transition-colors hover:bg-accent/35 hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
               查看全部
             </Link>
           )}
@@ -99,12 +102,16 @@ export function ArchivePage() {
       ) : (
         years.map((year, yi) => (
           <AnimateIn key={year} delay={`delay-${Math.min(yi, 4)}`} className="mb-[32px]">
-            <h2 className="mb-[16px] text-[20px] font-semibold tracking-[-0.01em] text-muted-foreground/40">{year}</h2>
-            <div className="flex flex-col gap-[2px]">
+            <div className="mb-[12px] flex items-center gap-[12px]">
+              <h2 className="font-heading text-[22px] font-semibold tracking-[-0.02em] text-muted-foreground/45">{year}</h2>
+              <div className="h-px flex-1 bg-border/18" />
+              <span className="font-mono text-[11px] text-muted-foreground/32">{grouped.get(year)!.length} 篇</span>
+            </div>
+            <div className="overflow-hidden rounded-md border border-border/16 bg-background/22">
               {grouped.get(year)!.map((post) => (
-                <Link key={post.slug} href={`/posts/${post.slug}`} className="-mx-[12px] group flex min-h-[44px] items-baseline gap-[12px] rounded-md px-[12px] py-[10px] transition-all duration-200 hover:translate-x-[4px] hover:bg-accent/25 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
-                  <span className="shrink-0 text-[13px] tabular-nums text-muted-foreground/40 w-[90px]">{formatDate(post.createdAt).replace(/\d{4}年/, "")}</span>
-                  <span className="text-[15px] text-foreground transition-colors duration-200 group-hover:text-foreground/80">{post.title}</span>
+                <Link key={post.slug} href={`/posts/${post.slug}`} className="group grid min-h-[52px] grid-cols-[86px_minmax(0,1fr)] items-center gap-[12px] border-b border-border/10 px-[12px] py-[10px] transition-all duration-200 last:border-b-0 hover:bg-accent/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring sm:grid-cols-[106px_minmax(0,1fr)_160px]">
+                  <span className="shrink-0 font-mono text-[12px] tabular-nums text-muted-foreground/40">{formatDate(post.createdAt).replace(/\d{4}年/, "")}</span>
+                  <span className="min-w-0 truncate text-[15px] text-foreground transition-colors duration-200 group-hover:text-foreground/82">{post.title}</span>
                   <div className="ml-auto hidden shrink-0 gap-[4px] sm:flex">
                     {post.tags.slice(0, 1).map((tag) => (
                       <Badge key={tag} variant="outline" className="h-[20px] rounded-[3px] px-[6px] text-[11px] font-normal text-muted-foreground/50">{tag}</Badge>

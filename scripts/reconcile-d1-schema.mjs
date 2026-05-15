@@ -1,8 +1,10 @@
 import { spawnSync } from "node:child_process";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import process from "node:process";
 
-const projectRoot = process.cwd();
-const serverRoot = `${projectRoot}/server`;
+const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const serverRoot = resolve(projectRoot, "server");
 const IS_WIN = process.platform === "win32";
 const SHELL = IS_WIN;
 
