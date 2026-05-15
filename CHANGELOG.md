@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.4.1](https://github.com/one-ea/Monolith/compare/v2.4.0...v2.4.1) (2026-05-15)
+
+
+### 🐛 Bug Fixes
+
+* address issue 72 and resolve dependabot alerts ([#76](https://github.com/one-ea/Monolith/issues/76)) ([661eb5a](https://github.com/one-ea/Monolith/commit/661eb5a413faffbe48c5c34611aeab511204a097))
+
 ## [2.4.0](https://github.com/one-ea/Monolith/compare/v2.3.2...v2.4.0) (2026-05-03)
 
 
