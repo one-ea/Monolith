@@ -204,45 +204,6 @@ function CategoryList({ categories }: { categories: CategoryInfo[] }) {
   );
 }
 
-function CategoryList({ categories }: { categories: CategoryInfo[] }) {
-  const [expanded, setExpanded] = useState(false);
-  const hasMore = categories.length > CATEGORY_VISIBLE;
-  const visibleCategories = expanded ? categories : categories.slice(0, CATEGORY_VISIBLE);
-
-  return (
-    <div className="rounded-md border border-border/25 bg-background/25 p-[18px]">
-      <h3 className="mb-[12px] flex items-center gap-[6px] text-[13px] font-medium tracking-normal text-muted-foreground/60">
-        <FolderOpen className="h-[13px] w-[13px]" />
-        分类
-        <span className="ml-auto text-[10px] font-mono text-muted-foreground/25">{categories.length}</span>
-      </h3>
-      <div className={`space-y-[4px] ${expanded && categories.length > 8 ? "max-h-[280px] overflow-y-auto pr-[4px]" : ""}`}>
-        {visibleCategories.map((cat) => (
-          <Link
-            key={cat.name}
-            href={`/archive?category=${encodeURIComponent(cat.name)}`}
-            className="group flex min-h-[44px] items-center justify-between rounded-md px-[8px] py-[6px] transition-colors hover:bg-accent/45 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring sm:min-h-[36px]"
-          >
-            <span className="min-w-0 truncate text-[12px] text-muted-foreground transition-colors group-hover:text-foreground">{cat.name}</span>
-            <span className="ml-[12px] shrink-0 rounded-[4px] bg-foreground/[0.04] px-[6px] py-[2px] text-[10px] font-mono text-muted-foreground/35">{cat.count}</span>
-          </Link>
-        ))}
-      </div>
-      {hasMore && (
-        <button
-          type="button"
-          onClick={() => setExpanded((value) => !value)}
-          aria-expanded={expanded}
-          className="mt-[10px] inline-flex min-h-[36px] w-full items-center justify-center gap-[4px] rounded-md border border-border/15 text-[11px] text-muted-foreground/50 transition-colors hover:bg-accent/35 hover:text-muted-foreground/80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-        >
-          {expanded ? "收起分类" : `展开 ${categories.length - CATEGORY_VISIBLE} 个更多分类`}
-          <ChevronDown className={`h-[11px] w-[11px] transition-transform ${expanded ? "rotate-180" : ""}`} />
-        </button>
-      )}
-    </div>
-  );
-}
-
 /* ── 纯 SVG 迷你折线图 ── */
 function SparkLine({ data, width = 240, height = 48 }: { data: number[]; width?: number; height?: number }) {
   const gradId = `sparkGrad-${React.useId().replace(/:/g, "")}`;
