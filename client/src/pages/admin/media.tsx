@@ -44,7 +44,7 @@ export function AdminMedia() {
   const [msg, setMsg] = useState<{ text: string; type: "success" | "error" } | null>(null);
 
   useEffect(() => {
-    document.title = "媒体库 | Monolith";
+    document.title = "媒体资产 | Monolith";
     loadMedia();
   }, []);
 
@@ -137,7 +137,7 @@ export function AdminMedia() {
       {/* ─── 顶栏 ─── */}
       <div className="mb-[24px] flex items-center justify-between">
         <div>
-          <h1 className="text-[24px] font-semibold tracking-[-0.02em]">媒体库</h1>
+          <h1 className="text-[24px] font-semibold tracking-[-0.02em]">媒体资产</h1>
           <p className="mt-[3px] text-[13px] text-muted-foreground/40">
             {media.length} 个文件 · 共 {formatSize(totalSize)}
           </p>
@@ -178,11 +178,11 @@ export function AdminMedia() {
         onDrop={handleDrop}
         className={`mb-[20px] rounded-lg border-2 border-dashed py-[32px] text-center transition-all ${
           dragOver
-            ? "border-blue-400/50 bg-blue-400/5"
+            ? "border-foreground/35 bg-foreground/[0.04]"
             : "border-border/25 hover:border-border/40"
         }`}
       >
-        <Upload className={`mx-auto mb-[8px] h-[24px] w-[24px] ${dragOver ? "text-blue-400" : "text-muted-foreground/20"}`} />
+        <Upload className={`mx-auto mb-[8px] h-[24px] w-[24px] ${dragOver ? "text-foreground/72" : "text-muted-foreground/20"}`} />
         <p className="text-[13px] text-muted-foreground/40">
           {dragOver ? "松开以上传" : "拖拽文件到此处，或"}
           {!dragOver && (
@@ -259,7 +259,7 @@ export function AdminMedia() {
               key={item.key}
               className={`group relative rounded-lg border overflow-hidden cursor-pointer transition-all ${
                 selected.has(item.key)
-                  ? "border-blue-400/50 ring-1 ring-blue-400/30"
+                  ? "border-foreground/42 ring-1 ring-foreground/20"
                   : "border-border/25 hover:border-border/40"
               }`}
               onClick={() => toggleSelect(item.key)}
@@ -276,10 +276,10 @@ export function AdminMedia() {
               {/* 选中指示器 */}
               <div className={`absolute top-[6px] left-[6px] h-[20px] w-[20px] rounded-full border-2 flex items-center justify-center transition-all ${
                 selected.has(item.key)
-                  ? "bg-blue-500 border-blue-500"
+                  ? "bg-foreground border-foreground"
                   : "border-white/30 bg-black/20 opacity-0 group-hover:opacity-100"
               }`}>
-                {selected.has(item.key) && <Check className="h-[12px] w-[12px] text-white" />}
+                {selected.has(item.key) && <Check className="h-[12px] w-[12px] text-background" />}
               </div>
 
               {/* 操作覆盖层 */}
@@ -319,17 +319,17 @@ export function AdminMedia() {
             <div
               key={item.key}
               className={`group flex items-center gap-[12px] px-[16px] py-[10px] ${i < media.length - 1 ? "border-b border-border/12" : ""} hover:bg-card/15 transition-colors cursor-pointer ${
-                selected.has(item.key) ? "bg-blue-400/5" : ""
+                selected.has(item.key) ? "bg-foreground/[0.04]" : ""
               }`}
               onClick={() => toggleSelect(item.key)}
             >
               {/* 选中框 */}
               <div className={`h-[18px] w-[18px] rounded border-2 shrink-0 flex items-center justify-center transition-all ${
                 selected.has(item.key)
-                  ? "bg-blue-500 border-blue-500"
+                  ? "bg-foreground border-foreground"
                   : "border-border/30"
               }`}>
-                {selected.has(item.key) && <Check className="h-[11px] w-[11px] text-white" />}
+                {selected.has(item.key) && <Check className="h-[11px] w-[11px] text-background" />}
               </div>
 
               {/* 缩略图 */}

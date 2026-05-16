@@ -43,8 +43,8 @@ export function SeoHead({
   breadcrumbs,
   noindex = false,
 }: SeoProps) {
-  const fullTitle = title ? `${title} | ${siteName}` : `${siteName} — ${DEFAULT_DESCRIPTION}`;
   const metaDescription = description || DEFAULT_DESCRIPTION;
+  const fullTitle = title ? `${title} | ${siteName}` : `${siteName} — ${metaDescription}`;
   const canonicalUrl = url ? `${window.location.origin}${url}` : window.location.href;
   const ogImage = image || `${window.location.origin}/og-default.png`;
 

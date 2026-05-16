@@ -27,7 +27,7 @@ export function AdminComments() {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    document.title = "评论管理 | Monolith";
+    document.title = "互动审核 | Monolith";
     fetchAdminComments()
       .then((data) => {
         setComments(data);
@@ -81,8 +81,8 @@ export function AdminComments() {
       {/* ─── 顶栏 ─── */}
       <div className="mb-[24px] flex items-center justify-between">
         <div>
-          <h1 className="text-[24px] font-semibold tracking-[-0.02em]">评论管理</h1>
-          <p className="mt-[3px] text-[13px] text-muted-foreground/40">审核、管理用户评论</p>
+          <h1 className="text-[24px] font-semibold tracking-[-0.02em]">互动审核</h1>
+          <p className="mt-[3px] text-[13px] text-muted-foreground/40">处理互动反馈、可见状态与内容质量</p>
         </div>
       </div>
 
@@ -96,11 +96,11 @@ export function AdminComments() {
       <div className="mb-[20px] grid grid-cols-3 gap-[10px]">
         <button
           onClick={() => setFilter("all")}
-          className={`rounded-lg border p-[16px] text-left transition-all ${filter === "all" ? "border-foreground/20 bg-card/30" : "border-border/25 bg-card/10 hover:bg-card/20"}`}
+          className={`rounded-md border p-[16px] text-left transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${filter === "all" ? "border-foreground/20 bg-card/30" : "border-border/25 bg-card/10 hover:bg-card/20"}`}
         >
           <div className="flex items-center gap-[8px]">
-            <div className="flex h-[32px] w-[32px] items-center justify-center rounded-md bg-blue-500/10">
-              <MessageCircle className="h-[14px] w-[14px] text-blue-400" />
+            <div className="flex h-[32px] w-[32px] items-center justify-center rounded-md bg-foreground/[0.06]">
+              <MessageCircle className="h-[14px] w-[14px] text-foreground/62" />
             </div>
             <div>
               <p className="text-[20px] font-semibold leading-none">{comments.length}</p>
@@ -110,7 +110,7 @@ export function AdminComments() {
         </button>
         <button
           onClick={() => setFilter("pending")}
-          className={`rounded-lg border p-[16px] text-left transition-all ${filter === "pending" ? "border-foreground/20 bg-card/30" : "border-border/25 bg-card/10 hover:bg-card/20"}`}
+          className={`rounded-md border p-[16px] text-left transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${filter === "pending" ? "border-foreground/20 bg-card/30" : "border-border/25 bg-card/10 hover:bg-card/20"}`}
         >
           <div className="flex items-center gap-[8px]">
             <div className="flex h-[32px] w-[32px] items-center justify-center rounded-md bg-amber-500/10">
@@ -124,7 +124,7 @@ export function AdminComments() {
         </button>
         <button
           onClick={() => setFilter("approved")}
-          className={`rounded-lg border p-[16px] text-left transition-all ${filter === "approved" ? "border-foreground/20 bg-card/30" : "border-border/25 bg-card/10 hover:bg-card/20"}`}
+          className={`rounded-md border p-[16px] text-left transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${filter === "approved" ? "border-foreground/20 bg-card/30" : "border-border/25 bg-card/10 hover:bg-card/20"}`}
         >
           <div className="flex items-center gap-[8px]">
             <div className="flex h-[32px] w-[32px] items-center justify-center rounded-md bg-emerald-500/10">

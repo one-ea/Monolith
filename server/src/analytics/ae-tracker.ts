@@ -18,7 +18,11 @@
  *   blob8  = screen (例 "1920x1080")
  *   blob9  = language (浏览器首选语言, 例 "zh-CN")
  *   blob10 = visitor_id (浏览器指纹哈希前缀, 用于 UV 估算)
+ *   blob11 = event_type (pageview/search)
+ *   blob12 = search_query (仅 search)
+ *   blob13 = result_bucket (仅 search, 0 / 1-3 / 4-9 / 10+)
  *   double1 = duration_ms (停留时长，0 = pageview 上报)
+ *   double2 = result_count (仅 search)
  *   index1  = website (作为采样索引，便于按站点过滤)
  */
 
@@ -32,6 +36,9 @@ export type TrackPayload = {
   language?: string;
   visitorId?: string; // 客户端生成的访客指纹（哈希后）
   duration?: number; // 停留时长(ms)，可选
+  eventType?: "pageview" | "search";
+  searchQuery?: string;
+  resultCount?: number;
 };
 
 export type TrackContext = {
@@ -59,10 +66,24 @@ export function writeAnalyticsPoint(payload: TrackPayload, ctx: TrackContext): v
       (payload.screen || "").slice(0, 16),
       (payload.language || "").slice(0, 16),
       (payload.visitorId || "").slice(0, 16),
+      (payload.eventType || "pageview").slice(0, 24),
+      (payload.searchQuery || "").slice(0, 96),
+      bucketResultCount(payload.resultCount),
     ],
-    doubles: [Math.max(0, Math.min(payload.duration || 0, 86400000))], // 上限 24h
+    doubles: [
+      Math.max(0, Math.min(payload.duration || 0, 86400000)), // 上限 24h
+      Math.max(0, Math.min(payload.resultCount || 0, 1000)),
+    ],
     indexes: [website], // 采样索引
   });
+}
+
+function bucketResultCount(count: number | undefined): string {
+  const value = Math.max(0, Math.floor(count || 0));
+  if (value === 0) return "0";
+  if (value <= 3) return "1-3";
+  if (value <= 9) return "4-9";
+  return "10+";
 }
 
 /**

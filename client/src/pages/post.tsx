@@ -212,10 +212,13 @@ export function PostPage() {
             </button>
           </div>
 
-          <header className="mb-[32px] animate-fade-in-up delay-1 rounded-md border border-border/20 bg-background/30 p-[18px] sm:p-[24px]">
-            <div className="mb-[18px] flex items-center gap-[12px]">
-              <div className={`h-[2px] w-[64px] rounded-full bg-gradient-to-r ${post.coverColor || "from-gray-500/20 to-gray-600/20"} grayscale`} />
-              <span className="font-mono text-[11px] uppercase text-muted-foreground/40">Reading File</span>
+          <header className="mb-[32px] animate-fade-in-up delay-1 rounded-md border border-border/20 bg-background/28 p-[18px] sm:p-[24px]">
+            <div className="mb-[18px] flex flex-wrap items-center gap-[12px]">
+              <div className="h-[2px] w-[64px] rounded-full bg-foreground/36" />
+              <span className="font-mono text-[11px] text-muted-foreground/44">READING FILE</span>
+              {post.category && (
+                <span className="rounded-[4px] border border-border/18 px-[6px] py-[2px] text-[11px] text-muted-foreground/55">{post.category}</span>
+              )}
             </div>
             <div className="mb-[16px] flex flex-wrap items-center gap-[8px]">
               {post.tags.map((tag) => (
@@ -226,6 +229,11 @@ export function PostPage() {
             </div>
             <h1 className="font-heading text-[30px] font-semibold tracking-[-0.035em] leading-[1.08] sm:text-[40px] lg:text-[48px]">{post.title}</h1>
             <p className="mt-[18px] max-w-[680px] text-[16px] leading-[1.85] text-muted-foreground">{post.excerpt}</p>
+            <div className="mt-[20px] grid grid-cols-2 gap-[8px] border-t border-border/16 pt-[14px] text-[12px] text-muted-foreground/52 sm:grid-cols-3">
+              <span>发布：{formatDate(post.createdAt)}</span>
+              <span>浏览：{(post.viewCount ?? 0).toLocaleString()}</span>
+              <span className="col-span-2 sm:col-span-1">更新：{formatDate(post.updatedAt)}</span>
+            </div>
           </header>
 
           {/* 移动端 TOC（显示在分隔线上方） */}

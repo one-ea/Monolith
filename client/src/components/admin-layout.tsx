@@ -24,26 +24,26 @@ interface AdminLayoutProps {
 
 const NAV_GROUPS = [
   {
-    title: "内容管理",
+    title: "内容运营",
     items: [
-      { href: "/admin", icon: LayoutDashboard, label: "控制台" },
-      { href: "/admin/pages", icon: StickyNote, label: "独立页面" },
-      { href: "/admin/comments", icon: MessageCircle, label: "评论审核" },
+      { href: "/admin", icon: LayoutDashboard, label: "运营总览" },
+      { href: "/admin/pages", icon: StickyNote, label: "页面管理" },
+      { href: "/admin/comments", icon: MessageCircle, label: "互动审核" },
     ],
   },
   {
-    title: "资源与数据",
+    title: "增长工具",
     items: [
-      { href: "/admin/media", icon: ImageIcon, label: "媒体库" },
-      { href: "/admin/analytics", icon: BarChart3, label: "数据分析" },
-      { href: "/admin/seo", icon: Sparkles, label: "SEO 优化" },
-      { href: "/admin/backup", icon: HardDrive, label: "安全备份" },
+      { href: "/admin/media", icon: ImageIcon, label: "媒体资产" },
+      { href: "/admin/analytics", icon: BarChart3, label: "运营洞察" },
+      { href: "/admin/seo", icon: Sparkles, label: "搜索优化" },
+      { href: "/admin/backup", icon: HardDrive, label: "备份恢复" },
     ],
   },
   {
-    title: "系统配置",
+    title: "系统维护",
     items: [
-      { href: "/admin/settings", icon: Settings, label: "站点设置" },
+      { href: "/admin/settings", icon: Settings, label: "站点配置" },
     ],
   },
 ];
@@ -113,7 +113,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
           </div>
           <div>
             <span className="block font-heading text-[17px] font-semibold tracking-[-0.02em]">Monolith</span>
-            <span className="block text-[10px] text-muted-foreground/45">Admin Console</span>
+            <span className="block text-[10px] text-muted-foreground/45">Operations Desk</span>
           </div>
         </Link>
         <label className="mt-[14px] flex min-h-[44px] items-center gap-[8px] rounded-md border border-border/25 bg-background/45 px-[12px] text-[13px] text-foreground shadow-[0_8px_24px_oklch(0_0_0_/_10%)] transition-colors focus-within:border-foreground/25 focus-within:bg-background/65 focus-within:ring-1 focus-within:ring-foreground/10">
@@ -163,7 +163,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
                         : "text-muted-foreground/55 hover:bg-muted/35 hover:text-foreground/85"
                     }`}
                   >
-                    {isActive && <span className="absolute left-[4px] top-1/2 h-[18px] w-[2px] -translate-y-1/2 rounded-full bg-cyan-300/80" />}
+                    {isActive && <span className="absolute left-[4px] top-1/2 h-[18px] w-[2px] -translate-y-1/2 rounded-full bg-background/75" />}
                     <item.icon className="w-[14px] h-[14px]" />
                     {item.label}
                   </Link>
@@ -237,7 +237,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
 
         <div className="hidden h-[56px] items-center justify-between border-b border-border/20 bg-background/72 px-[24px] backdrop-blur-xl md:flex">
           <div className="flex items-center gap-[8px]">
-            <span className="font-heading text-[13px] font-medium text-foreground/90">Monolith 管理后台</span>
+            <span className="font-heading text-[13px] font-medium text-foreground/90">Monolith 运营后台</span>
             <span className="text-[12px] text-muted-foreground/25">/</span>
             <span className="font-heading text-[13px] font-semibold text-foreground/75">{currentTitle}</span>
           </div>

@@ -8,10 +8,11 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { sign, verify } from "hono/jwt";
 import { createDatabase, createObjectStorage } from "./storage/factory";
-import type { IDatabase } from "./storage/interfaces";
+import type { CreatePostInput, IDatabase } from "./storage/interfaces";
 import type { IObjectStorage } from "./storage/interfaces";
 import { writeAnalyticsPoint, isWebsiteAllowed } from "./analytics/ae-tracker";
 import { queryAEAnalytics } from "./analytics/ae-query";
+import { attachAnalyticsInsights } from "./analytics/insights";
 
 /* ── 类型定义 ──────────────────────────────── */
 type Bindings = {
@@ -104,6 +105,122 @@ async function triggerWebhook(c: any, eventName: string, payload: any) {
   }
 }
 
+type BackupPreviewPayload = {
+  version?: string;
+  exportedAt?: string;
+  posts?: CreatePostInput[];
+  tags?: { name: string }[];
+  settings?: Record<string, string>;
+};
+
+type BackupPreviewOptions = {
+  mode?: "merge" | "overwrite";
+  includeSettings?: boolean;
+  source?: string;
+};
+
+async function readObjectBody(body: ReadableStream<Uint8Array>): Promise<string> {
+  const reader = body.getReader();
+  const chunks: Uint8Array[] = [];
+  let done = false;
+  while (!done) {
+    const result = await reader.read();
+    if (result.value) chunks.push(result.value);
+    done = result.done;
+  }
+  const totalLength = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
+  const bytes = new Uint8Array(totalLength);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.length;
+  }
+  return new TextDecoder().decode(bytes);
+}
+
+async function buildBackupPreview(
+  db: IDatabase,
+  data: BackupPreviewPayload,
+  options: BackupPreviewOptions = {},
+) {
+  const mode = options.mode || "merge";
+  const includeSettings = options.includeSettings ?? Boolean(data.settings);
+  const incomingPosts = Array.isArray(data.posts) ? data.posts : [];
+  const incomingTags = Array.isArray(data.tags) ? data.tags : [];
+  const settingsKeys = Object.keys(data.settings || {});
+  const [existingPosts, existingTags] = await Promise.all([db.getAllPosts(), db.getAllTags()]);
+  const existingSlugs = new Set(existingPosts.map((post) => post.slug));
+  const existingTagNames = new Set(existingTags.map((tag) => tag.name));
+
+  const willUpdate = incomingPosts.filter((post) => existingSlugs.has(post.slug)).length;
+  const willCreate = incomingPosts.length - willUpdate;
+  const willSkip = mode === "merge" ? willUpdate : 0;
+  const tagWillCreate = incomingTags.filter((tag) => tag?.name && !existingTagNames.has(tag.name)).length;
+  const unknownItems = incomingPosts.filter((post) => !post.slug || !post.title).length;
+  const warnings: string[] = [];
+
+  if (incomingPosts.length === 0 && incomingTags.length === 0 && settingsKeys.length === 0) {
+    warnings.push("备份文件没有包含可恢复的数据。");
+  }
+  if (unknownItems > 0) {
+    warnings.push(`${unknownItems} 条文章缺少 slug 或标题，恢复前需要额外确认。`);
+  }
+  if (mode === "overwrite" && willUpdate > 0) {
+    warnings.push(`覆盖模式会更新 ${willUpdate} 篇已存在文章。`);
+  }
+  if (includeSettings && settingsKeys.length > 0) {
+    warnings.push(`将恢复 ${settingsKeys.length} 项站点设置，可能影响前台展示、SEO 或第三方配置。`);
+  }
+
+  const riskLevel = mode === "overwrite" && (willUpdate > 0 || includeSettings)
+    ? "high"
+    : warnings.length > 0 || willCreate + tagWillCreate > 20
+      ? "medium"
+      : "low";
+
+  return {
+    source: options.source || "upload",
+    summary: {
+      version: data.version || "unknown",
+      exportedAt: data.exportedAt || "unknown",
+      postCount: incomingPosts.length,
+      tagCount: incomingTags.length,
+      settingsCount: settingsKeys.length,
+    },
+    diff: {
+      willCreate,
+      willUpdate: mode === "overwrite" ? willUpdate : 0,
+      willSkip,
+      tagWillCreate,
+      willRestoreSettings: includeSettings ? settingsKeys.length : 0,
+      unknownItems,
+    },
+    warnings,
+    sample: incomingPosts.slice(0, 20).map((post) => ({
+      title: post.title || "未命名文章",
+      slug: post.slug || "",
+      status: existingSlugs.has(post.slug) ? (mode === "overwrite" ? "update" : "skip") : "create",
+    })),
+    settingsKeys,
+    riskLevel,
+  };
+}
+
+function validateWebdavTarget(url: string): { ok: true; baseUrl: string } | { ok: false; error: string } {
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== "https:") {
+      return { ok: false, error: "仅允许 HTTPS 协议的 WebDAV 地址" };
+    }
+    if (/^(10\.|172\.(1[6-9]|2[0-9]|3[01])\.|192\.168\.|127\.|0\.|169\.254\.|::1|fc)/.test(parsed.hostname)) {
+      return { ok: false, error: "不允许内网地址" };
+    }
+    return { ok: true, baseUrl: url.replace(/\/$/, "") };
+  } catch {
+    return { ok: false, error: "无效的 WebDAV 地址" };
+  }
+}
+
 /* ── 健康检查端点 ──────────────────────────── */
 app.get("/api/health", async (c) => {
   return c.json({ status: "ok", timestamp: new Date().toISOString() });
@@ -170,6 +287,22 @@ app.get("/api/search", async (c) => {
   limit = Math.min(limit, 50);
   const db = c.get("db");
   const results = await db.searchPosts(query.trim(), limit);
+  writeAnalyticsPoint(
+    {
+      website: "default",
+      path: "/search",
+      referer: c.req.header("Referer"),
+      language: c.req.header("Accept-Language")?.split(",")[0],
+      eventType: "search",
+      searchQuery: query.trim().slice(0, 96),
+      resultCount: results.length,
+    },
+    {
+      ae: c.env.AE,
+      userAgent: c.req.header("User-Agent"),
+      country: c.req.header("CF-IPCountry") || "XX",
+    },
+  );
   return c.json(results);
 });
 
@@ -354,6 +487,12 @@ app.get("/api/settings/public", async (c) => {
     site_title: all.site_title || "Monolith",
     site_description: all.site_description || "",
     site_tagline: all.site_tagline || "",
+    hero_kicker: all.hero_kicker || "",
+    hero_subtitle: all.hero_subtitle || "",
+    hero_description: all.hero_description || "",
+    hero_actions: all.hero_actions || "",
+    hero_topics: all.hero_topics || "",
+    site_og_image: all.site_og_image || "",
     footer_text: all.footer_text || "",
     author_name: all.author_name || "Monolith",
     author_title: all.author_title || "",
@@ -593,8 +732,21 @@ app.get("/api/admin/analytics", async (c) => {
   let days = parseInt(c.req.query("days") || "7", 10);
   if (isNaN(days) || days <= 0) days = 7;
   const db = c.get("db");
-  const analytics = await db.getAnalytics(Math.min(days, 90));
-  return c.json(analytics);
+  const safeDays = Math.min(days, 90);
+  const [analytics, broaderAnalytics, posts] = await Promise.all([
+    db.getAnalytics(safeDays),
+    db.getAnalytics(Math.min(safeDays * 2, 180)),
+    db.getPublishedPosts(),
+  ]);
+  const currentDates = new Set(analytics.visitsByDay.map((item) => item.date));
+  const previousVisitsByDay = broaderAnalytics.visitsByDay
+    .filter((item) => !currentDates.has(item.date))
+    .slice(-safeDays);
+  return c.json(attachAnalyticsInsights(analytics, {
+    days: safeDays,
+    previousVisitsByDay,
+    posts,
+  }));
 });
 
 // 访客分析数据 — AE 增强版（CF 专属，仅在 D1 后端 + 配置好 API Token 时可用）
@@ -617,9 +769,12 @@ app.get("/api/admin/analytics/ae", async (c) => {
   if (isNaN(days) || days <= 0) days = 7;
 
   try {
+    const db = c.get("db");
+    const posts = await db.getPublishedPosts();
     const data = await queryAEAnalytics(
       { CLOUDFLARE_ACCOUNT_ID: c.env.CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_API_TOKEN: c.env.CLOUDFLARE_API_TOKEN },
       Math.min(days, 31),
+      posts,
     );
     return c.json(data);
   } catch (err) {
@@ -1051,47 +1206,45 @@ app.post("/api/admin/backup/r2-delete", async (c) => {
 
 // 预览备份内容摘要
 app.post("/api/admin/backup/r2-preview", async (c) => {
-  const { name } = await c.req.json<{ name: string }>();
+  const { name, mode, includeSettings } = await c.req.json<{ name: string; mode?: "merge" | "overwrite"; includeSettings?: boolean }>();
   const storage = c.get("storage");
   const object = await storage.get(`backups/${name}`);
 
   if (!object) return c.json({ error: "备份文件不存在" }, 404);
 
-  const reader = object.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let done = false;
-  while (!done) {
-    const result = await reader.read();
-    if (result.value) chunks.push(result.value);
-    done = result.done;
-  }
-  const text = new TextDecoder().decode(new Uint8Array(chunks.flatMap((c) => [...c])));
+  const text = await readObjectBody(object.body);
 
   try {
-    const data = JSON.parse(text);
-    return c.json({
-      version: data.version || "unknown",
-      exportedAt: data.exportedAt || "unknown",
-      postCount: data.posts?.length || 0,
-      tagCount: data.tags?.length || 0,
-      postTitles: (data.posts || []).slice(0, 10).map((p: { title: string; slug: string }) => ({ title: p.title, slug: p.slug })),
-      settingsKeys: Object.keys(data.settings || {}),
-    });
+    const data = JSON.parse(text) as BackupPreviewPayload;
+    const db = c.get("db");
+    return c.json(await buildBackupPreview(db, data, { mode, includeSettings, source: name }));
   } catch {
     return c.json({ error: "备份文件格式无效" }, 400);
   }
+});
+
+// 预检本地备份或多平台迁移数据
+app.post("/api/admin/backup/preview", async (c) => {
+  const body = await c.req.json<BackupPreviewPayload & BackupPreviewOptions>();
+  const db = c.get("db");
+  return c.json(await buildBackupPreview(db, body, {
+    mode: body.mode,
+    includeSettings: body.includeSettings,
+    source: body.source,
+  }));
 });
 
 // 从 JSON 文件恢复/导入数据
 app.post("/api/admin/backup/restore", async (c) => {
   const body = await c.req.json();
   const db = c.get("db");
+  const includeSettings = body.includeSettings ?? Boolean(body.settings);
 
   try {
     const imported = await db.importAll({
       posts: body.posts,
       tags: body.tags,
-      settings: body.settings,
+      settings: includeSettings ? body.settings : undefined,
       mode: body.mode || "merge",
     });
     return c.json({ success: true, imported, mode: body.mode || "merge" });
@@ -1102,7 +1255,7 @@ app.post("/api/admin/backup/restore", async (c) => {
 
 // 从 R2 备份文件直接恢复数据（真正的恢复逻辑）
 app.post("/api/admin/backup/r2-restore", async (c) => {
-  const { name, mode } = await c.req.json<{ name: string; mode?: "merge" | "overwrite" }>();
+  const { name, mode, includeSettings } = await c.req.json<{ name: string; mode?: "merge" | "overwrite"; includeSettings?: boolean }>();
   if (!name) return c.json({ error: "缺少备份文件名" }, 400);
 
   const storage = c.get("storage");
@@ -1111,16 +1264,7 @@ app.post("/api/admin/backup/r2-restore", async (c) => {
   const object = await storage.get(`backups/${name}`);
   if (!object) return c.json({ error: "备份文件不存在" }, 404);
 
-  // 读取完整备份内容
-  const reader = object.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let done = false;
-  while (!done) {
-    const result = await reader.read();
-    if (result.value) chunks.push(result.value);
-    done = result.done;
-  }
-  const text = new TextDecoder().decode(new Uint8Array(chunks.flatMap((c) => [...c])));
+  const text = await readObjectBody(object.body);
 
   let data: { posts?: unknown[]; tags?: unknown[]; settings?: Record<string, string> };
   try {
@@ -1137,7 +1281,7 @@ app.post("/api/admin/backup/r2-restore", async (c) => {
     const imported = await db.importAll({
       posts: data.posts as Parameters<typeof db.importAll>[0]["posts"],
       tags: data.tags as Parameters<typeof db.importAll>[0]["tags"],
-      settings: data.settings,
+      settings: (includeSettings ?? true) ? data.settings : undefined,
       mode: mode || "merge",
     });
     return c.json({ success: true, imported, source: name, mode: mode || "merge" });
@@ -1155,17 +1299,8 @@ app.post("/api/admin/backup/webdav", async (c) => {
   }>();
 
   // SSRF 防护：仅允许 https:// 的外部 URL
-  try {
-    const parsed = new URL(body.url);
-    if (parsed.protocol !== "https:") {
-      return c.json({ error: "仅允许 HTTPS 协议的 WebDAV 地址" }, 400);
-    }
-    if (/^(10\.|172\.(1[6-9]|2[0-9]|3[01])\.|192\.168\.|127\.|0\.|169\.254\.|::1|fc)/.test(parsed.hostname)) {
-      return c.json({ error: "不允许内网地址" }, 400);
-    }
-  } catch {
-    return c.json({ error: "无效的 WebDAV 地址" }, 400);
-  }
+  const target = validateWebdavTarget(body.url);
+  if (!target.ok) return c.json({ error: target.error }, 400);
 
   const db = c.get("db");
   const data = await db.exportAll();
@@ -1173,10 +1308,10 @@ app.post("/api/admin/backup/webdav", async (c) => {
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
   const filename = `monolith-backup-${timestamp}.json`;
   const remotePath = (body.path || "/").replace(/\/$/, "");
-  const fullUrl = `${body.url.replace(/\/$/, "")}${remotePath}/${filename}`;
+  const fullUrl = `${target.baseUrl}${remotePath}/${filename}`;
 
   try {
-    await fetch(`${body.url.replace(/\/$/, "")}${remotePath}/`, {
+    await fetch(`${target.baseUrl}${remotePath}/`, {
       method: "MKCOL",
       headers: { Authorization: "Basic " + btoa(`${body.username}:${body.password}`) },
     }).catch(() => {});
@@ -1197,6 +1332,38 @@ app.post("/api/admin/backup/webdav", async (c) => {
     return c.json({ success: true, url: fullUrl, size: json.length, timestamp: data.exportedAt });
   } catch (err) {
     return c.json({ error: `WebDAV 连接失败: ${err instanceof Error ? err.message : "未知错误"}` }, 500);
+  }
+});
+
+app.post("/api/admin/backup/webdav-test", async (c) => {
+  const body = await c.req.json<{
+    url: string; username: string; password: string; path?: string;
+  }>();
+  if (!body.url || !body.username || !body.password) {
+    return c.json({ error: "请完整填写 WebDAV 地址、用户名和密码" }, 400);
+  }
+  const target = validateWebdavTarget(body.url);
+  if (!target.ok) return c.json({ error: target.error }, 400);
+
+  const remotePath = (body.path || "/").replace(/\/$/, "");
+  const auth = "Basic " + btoa(`${body.username}:${body.password}`);
+  const directoryUrl = `${target.baseUrl}${remotePath}/`;
+  const testUrl = `${target.baseUrl}${remotePath}/.monolith-webdav-test.txt`;
+
+  try {
+    await fetch(directoryUrl, { method: "MKCOL", headers: { Authorization: auth } }).catch(() => {});
+    const res = await fetch(testUrl, {
+      method: "PUT",
+      headers: { Authorization: auth, "Content-Type": "text/plain" },
+      body: `monolith webdav test ${new Date().toISOString()}`,
+    });
+    if (!res.ok && res.status !== 201 && res.status !== 204) {
+      return c.json({ error: `WebDAV 写入测试失败: ${res.status} ${res.statusText}` }, 500);
+    }
+    await fetch(testUrl, { method: "DELETE", headers: { Authorization: auth } }).catch(() => {});
+    return c.json({ success: true, path: remotePath || "/" });
+  } catch (err) {
+    return c.json({ error: `WebDAV 测试失败: ${err instanceof Error ? err.message : "未知错误"}` }, 500);
   }
 });
 

@@ -138,7 +138,7 @@ export function AdminDashboard() {
     const totalAll = checks.reduce((sum, check) => sum + check.total, 0);
     const score = totalAll > 0 ? Math.round((totalOk / totalAll) * 100) : 0;
     const tone = score >= 90
-      ? { label: "优秀", text: "text-foreground/85", dot: "bg-cyan-300/80", bar: "bg-cyan-300/85" }
+      ? { label: "优秀", text: "text-zinc-100", dot: "bg-zinc-300", bar: "bg-zinc-300" }
       : score >= 70
         ? { label: "需关注", text: "text-foreground/75", dot: "bg-amber-400/70", bar: "bg-amber-400/75" }
         : { label: "待修复", text: "text-foreground/75", dot: "bg-red-400/70", bar: "bg-red-400/75" };
@@ -155,7 +155,7 @@ export function AdminDashboard() {
         <div className="flex flex-col gap-[16px] lg:flex-row lg:items-center lg:justify-between">
           <div>
             <p className="text-[12px] text-muted-foreground/42">今日工作台</p>
-            <h1 className="mt-[4px] font-heading text-[24px] font-semibold tracking-[-0.02em] text-foreground/92 sm:text-[30px]">内容运营控制台</h1>
+            <h1 className="mt-[4px] font-heading text-[24px] font-semibold tracking-[-0.02em] text-foreground/92 sm:text-[30px]">内容运营总览</h1>
             <p className="mt-[8px] max-w-[560px] text-[13px] leading-[1.7] text-muted-foreground/60">
               集中处理文章状态、搜索筛选、批量发布、SEO 健康与访问趋势。
             </p>
@@ -164,19 +164,19 @@ export function AdminDashboard() {
             {seoHealth && (
               <Link
                 href="/admin/seo"
-                className="group flex min-h-[44px] min-w-0 items-center gap-[12px] rounded-md border border-border/18 bg-background/32 px-[12px] transition-colors hover:border-border/30 hover:bg-background/55 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring sm:min-w-[260px]"
+                className="group flex min-h-[44px] min-w-0 items-center gap-[12px] rounded-md border border-zinc-500/24 bg-zinc-950/35 px-[12px] transition-colors hover:border-zinc-400/40 hover:bg-zinc-900/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring sm:min-w-[260px]"
               >
                 <div className="flex min-w-0 flex-1 items-center gap-[10px]">
-                  <div className="relative flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-md border border-border/15 bg-background/35">
-                    <Globe className="h-[14px] w-[14px] text-foreground/70" />
-                    <span className={`absolute right-[4px] top-[4px] h-[4px] w-[4px] rounded-full ${seoHealth.tone.dot}`} />
+                  <div className="relative flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-md border border-zinc-500/24 bg-zinc-900/45">
+                    <Globe className="h-[14px] w-[14px] text-zinc-300" />
+                    <span className={`absolute right-[4px] top-[4px] h-[4px] w-[4px] rounded-full ring-1 ring-zinc-950 ${seoHealth.tone.dot}`} />
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center justify-between gap-[10px]">
-                      <span className="truncate text-[12px] font-semibold text-foreground/80">SEO 健康</span>
+                      <span className="truncate text-[12px] font-semibold text-zinc-100">SEO 健康</span>
                       <span className={`text-[13px] font-bold tabular-nums ${seoHealth.tone.text}`}>{seoHealth.score}%</span>
                     </div>
-                    <div className="mt-[6px] h-[4px] overflow-hidden rounded-full bg-background/60">
+                    <div className="mt-[6px] h-[4px] overflow-hidden rounded-full bg-zinc-700/55 ring-1 ring-zinc-500/18">
                       <div
                         className={`h-full rounded-full ${seoHealth.tone.bar} transition-[width] duration-300`}
                         style={{ width: `${seoHealth.score}%` }}
@@ -303,7 +303,7 @@ export function AdminDashboard() {
                   </button>
 
                   {/* 状态指示点 */}
-                  <div className={`h-[6px] w-[6px] rounded-full shrink-0 ${post.published ? "bg-cyan-300/65" : "bg-muted-foreground/30"}`} />
+                  <div className={`h-[6px] w-[6px] rounded-full shrink-0 ${post.published ? "bg-foreground/55" : "bg-muted-foreground/30"}`} />
 
                   <div className="flex-1 min-w-0">
                     <div className="mb-[4px] flex items-center gap-[6px]">

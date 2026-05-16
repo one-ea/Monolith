@@ -1,13 +1,6 @@
-import { useState, useEffect } from "react";
-import { fetchAEAnalytics, type AEAnalyticsData, type AEAnalyticsError } from "@/lib/api";
-import { Globe, Monitor, ExternalLink, Cloud, Users, Clock, Languages, MonitorSmartphone, Activity, LogIn, LogOut, UserPlus, Repeat, Hourglass, CalendarClock } from "lucide-react";
-
-function countryFlag(code: string): string {
-  if (!code || code === "XX" || code.length !== 2) return "🌍";
-  return String.fromCodePoint(
-    ...code.toUpperCase().split("").map((c) => 0x1f1e6 + c.charCodeAt(0) - 65)
-  );
-}
+import { useState } from "react";
+import type { AEAnalyticsData } from "@/lib/api";
+import { Activity, CalendarClock, Clock, ExternalLink, Gauge, Globe, Hourglass, Languages, LogIn, LogOut, Monitor, MonitorSmartphone, Repeat, TrendingDown, TrendingUp, UserPlus, Users } from "lucide-react";
 
 function formatDuration(ms: number): string {
   if (!ms || ms <= 0) return "-";
@@ -59,19 +52,19 @@ function DualTrendChart({ data, maxValue }: { data: { date: string; count: numbe
       {/* 图例 */}
       <div className="flex items-center gap-[16px] mb-[8px] text-[11px] text-muted-foreground/60">
         <span className="flex items-center gap-[6px]">
-          <span className="inline-block w-[12px] h-[2px] rounded-full" style={{ background: "oklch(0.78 0.14 200)" }} />
+          <span className="inline-block w-[12px] h-[2px] rounded-full" style={{ background: "oklch(0.82 0 0)" }} />
           PV 总访问
         </span>
         <span className="flex items-center gap-[6px]">
-          <span className="inline-block w-[12px] h-[2px] rounded-full" style={{ background: "oklch(0.75 0.18 80)" }} />
+          <span className="inline-block w-[12px] h-[2px] rounded-full" style={{ background: "oklch(0.76 0.1 78)" }} />
           UV 独立访客
         </span>
       </div>
       <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto" preserveAspectRatio="none" role="img" aria-label="PV / UV 趋势图">
         <defs>
           <linearGradient id="aePvArea" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="oklch(0.65 0.15 200)" stopOpacity="0.3" />
-            <stop offset="100%" stopColor="oklch(0.65 0.15 200)" stopOpacity="0" />
+            <stop offset="0%" stopColor="oklch(0.82 0 0)" stopOpacity="0.18" />
+            <stop offset="100%" stopColor="oklch(0.82 0 0)" stopOpacity="0" />
           </linearGradient>
         </defs>
 
@@ -83,14 +76,14 @@ function DualTrendChart({ data, maxValue }: { data: { date: string; count: numbe
         ))}
 
         {pvArea && <path d={pvArea} fill="url(#aePvArea)" />}
-        {pvLine && <path d={pvLine} fill="none" stroke="oklch(0.78 0.14 200)" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />}
-        {uvLine && <path d={uvLine} fill="none" stroke="oklch(0.75 0.18 80)" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" strokeDasharray="4 3" />}
+        {pvLine && <path d={pvLine} fill="none" stroke="oklch(0.82 0 0)" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />}
+        {uvLine && <path d={uvLine} fill="none" stroke="oklch(0.76 0.1 78)" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" strokeDasharray="4 3" />}
 
         {pvPoints.map((p, i) => (
-          <circle key={`pv-${i}`} cx={p.x} cy={p.y} r={hover === i ? 5 : 3} fill="oklch(0.85 0.15 200)" stroke="oklch(0.13 0.005 260)" strokeWidth={1.5} style={{ transition: "r .15s" }} />
+          <circle key={`pv-${i}`} cx={p.x} cy={p.y} r={hover === i ? 5 : 3} fill="oklch(0.9 0 0)" stroke="oklch(0.13 0 0)" strokeWidth={1.5} style={{ transition: "r .15s" }} />
         ))}
         {uvPoints.map((p, i) => (
-          <circle key={`uv-${i}`} cx={p.x} cy={p.y} r={hover === i ? 5 : 3} fill="oklch(0.82 0.18 80)" stroke="oklch(0.13 0.005 260)" strokeWidth={1.5} style={{ transition: "r .15s" }} />
+          <circle key={`uv-${i}`} cx={p.x} cy={p.y} r={hover === i ? 5 : 3} fill="oklch(0.82 0.1 78)" stroke="oklch(0.13 0 0)" strokeWidth={1.5} style={{ transition: "r .15s" }} />
         ))}
 
         {/* hover 时显示当日 PV/UV 数值在 PV 点上方 */}
@@ -212,7 +205,7 @@ function HeatmapChart({ data }: { data: { dow: number; hour: number; count: numb
                 width={cellW - 2}
                 height={cellH - 2}
                 rx={2}
-                fill="oklch(0.7 0.15 200)"
+                fill="oklch(0.78 0 0)"
                 opacity={opacity}
               >
                 <title>{`周${dows[di]} ${String(h).padStart(2, "0")}:00 — ${v} 次访问`}</title>
@@ -246,7 +239,7 @@ function DurationBucketsChart({ buckets }: { buckets: { bucket: string; count: n
                 className="h-full rounded-full"
                 style={{
                   width: `${pct}%`,
-                  background: "linear-gradient(90deg, oklch(0.65 0.15 200), oklch(0.55 0.18 220))",
+                  background: "linear-gradient(90deg, oklch(0.72 0 0), oklch(0.58 0 0))",
                   transition: "width .4s cubic-bezier(0.16, 1, 0.3, 1)",
                 }}
               />
@@ -274,7 +267,7 @@ function VisitorRatio({ types }: { types: { type: "new" | "returning"; count: nu
           className="h-full"
           style={{
             width: `${newPct}%`,
-            background: "linear-gradient(90deg, oklch(0.7 0.16 200), oklch(0.6 0.18 220))",
+            background: "linear-gradient(90deg, oklch(0.78 0 0), oklch(0.58 0 0))",
             transition: "width .4s cubic-bezier(0.16, 1, 0.3, 1)",
           }}
         />
@@ -282,20 +275,20 @@ function VisitorRatio({ types }: { types: { type: "new" | "returning"; count: nu
           className="h-full"
           style={{
             width: `${retPct}%`,
-            background: "linear-gradient(90deg, oklch(0.75 0.18 80), oklch(0.65 0.18 60))",
+            background: "linear-gradient(90deg, oklch(0.78 0.1 78), oklch(0.62 0.08 78))",
             transition: "width .4s cubic-bezier(0.16, 1, 0.3, 1)",
           }}
         />
       </div>
       <div className="flex items-center justify-between text-[12px]">
         <span className="flex items-center gap-[6px] text-muted-foreground/70">
-          <UserPlus className="h-[12px] w-[12px]" style={{ color: "oklch(0.7 0.16 200)" }} />
+          <UserPlus className="h-[12px] w-[12px]" style={{ color: "oklch(0.78 0 0)" }} />
           新访客
           <span className="font-mono text-foreground/80">{newCount}</span>
           <span className="font-mono text-muted-foreground/40">({newPct.toFixed(1)}%)</span>
         </span>
         <span className="flex items-center gap-[6px] text-muted-foreground/70">
-          <Repeat className="h-[12px] w-[12px]" style={{ color: "oklch(0.75 0.18 80)" }} />
+          <Repeat className="h-[12px] w-[12px]" style={{ color: "oklch(0.78 0.1 78)" }} />
           回访
           <span className="font-mono text-foreground/80">{retCount}</span>
           <span className="font-mono text-muted-foreground/40">({retPct.toFixed(1)}%)</span>
@@ -305,94 +298,46 @@ function VisitorRatio({ types }: { types: { type: "new" | "returning"; count: nu
   );
 }
 
-export function AnalyticsAEView({ days }: { days: number }) {
-  const [data, setData] = useState<AEAnalyticsData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<AEAnalyticsError | null>(null);
+function formatPercent(value: number | null): string {
+  if (value === null) return "新增基线";
+  return `${value >= 0 ? "+" : ""}${Math.round(value * 100)}%`;
+}
 
-  useEffect(() => {
-    setLoading(true);
-    fetchAEAnalytics(days)
-      .then((d) => { setData(d); setError(null); })
-      .catch((e: AEAnalyticsError) => { setData(null); setError(e); })
-      .finally(() => setLoading(false));
-  }, [days]);
-
-  if (loading) {
-    return <div className="text-center text-muted-foreground/40 py-[60px]">加载中...</div>;
-  }
-
-  if (error) {
-    if (error.status === 501) {
-      return (
-        <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 px-[20px] py-[28px] text-center">
-          <Cloud className="inline h-[24px] w-[24px] text-amber-400 mb-[12px]" />
-          <div className="text-[14px] text-amber-300 mb-[6px]">AE 增强分析仅支持 Cloudflare 部署</div>
-          <div className="text-[12px] text-muted-foreground/60">当前后端：{error.message}</div>
-        </div>
-      );
-    }
-    if (error.status === 503) {
-      return (
-        <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 px-[20px] py-[28px] text-center">
-          <div className="text-[14px] text-amber-300 mb-[6px]">AE 配置缺失</div>
-          <div className="text-[12px] text-muted-foreground/60">
-            请通过 wrangler secret put 注入 CLOUDFLARE_ACCOUNT_ID 与 CLOUDFLARE_API_TOKEN
-            （需 Account Analytics:Read 权限）
-          </div>
-        </div>
-      );
-    }
-    return (
-      <div className="rounded-lg border border-red-500/20 bg-red-500/10 px-[16px] py-[24px] text-center text-[13px] text-red-400">
-        {error.message}
-      </div>
-    );
-  }
-
-  if (!data) {
-    return <div className="text-center text-muted-foreground/40 py-[60px]">暂无数据</div>;
-  }
+export function AnalyticsAEAdvancedView({ data }: { data: AEAnalyticsData }) {
 
   const maxDay = Math.max(...data.visitsByDay.map((d) => Math.max(d.count, d.uv)), 1);
   const bounceRatePct = (data.bounceRate * 100).toFixed(1);
   const pagesPerVisitor = data.pagesPerVisitor.toFixed(2);
+  const periodDeltaIcon = data.derived.period.change >= 0 ? TrendingUp : TrendingDown;
+  const PeriodDeltaIcon = periodDeltaIcon;
 
   return (
     <div className="space-y-[20px]">
-      {/* 核心指标 8 张卡 */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-[12px]">
-        <div className="analytics-card">
-          <span className="analytics-card__label">总访问 (PV)</span>
-          <span className="analytics-card__value">{data.totalVisits}</span>
-        </div>
-        <div className="analytics-card">
-          <span className="analytics-card__label">独立访客 (UV)</span>
-          <span className="analytics-card__value">{data.uniqueVisitors}</span>
-        </div>
-        <div className="analytics-card">
-          <span className="analytics-card__label">平均停留</span>
-          <span className="analytics-card__value">{formatDuration(data.avgDuration)}</span>
-        </div>
-        <div className="analytics-card">
-          <span className="analytics-card__label">国家/地区</span>
-          <span className="analytics-card__value">{data.topCountries.length}</span>
-        </div>
-        <div className="analytics-card">
-          <span className="analytics-card__label">跳出率</span>
-          <span className="analytics-card__value">{bounceRatePct}%</span>
-        </div>
-        <div className="analytics-card">
-          <span className="analytics-card__label">人均页数</span>
-          <span className="analytics-card__value">{pagesPerVisitor}</span>
-        </div>
-        <div className="analytics-card">
-          <span className="analytics-card__label">浏览器种类</span>
-          <span className="analytics-card__value">{data.browserBreakdown.length}</span>
-        </div>
-        <div className="analytics-card">
-          <span className="analytics-card__label">引荐来源</span>
-          <span className="analytics-card__value">{data.topReferersFull.length}</span>
+      <div className="analytics-section">
+        <h2 className="analytics-section__title">
+          <Gauge className="h-[14px] w-[14px]" />
+          Cloudflare 高级维度
+          <span className="ml-auto flex items-center gap-[4px] text-[11px] text-muted-foreground/50 font-normal">
+            <PeriodDeltaIcon className="h-[12px] w-[12px]" />
+            {formatPercent(data.derived.period.changePercent)}
+          </span>
+        </h2>
+        <div className="analytics-quality-grid">
+          <div>
+            <span className="analytics-card__label">阅读质量</span>
+            <strong>{data.derived.quality.score}<small>/100</small></strong>
+            <p>{data.derived.quality.label}</p>
+          </div>
+          <div>
+            <span className="analytics-card__label">跳出率解释</span>
+            <strong>{bounceRatePct}%</strong>
+            <p>{data.bounceRate > 0.65 ? "首屏或入口匹配度偏弱" : "用户愿意继续浏览"}</p>
+          </div>
+          <div>
+            <span className="analytics-card__label">人均页数</span>
+            <strong>{pagesPerVisitor}</strong>
+            <p>{data.pagesPerVisitor >= 2 ? "站内路径有效" : "需要补内链和下一篇入口"}</p>
+          </div>
         </div>
       </div>
 
@@ -484,7 +429,7 @@ export function AnalyticsAEView({ days }: { days: number }) {
           title="国家 / 地区"
           icon={Globe}
           accent="blue"
-          items={data.topCountries.map((i) => ({ name: `${countryFlag(i.country)} ${i.country}`, count: i.count }))}
+          items={data.topCountries.map((i) => ({ name: i.country || "未知地区", count: i.count }))}
         />
         <ListSection
           title="设备类型"

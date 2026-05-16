@@ -100,7 +100,8 @@ export function TableOfContents({ headings }: Props) {
       <div className="toc-mobile xl:hidden">
         <button
           onClick={() => setMobileOpen(!mobileOpen)}
-          className="inline-flex items-center gap-[6px] h-[34px] px-[12px] rounded-[8px] bg-card/40 border border-border/30 text-[12px] text-muted-foreground hover:bg-card/60 hover:text-foreground transition-all duration-200"
+          className="inline-flex min-h-[44px] items-center gap-[6px] rounded-md border border-border/30 bg-card/40 px-[12px] text-[12px] text-muted-foreground transition-all duration-200 hover:bg-card/60 hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring sm:min-h-[34px]"
+          aria-expanded={mobileOpen}
         >
           <List className="h-[13px] w-[13px]" />
           目录
@@ -108,7 +109,7 @@ export function TableOfContents({ headings }: Props) {
         </button>
 
         {mobileOpen && (
-          <div className="mt-[8px] rounded-[10px] bg-card/60 backdrop-blur-xl border border-border/30 p-[12px] animate-fade-in">
+          <div className="mt-[8px] rounded-md border border-border/30 bg-card/60 p-[12px] backdrop-blur-xl animate-fade-in">
             <ul className="toc-list space-y-[1px]">
               {headings.map((h) => (
                 <li key={h.id}>

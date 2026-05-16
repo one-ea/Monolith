@@ -8,6 +8,8 @@
  * 字段映射详见 ae-tracker.ts 顶部注释。
  */
 
+import { attachAnalyticsInsights, type AnalyticsDerived } from "./insights";
+
 const AE_SQL_ENDPOINT = (accountId: string) =>
   `https://api.cloudflare.com/client/v4/accounts/${accountId}/analytics_engine/sql`;
 
@@ -38,6 +40,7 @@ export type AEAnalyticsResult = {
   bounceRate: number; // 跳出率（只浏览 1 个页面的 visitor 占比，0-1）
   pagesPerVisitor: number; // 人均访问页面数
   topReferersFull: { referer: string; count: number }[]; // 引荐扩展到 20 条
+  derived: AnalyticsDerived;
 };
 
 /** 执行一条 AE SQL，返回数据数组（失败抛错） */
@@ -72,9 +75,14 @@ function safeDays(days: number): number {
 }
 
 /** SQL 注入防护：只允许传入数字（days）和已知 enum，绝不拼接用户字符串 */
-export async function queryAEAnalytics(env: AEQueryEnv, days: number): Promise<AEAnalyticsResult> {
+export async function queryAEAnalytics(
+  env: AEQueryEnv,
+  days: number,
+  posts: { slug: string; title: string; createdAt: string; pinned?: boolean; category?: string; seriesSlug?: string | null }[] = [],
+): Promise<AEAnalyticsResult> {
   const d = safeDays(days);
   const since = `INTERVAL '${d}' DAY`;
+  const previousStart = `INTERVAL '${d * 2}' DAY`;
 
   // 并发执行多条聚合查询
   const [
@@ -101,6 +109,12 @@ export async function queryAEAnalytics(env: AEQueryEnv, days: number): Promise<A
     bounceBouncers,
     referersFull,
     directAccess,
+    previousByDay,
+    previousByPage,
+    topSearchQueries,
+    zeroSearchQueries,
+    searchTotals,
+    zeroSearchTotals,
   ] = await Promise.all([
     runSql<{ date: string; cnt: number; uv: number }>(
       env,
@@ -250,6 +264,46 @@ export async function queryAEAnalytics(env: AEQueryEnv, days: number): Promise<A
       `SELECT SUM(_sample_interval) AS cnt FROM ${DATASET}
        WHERE timestamp > NOW() - ${since} AND blob4 = '' FORMAT JSON`,
     ),
+    runSql<{ date: string; cnt: number }>(
+      env,
+      `SELECT toDate(timestamp) AS date, SUM(_sample_interval) AS cnt
+       FROM ${DATASET}
+       WHERE timestamp <= NOW() - ${since} AND timestamp > NOW() - ${previousStart}
+       GROUP BY date ORDER BY date ASC FORMAT JSON`,
+    ),
+    runSql<{ path: string; cnt: number }>(
+      env,
+      `SELECT blob2 AS path, SUM(_sample_interval) AS cnt
+       FROM ${DATASET}
+       WHERE timestamp <= NOW() - ${since} AND timestamp > NOW() - ${previousStart}
+       GROUP BY path ORDER BY cnt DESC LIMIT 10 FORMAT JSON`,
+    ),
+    runSql<{ query: string; cnt: number; avg_results: number }>(
+      env,
+      `SELECT blob12 AS query, SUM(_sample_interval) AS cnt, AVG(double2) AS avg_results
+       FROM ${DATASET}
+       WHERE timestamp > NOW() - ${since} AND blob11 = 'search' AND blob12 != ''
+       GROUP BY query ORDER BY cnt DESC LIMIT 12 FORMAT JSON`,
+    ),
+    runSql<{ query: string; cnt: number }>(
+      env,
+      `SELECT blob12 AS query, SUM(_sample_interval) AS cnt
+       FROM ${DATASET}
+       WHERE timestamp > NOW() - ${since} AND blob11 = 'search' AND blob13 = '0' AND blob12 != ''
+       GROUP BY query ORDER BY cnt DESC LIMIT 12 FORMAT JSON`,
+    ),
+    runSql<{ total: number }>(
+      env,
+      `SELECT SUM(_sample_interval) AS total
+       FROM ${DATASET}
+       WHERE timestamp > NOW() - ${since} AND blob11 = 'search' FORMAT JSON`,
+    ),
+    runSql<{ total: number }>(
+      env,
+      `SELECT SUM(_sample_interval) AS total
+       FROM ${DATASET}
+       WHERE timestamp > NOW() - ${since} AND blob11 = 'search' AND blob13 = '0' FORMAT JSON`,
+    ),
   ]);
 
   const totalRow = totals[0] || { total: 0, uv: 0, avg_dur: 0 };
@@ -317,7 +371,7 @@ export async function queryAEAnalytics(env: AEQueryEnv, days: number): Promise<A
     referersFullList.splice(20);
   }
 
-  return {
+  const result: Omit<AEAnalyticsResult, "derived"> = {
     visitsByDay: byDay.map((r) => ({ date: r.date, count: Number(r.cnt) || 0, uv: Number(r.uv) || 0 })),
     topCountries: byCountry.map((r) => ({ country: r.country, count: Number(r.cnt) || 0 })),
     topReferers: byReferer.map((r) => ({ referer: r.referer, count: Number(r.cnt) || 0 })),
@@ -346,4 +400,34 @@ export async function queryAEAnalytics(env: AEQueryEnv, days: number): Promise<A
     pagesPerVisitor,
     topReferersFull: referersFullList,
   };
+
+  return attachAnalyticsInsights(result, {
+    days: d,
+    previousVisitsByDay: previousByDay.map((r) => ({ date: r.date, count: Number(r.cnt) || 0 })),
+    previousTopPages: previousByPage.map((r) => ({ path: r.path, count: Number(r.cnt) || 0 })),
+    posts,
+    search: {
+      status: Number(searchTotals[0]?.total) > 0 ? "tracked" : "empty",
+      totalSearches: Number(searchTotals[0]?.total) || 0,
+      zeroResultRate: Number(searchTotals[0]?.total) > 0 ? (Number(zeroSearchTotals[0]?.total) || 0) / Number(searchTotals[0]?.total) : 0,
+      topQueries: topSearchQueries.map((r) => ({
+        query: r.query,
+        count: Number(r.cnt) || 0,
+        avgResults: Math.round(Number(r.avg_results) || 0),
+      })),
+      zeroResultQueries: zeroSearchQueries.map((r) => ({ query: r.query, count: Number(r.cnt) || 0 })),
+      suggestions: zeroSearchQueries.slice(0, 3).map((r, index) => ({
+        id: `search-zero-${index}-${r.query}`,
+        priority: index === 0 ? "high" : "medium",
+        title: "补齐零结果搜索",
+        reason: `「${r.query}」出现 ${Number(r.cnt) || 0} 次零结果搜索。`,
+        action: "新增相关文章、标签别名或在搜索范围中补充相关摘要。",
+        metric: `${Number(r.cnt) || 0}`,
+      })),
+    },
+    avgDuration: result.avgDuration,
+    bounceRate,
+    pagesPerVisitor,
+    uniqueVisitors: result.uniqueVisitors,
+  });
 }

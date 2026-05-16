@@ -15,6 +15,7 @@ type SearchResult = {
 };
 
 const API_BASE = "";
+const SEARCH_SUGGESTIONS = ["边缘计算", "设计系统", "React", "Cloudflare"];
 
 function findSelectedResult(results: SearchResult[], selectedIndex: number) {
   if (selectedIndex < 0) return undefined;
@@ -196,8 +197,23 @@ export function SearchOverlay() {
           {query.trim() && !loading && results.length === 0 && (
             <div className="flex flex-col items-center justify-center py-[48px] text-muted-foreground">
               <Search className="h-[32px] w-[32px] mb-[12px] opacity-40" />
-              <p className="text-[14px]">未找到相关文章</p>
-              <p className="text-[12px] mt-[4px] opacity-60">试试其他关键词</p>
+              <p className="text-[14px] text-foreground/82">未找到相关文章</p>
+              <p className="mt-[4px] text-[12px] opacity-65">换一个主题词，或从常见方向继续探索。</p>
+              <div className="mt-[14px] flex flex-wrap justify-center gap-[8px] px-[16px]">
+                {SEARCH_SUGGESTIONS.map((item) => (
+                  <button
+                    key={item}
+                    type="button"
+                    onClick={() => {
+                      handleInputChange(item);
+                      inputRef.current?.focus();
+                    }}
+                    className="inline-flex min-h-[36px] items-center rounded-md border border-border/22 bg-background/28 px-[10px] text-[12px] text-muted-foreground/72 transition-colors hover:bg-accent/35 hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                  >
+                    {item}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
 
@@ -257,6 +273,9 @@ export function SearchOverlay() {
               关闭
             </span>
           </div>
+          {query.trim() && (
+            <span>{loading ? "搜索中" : `${results.length} 条结果`}</span>
+          )}
         </div>
       </div>
     </div>

@@ -121,7 +121,7 @@ export function AdminGate({
         <div className="overflow-hidden rounded-md border border-border/35 bg-card/95 shadow-[0_28px_90px_oklch(0_0_0_/_38%)] backdrop-blur-xl">
           <div className="flex items-center justify-between border-b border-border/20 px-[18px] py-[14px]">
             <div className="flex items-center gap-[10px]">
-              <div className="flex h-[32px] w-[32px] items-center justify-center rounded-md border border-cyan-400/20 bg-cyan-400/10 text-cyan-300">
+              <div className="flex h-[32px] w-[32px] items-center justify-center rounded-md border border-foreground/16 bg-foreground/[0.06] text-foreground/72">
                 <ShieldCheck className="h-[16px] w-[16px]" />
               </div>
               <div>
@@ -191,7 +191,7 @@ export function AdminGate({
                   placeholder="输入密码"
                   autoComplete="current-password"
                   aria-label="管理员密码"
-                  className="h-[46px] w-full rounded-md border border-border/45 bg-background/55 px-[14px] pr-[48px] text-[15px] text-foreground outline-none transition-all placeholder:text-muted-foreground/35 focus:border-cyan-400/45 focus:ring-1 focus:ring-cyan-400/20"
+                  className="h-[46px] w-full rounded-md border border-border/45 bg-background/55 px-[14px] pr-[48px] text-[15px] text-foreground outline-none transition-all placeholder:text-muted-foreground/35 focus:border-foreground/35 focus:ring-1 focus:ring-foreground/12"
                 />
 
                 {error && (

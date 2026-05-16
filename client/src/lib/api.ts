@@ -289,12 +289,142 @@ export async function fetchViewStats(): Promise<ViewStats> {
   return res.json();
 }
 
+export type AnalyticsTone = "good" | "warning" | "danger" | "neutral";
+
+export type AnalyticsInsight = {
+  id: string;
+  tone: AnalyticsTone;
+  title: string;
+  description: string;
+  action: string;
+  metric?: string;
+  path?: string;
+};
+
+export type AnalyticsKpi = {
+  key: string;
+  label: string;
+  value: number;
+  unit?: string;
+  change: number;
+  changePercent: number | null;
+  interpretation: string;
+};
+
+export type AnalyticsTrendPoint = {
+  date: string;
+  count: number;
+  previousCount: number;
+  change: number;
+  isPeak: boolean;
+  isAnomaly: boolean;
+};
+
+export type AnalyticsShareItem = {
+  name: string;
+  count: number;
+  share: number;
+  meaning: string;
+};
+
+export type ContentSuggestion = {
+  id: string;
+  priority: "high" | "medium" | "low";
+  title: string;
+  reason: string;
+  action: string;
+  path?: string;
+  metric?: string;
+};
+
+export type AnalyticsPageFilter = {
+  key: "all" | "posts" | "pages" | "search" | "other";
+  label: string;
+  count: number;
+  share: number;
+  description: string;
+};
+
+export type ContentLifecycleItem = {
+  path: string;
+  title: string;
+  count: number;
+  ageDays: number | null;
+  change?: number;
+  stage: "new" | "growing" | "evergreen" | "declining";
+  action: string;
+};
+
+export type SearchAnalytics = {
+  status: "tracked" | "not_configured" | "empty";
+  totalSearches: number;
+  zeroResultRate: number;
+  topQueries: { query: string; count: number; avgResults: number }[];
+  zeroResultQueries: { query: string; count: number }[];
+  suggestions: ContentSuggestion[];
+};
+
+export type OperationalReport = {
+  title: string;
+  summary: string;
+  highlights: string[];
+  nextActions: string[];
+  markdown: string;
+};
+
+export type AnalyticsDerived = {
+  period: {
+    days: number;
+    total: number;
+    previousTotal: number;
+    change: number;
+    changePercent: number | null;
+    average: number;
+    previousAverage: number;
+  };
+  kpis: AnalyticsKpi[];
+  trend: AnalyticsTrendPoint[];
+  anomalies: AnalyticsInsight[];
+  topRisingPages: { path: string; count: number; previousCount: number; change: number; changePercent: number | null }[];
+  concentration: {
+    topPageShare: number;
+    topRefererShare: number;
+    topDeviceShare: number;
+    label: "healthy" | "watch" | "concentrated";
+    explanation: string;
+  };
+  shares: {
+    devices: AnalyticsShareItem[];
+    referers: AnalyticsShareItem[];
+    countries: AnalyticsShareItem[];
+  };
+  quality: {
+    score: number;
+    label: string;
+    avgDuration?: number;
+    bounceRate?: number;
+    pagesPerVisitor?: number;
+  };
+  pageFilters: AnalyticsPageFilter[];
+  contentLifecycle: {
+    newPosts: ContentLifecycleItem[];
+    growing: ContentLifecycleItem[];
+    evergreen: ContentLifecycleItem[];
+    declining: ContentLifecycleItem[];
+  };
+  search: SearchAnalytics;
+  report: OperationalReport;
+  insights: AnalyticsInsight[];
+  contentSuggestions: ContentSuggestion[];
+};
+
 export type AnalyticsData = {
   visitsByDay: { date: string; count: number }[];
   topCountries: { country: string; count: number }[];
   topReferers: { referer: string; count: number }[];
   deviceBreakdown: { device: string; count: number }[];
   topPages: { path: string; count: number }[];
+  derived: AnalyticsDerived;
 };
 
 export async function fetchAnalytics(days = 7): Promise<AnalyticsData> {
@@ -327,6 +457,7 @@ export type AEAnalyticsData = {
   bounceRate: number;
   pagesPerVisitor: number;
   topReferersFull: { referer: string; count: number }[];
+  derived: AnalyticsDerived;
 };
 
 export type AEAnalyticsError = {

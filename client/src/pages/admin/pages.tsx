@@ -23,7 +23,7 @@ export function AdminPages() {
   const jsonHeaders = { ...authHeaders, "Content-Type": "application/json" };
 
   useEffect(() => {
-    document.title = "独立页管理 | Monolith";
+    document.title = "页面管理 | Monolith";
     loadPages();
   }, []);
 
@@ -42,7 +42,7 @@ export function AdminPages() {
       setLoadError("");
     } catch {
       setPagesList([]);
-      setLoadError("独立页列表加载失败，请稍后重试。");
+      setLoadError("页面列表加载失败，请稍后重试。");
     } finally {
       setLoading(false);
     }
@@ -112,7 +112,7 @@ export function AdminPages() {
       {/* 顶栏 */}
       <div className="mb-[24px] flex items-center justify-between">
         <div>
-          <h1 className="text-[22px] font-semibold tracking-[-0.02em]">独立页管理</h1>
+          <h1 className="text-[22px] font-semibold tracking-[-0.02em]">页面管理</h1>
           <p className="text-[12px] text-muted-foreground/35 mt-[2px]">管理"关于"、"友链"等自定义页面</p>
         </div>
         <div className="flex items-center gap-[8px]">
@@ -148,7 +148,7 @@ export function AdminPages() {
           ) : pagesList.length === 0 ? (
             <div className="py-[32px] text-center">
               <FileText className="mx-auto mb-[8px] h-[18px] w-[18px] text-muted-foreground/15" />
-              <p className="text-[11px] text-muted-foreground/25">还没有独立页</p>
+              <p className="text-[11px] text-muted-foreground/25">还没有自定义页面</p>
             </div>
           ) : (
             pagesList.map((page) => (
@@ -161,7 +161,7 @@ export function AdminPages() {
                   <div className="flex items-center gap-[6px]">
                     <span className="text-[13px] font-medium text-foreground truncate">{page.title}</span>
                     {!page.published && <Badge variant="outline" className="h-[14px] px-[4px] text-[8px] text-amber-400/60 border-amber-400/20">草稿</Badge>}
-                    {page.showInNav && <Badge variant="outline" className="h-[14px] px-[4px] text-[8px] text-blue-400/60 border-blue-400/20">导航</Badge>}
+                    {page.showInNav && <Badge variant="outline" className="h-[14px] px-[4px] text-[8px] text-foreground/60 border-foreground/18">导航</Badge>}
                   </div>
                   <span className="text-[10px] text-muted-foreground/25 font-mono">/{page.slug}</span>
                 </div>
@@ -248,10 +248,10 @@ export function AdminPages() {
                 </button>
                 <button
                   onClick={() => setEditing((p) => p ? { ...p, showInNav: !p.showInNav } : p)}
-                  className={`rounded-md border px-[10px] py-[6px] text-left transition-all ${editing.showInNav ? "border-blue-400/20 bg-blue-500/5" : "border-border/25 bg-background/10"}`}
+                  className={`rounded-md border px-[10px] py-[6px] text-left transition-all ${editing.showInNav ? "border-foreground/20 bg-foreground/[0.04]" : "border-border/25 bg-background/10"}`}
                 >
                   <div className="flex items-center gap-[5px]">
-                    <Navigation className={`h-[11px] w-[11px] ${editing.showInNav ? "text-blue-400/70" : "text-muted-foreground/30"}`} />
+                    <Navigation className={`h-[11px] w-[11px] ${editing.showInNav ? "text-foreground/70" : "text-muted-foreground/30"}`} />
                     <span className="text-[11px] text-muted-foreground/60">{editing.showInNav ? "显示导航" : "隐藏导航"}</span>
                   </div>
                 </button>
