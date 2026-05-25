@@ -17,7 +17,7 @@
     "clsx": "^2.1.1",
     "dompurify": "^3.4.1",
     "highlight.js": "^11.11.1",
-    "katex": "^0.16.45",
+    "katex": "^0.17.0",
     "lucide-react": "^1.11.0",
     "marked": "^17.0.6",
     "react": "^19.0.0",
