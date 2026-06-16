@@ -236,7 +236,7 @@ export function PostPage() {
             </div>
           </header>
 
-          {/* 移动端 TOC（显示在分隔线上方） */}
+          {/* 移动端 TOC（显示在正文上方） */}
           {headings.length >= 2 && (
             <div className="mb-[24px] xl:hidden">
               <TableOfContents headings={headings} />
@@ -301,7 +301,9 @@ export function PostPage() {
 
         {/* 桌面端 TOC 侧边栏 */}
         {headings.length >= 2 && (
-          <TableOfContents headings={headings} />
+          <div className="hidden xl:block">
+            <TableOfContents headings={headings} />
+          </div>
         )}
       </div>
       {/* 阅读模式控制面板 */}
