@@ -129,7 +129,11 @@
 
 ```bash
 git clone https://github.com/one-ea/Monolith.git && cd Monolith
-npm install
+source "$HOME/.nvm/nvm.sh"  # bash/zsh 按需加载 nvm
+nvm install
+nvm use
+npm ci
+npm run doctor:local
 npm run dev
 ```
 

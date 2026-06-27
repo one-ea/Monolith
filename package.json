@@ -7,7 +7,9 @@
     "server"
   ],
   "scripts": {
-    "dev": "npx concurrently -n server,client -c blue,green \"npm run dev:server\" \"npm run dev:client\"",
+    "setup:local": "npm ci",
+    "doctor:local": "node scripts/check-local-env.mjs",
+    "dev": "concurrently -n server,client -c blue,green \"npm run dev:server\" \"npm run dev:client\"",
     "dev:client": "npm -w monolith-client run dev",
     "dev:server": "npm -w monolith-server run dev",
     "build": "npm -w monolith-client run build",
@@ -22,8 +24,8 @@
     "db:migrate:remote": "npm -w monolith-server run db:migrate:remote",
     "db:seed:local": "npm -w monolith-server run db:seed:local",
     "db:seed:test-posts:local": "npm -w monolith-server run db:seed:test-posts:local",
-    "check": "npm -ws run check",
-    "lint": "npm -ws run lint"
+    "check": "npm --workspaces run check",
+    "lint": "npm --workspaces run lint"
   },
   "engines": {
     "node": ">=22"

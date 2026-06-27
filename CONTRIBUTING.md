@@ -39,8 +39,11 @@ type(scope): description
 
 ```bash
 # 一次性安装
-nvm use            # 读取 .nvmrc，使用 Node 20
-npm install
+source "$HOME/.nvm/nvm.sh"  # bash/zsh 按需加载 nvm
+nvm install                 # 读取 .nvmrc，安装 Node 20
+nvm use
+npm ci
+npm run doctor:local
 
 # 同时启动前后端
 npm run dev        # client :5173 · server :8787
