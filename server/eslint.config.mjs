@@ -13,5 +13,5 @@ export default [
       "security/detect-object-injection": "off",
     },
   },
-  { ignores: ["dist/", "node_modules/", "*.config.*"] },
+  { ignores: ["dist/", "node_modules/", ".wrangler/", "*.config.*"] },
 ];

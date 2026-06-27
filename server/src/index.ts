@@ -7,6 +7,7 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { sign, verify } from "hono/jwt";
+import type { Context } from "hono";
 import { createDatabase, createObjectStorage } from "./storage/factory";
 import type { CreatePostInput, IDatabase } from "./storage/interfaces";
 import type { IObjectStorage } from "./storage/interfaces";
@@ -39,6 +40,7 @@ type Variables = {
 };
 
 const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
+type AppContext = Context<{ Bindings: Bindings; Variables: Variables }>;
 
 /* ── 全局中间件 ────────────────────────────── */
 app.use("*", cors({
@@ -118,6 +120,18 @@ type BackupPreviewOptions = {
   includeSettings?: boolean;
   source?: string;
 };
+
+async function readJson<T>(c: AppContext): Promise<{ ok: true; body: T } | { ok: false; response: Response }> {
+  try {
+    const body = await c.req.json();
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
+      return { ok: false, response: c.json({ error: "请求体必须是 JSON 对象" }, 400) };
+    }
+    return { ok: true, body: body as T };
+  } catch {
+    return { ok: false, response: c.json({ error: "请求体必须是有效 JSON" }, 400) };
+  }
+}
 
 async function readObjectBody(body: ReadableStream<Uint8Array>): Promise<string> {
   const reader = body.getReader();
@@ -206,19 +220,71 @@ async function buildBackupPreview(
   };
 }
 
+function normalizeHostname(hostname: string): string {
+  return hostname.toLowerCase().replace(/^\[|\]$/g, "").replace(/\.$/, "");
+}
+
+function isBlockedIpv4(hostname: string): boolean {
+  const parts = hostname.split(".");
+  if (parts.length !== 4) return false;
+  const bytes = parts.map((part) => Number(part));
+  if (bytes.some((byte, index) => !/^\d+$/.test(parts[index]) || !Number.isInteger(byte) || byte < 0 || byte > 255)) {
+    return false;
+  }
+  const [a, b] = bytes;
+  return a === 0
+    || a === 10
+    || a === 127
+    || (a === 100 && b >= 64 && b <= 127)
+    || (a === 169 && b === 254)
+    || (a === 172 && b >= 16 && b <= 31)
+    || (a === 192 && (b === 0 || b === 168))
+    || (a === 198 && (b === 18 || b === 19))
+    || a >= 224;
+}
+
+function isBlockedIpv6(hostname: string): boolean {
+  if (!hostname.includes(":")) return false;
+  const host = hostname.toLowerCase();
+  if (host === "::" || host === "::1" || host === "0:0:0:0:0:0:0:1") return true;
+  if (host.startsWith("fc") || host.startsWith("fd") || /^fe[89ab]/.test(host) || host.startsWith("ff")) return true;
+  if (host.startsWith("::ffff:")) return isBlockedIpv4(host.slice("::ffff:".length));
+  return false;
+}
+
+function isBlockedWebdavHostname(hostname: string): boolean {
+  const host = normalizeHostname(hostname);
+  if (!host || host === "localhost" || host.endsWith(".localhost")) return true;
+  return isBlockedIpv4(host) || isBlockedIpv6(host);
+}
+
 function validateWebdavTarget(url: string): { ok: true; baseUrl: string } | { ok: false; error: string } {
   try {
     const parsed = new URL(url);
     if (parsed.protocol !== "https:") {
       return { ok: false, error: "仅允许 HTTPS 协议的 WebDAV 地址" };
     }
-    if (/^(10\.|172\.(1[6-9]|2[0-9]|3[01])\.|192\.168\.|127\.|0\.|169\.254\.|::1|fc)/.test(parsed.hostname)) {
+    if (parsed.username || parsed.password) {
+      return { ok: false, error: "WebDAV 地址不允许包含用户名或密码" };
+    }
+    if (parsed.search || parsed.hash) {
+      return { ok: false, error: "WebDAV 地址不允许包含查询参数或锚点" };
+    }
+    if (isBlockedWebdavHostname(parsed.hostname)) {
       return { ok: false, error: "不允许内网地址" };
     }
-    return { ok: true, baseUrl: url.replace(/\/$/, "") };
+    return { ok: true, baseUrl: `${parsed.origin}${parsed.pathname.replace(/\/$/, "")}` };
   } catch {
     return { ok: false, error: "无效的 WebDAV 地址" };
   }
+}
+
+async function fetchWebdav(url: string, init: RequestInit): Promise<Response> {
+  const res = await fetch(url, { ...init, redirect: "manual" });
+  if (res.status >= 300 && res.status < 400) {
+    throw new Error("WebDAV 目标返回重定向，已拒绝");
+  }
+  return res;
 }
 
 /* ── 健康检查端点 ──────────────────────────── */
@@ -387,12 +453,14 @@ app.get("/api/posts/:slug/comments", async (c) => {
 // 提交评论（公开接口，需审核后才显示）
 app.post("/api/posts/:slug/comments", async (c) => {
   const slug = c.req.param("slug");
-  const body = await c.req.json<{
+  const parsed = await readJson<{
     authorName: string;
     authorEmail?: string;
     content: string;
     _hp?: string; // honeypot 反垃圾字段
-  }>();
+  }>(c);
+  if (!parsed.ok) return parsed.response;
+  const body = parsed.body;
 
   // Honeypot 反垃圾：如果隐藏字段被填写，静默拒绝
   if (body._hp) return c.json({ success: true, message: "评论已提交，等待审核" });
@@ -457,7 +525,9 @@ app.get("/api/posts/:slug/reactions", async (c) => {
 // 切换表情反应（无需登录，IP 去重）
 app.post("/api/posts/:slug/reactions", async (c) => {
   const slug = c.req.param("slug");
-  const body = await c.req.json<{ type: string }>();
+  const parsed = await readJson<{ type: string }>(c);
+  if (!parsed.ok) return parsed.response;
+  const body = parsed.body;
 
   const validTypes = ["like", "heart", "celebrate", "think"];
   if (!validTypes.includes(body.type)) {
@@ -643,16 +713,35 @@ Sitemap: ${siteUrl}/sitemap.xml
 const loginAttempts = new Map<string, { count: number; firstAttempt: number }>();
 const LOGIN_RATE_LIMIT = 5;       // 最多 5 次
 const LOGIN_RATE_WINDOW = 15 * 60 * 1000; // 15 分钟窗口
+const LOGIN_RATE_MAX_KEYS = 1000;
+
+function getClientIp(c: any): string {
+  const cfIp = c.req.header("CF-Connecting-IP")?.trim();
+  if (cfIp) return cfIp;
+  return c.req.header("X-Forwarded-For")?.split(",")[0]?.trim() || "unknown";
+}
+
+function pruneLoginAttempts(now: number) {
+  for (const [ip, record] of loginAttempts.entries()) {
+    if ((now - record.firstAttempt) >= LOGIN_RATE_WINDOW) loginAttempts.delete(ip);
+  }
+  while (loginAttempts.size > LOGIN_RATE_MAX_KEYS) {
+    const oldest = loginAttempts.keys().next().value;
+    if (!oldest) break;
+    loginAttempts.delete(oldest);
+  }
+}
 
 /* ── 认证 API ──────────────────────────────── */
 
 // 登录
 app.post("/api/auth/login", async (c) => {
   c.header("Cache-Control", "no-store");
-  const ip = c.req.header("CF-Connecting-IP") || c.req.header("X-Forwarded-For") || "unknown";
+  const ip = getClientIp(c);
 
   // 速率限制
   const now = Date.now();
+  pruneLoginAttempts(now);
   const record = loginAttempts.get(ip);
   if (record && record.count >= LOGIN_RATE_LIMIT && (now - record.firstAttempt) < LOGIN_RATE_WINDOW) {
     return c.json({ error: "尝试次数过多，请稍后再试" }, 429);
@@ -663,7 +752,9 @@ app.post("/api/auth/login", async (c) => {
     record.count++;
   }
 
-  const body = await c.req.json<{ password: string }>();
+  const parsed = await readJson<{ password: string }>(c);
+  if (!parsed.ok) return parsed.response;
+  const body = parsed.body;
   if (!body.password || body.password !== c.env.ADMIN_PASSWORD) {
     return c.json({ error: "密码错误" }, 401);
   }
@@ -825,7 +916,9 @@ function extractFirstImage(markdown: string): string {
 
 // 创建文章
 app.post("/api/admin/posts", async (c) => {
-  const body = await c.req.json();
+  const parsed = await readJson<any>(c);
+  if (!parsed.ok) return parsed.response;
+  const body = parsed.body;
   const db = c.get("db");
   if (!body.coverImage) {
     body.coverImage = extractFirstImage(body.content || "");
@@ -838,7 +931,9 @@ app.post("/api/admin/posts", async (c) => {
 // 更新文章（同时创建版本快照如果是自动保存外的核心提交，不过我们可以简化，在每次保存时如果内容变更较大则创建版本，或者直接在保存时暴露保存新版本的选项。这里我们在更新接口本身提供一个 saveVersion 参数，或者每次 updatePost 之后根据是否新建版本保存）
 app.put("/api/admin/posts/:slug", async (c) => {
   const slug = c.req.param("slug");
-  const body = await c.req.json();
+  const parsed = await readJson<any>(c);
+  if (!parsed.ok) return parsed.response;
+  const body = parsed.body;
   const db = c.get("db");
   // 若用户清空了封面但正文有图，自动回填首图
   if (body.content !== undefined && (body.coverImage === undefined || body.coverImage === "")) {
@@ -881,7 +976,9 @@ app.post("/api/admin/posts/:slug/versions/:id/restore", async (c) => {
 
 // 批量操作文章：发布 / 撤回发布 / 删除
 app.post("/api/admin/posts/batch", async (c) => {
-  const { slugs, action } = await c.req.json<{ slugs: string[]; action: "publish" | "unpublish" | "delete" }>();
+  const parsed = await readJson<{ slugs: string[]; action: "publish" | "unpublish" | "delete" }>(c);
+  if (!parsed.ok) return parsed.response;
+  const { slugs, action } = parsed.body;
   if (!["publish", "unpublish", "delete"].includes(action)) {
     return c.json({ error: "非法的批处理操作" }, 400);
   }
@@ -932,8 +1029,7 @@ function isSafeImageUrl(url: string): boolean {
   try {
     const parsed = new URL(url);
     if (parsed.protocol !== "https:") return false;
-    if (/^(10\.|172\.(1[6-9]|2[0-9]|3[01])\.|192\.168\.|127\.|0\.|169\.254\.)/.test(parsed.hostname)) return false;
-    return true;
+    return !isBlockedWebdavHostname(parsed.hostname);
   } catch {
     return false;
   }
@@ -1145,7 +1241,9 @@ app.get("/api/admin/settings", async (c) => {
 
 app.put("/api/admin/settings", async (c) => {
   const db = c.get("db");
-  const body = await c.req.json<Record<string, string>>();
+  const parsed = await readJson<Record<string, string>>(c);
+  if (!parsed.ok) return parsed.response;
+  const body = parsed.body;
   await db.saveSettings(body);
   return c.json({ success: true });
 });
@@ -1195,7 +1293,9 @@ app.get("/api/admin/backup/r2-list", async (c) => {
 
 // 删除备份
 app.post("/api/admin/backup/r2-delete", async (c) => {
-  const { name } = await c.req.json<{ name: string }>();
+  const parsed = await readJson<{ name: string }>(c);
+  if (!parsed.ok) return parsed.response;
+  const { name } = parsed.body;
   if (!name) return c.json({ error: "缺少文件名" }, 400);
 
   const storage = c.get("storage");
@@ -1206,7 +1306,9 @@ app.post("/api/admin/backup/r2-delete", async (c) => {
 
 // 预览备份内容摘要
 app.post("/api/admin/backup/r2-preview", async (c) => {
-  const { name, mode, includeSettings } = await c.req.json<{ name: string; mode?: "merge" | "overwrite"; includeSettings?: boolean }>();
+  const parsed = await readJson<{ name: string; mode?: "merge" | "overwrite"; includeSettings?: boolean }>(c);
+  if (!parsed.ok) return parsed.response;
+  const { name, mode, includeSettings } = parsed.body;
   const storage = c.get("storage");
   const object = await storage.get(`backups/${name}`);
 
@@ -1225,7 +1327,9 @@ app.post("/api/admin/backup/r2-preview", async (c) => {
 
 // 预检本地备份或多平台迁移数据
 app.post("/api/admin/backup/preview", async (c) => {
-  const body = await c.req.json<BackupPreviewPayload & BackupPreviewOptions>();
+  const parsed = await readJson<BackupPreviewPayload & BackupPreviewOptions>(c);
+  if (!parsed.ok) return parsed.response;
+  const body = parsed.body;
   const db = c.get("db");
   return c.json(await buildBackupPreview(db, body, {
     mode: body.mode,
@@ -1236,7 +1340,9 @@ app.post("/api/admin/backup/preview", async (c) => {
 
 // 从 JSON 文件恢复/导入数据
 app.post("/api/admin/backup/restore", async (c) => {
-  const body = await c.req.json();
+  const parsed = await readJson<any>(c);
+  if (!parsed.ok) return parsed.response;
+  const body = parsed.body;
   const db = c.get("db");
   const includeSettings = body.includeSettings ?? Boolean(body.settings);
 
@@ -1255,7 +1361,9 @@ app.post("/api/admin/backup/restore", async (c) => {
 
 // 从 R2 备份文件直接恢复数据（真正的恢复逻辑）
 app.post("/api/admin/backup/r2-restore", async (c) => {
-  const { name, mode, includeSettings } = await c.req.json<{ name: string; mode?: "merge" | "overwrite"; includeSettings?: boolean }>();
+  const parsed = await readJson<{ name: string; mode?: "merge" | "overwrite"; includeSettings?: boolean }>(c);
+  if (!parsed.ok) return parsed.response;
+  const { name, mode, includeSettings } = parsed.body;
   if (!name) return c.json({ error: "缺少备份文件名" }, 400);
 
   const storage = c.get("storage");
@@ -1294,9 +1402,11 @@ app.post("/api/admin/backup/r2-restore", async (c) => {
 
 // WebDAV 备份
 app.post("/api/admin/backup/webdav", async (c) => {
-  const body = await c.req.json<{
+  const parsed = await readJson<{
     url: string; username: string; password: string; path?: string;
-  }>();
+  }>(c);
+  if (!parsed.ok) return parsed.response;
+  const body = parsed.body;
 
   // SSRF 防护：仅允许 https:// 的外部 URL
   const target = validateWebdavTarget(body.url);
@@ -1311,12 +1421,12 @@ app.post("/api/admin/backup/webdav", async (c) => {
   const fullUrl = `${target.baseUrl}${remotePath}/${filename}`;
 
   try {
-    await fetch(`${target.baseUrl}${remotePath}/`, {
+    await fetchWebdav(`${target.baseUrl}${remotePath}/`, {
       method: "MKCOL",
       headers: { Authorization: "Basic " + btoa(`${body.username}:${body.password}`) },
-    }).catch(() => {});
+    });
 
-    const res = await fetch(fullUrl, {
+    const res = await fetchWebdav(fullUrl, {
       method: "PUT",
       headers: {
         Authorization: "Basic " + btoa(`${body.username}:${body.password}`),
@@ -1336,9 +1446,11 @@ app.post("/api/admin/backup/webdav", async (c) => {
 });
 
 app.post("/api/admin/backup/webdav-test", async (c) => {
-  const body = await c.req.json<{
+  const parsed = await readJson<{
     url: string; username: string; password: string; path?: string;
-  }>();
+  }>(c);
+  if (!parsed.ok) return parsed.response;
+  const body = parsed.body;
   if (!body.url || !body.username || !body.password) {
     return c.json({ error: "请完整填写 WebDAV 地址、用户名和密码" }, 400);
   }
@@ -1351,8 +1463,8 @@ app.post("/api/admin/backup/webdav-test", async (c) => {
   const testUrl = `${target.baseUrl}${remotePath}/.monolith-webdav-test.txt`;
 
   try {
-    await fetch(directoryUrl, { method: "MKCOL", headers: { Authorization: auth } }).catch(() => {});
-    const res = await fetch(testUrl, {
+    await fetchWebdav(directoryUrl, { method: "MKCOL", headers: { Authorization: auth } });
+    const res = await fetchWebdav(testUrl, {
       method: "PUT",
       headers: { Authorization: auth, "Content-Type": "text/plain" },
       body: `monolith webdav test ${new Date().toISOString()}`,
@@ -1360,7 +1472,7 @@ app.post("/api/admin/backup/webdav-test", async (c) => {
     if (!res.ok && res.status !== 201 && res.status !== 204) {
       return c.json({ error: `WebDAV 写入测试失败: ${res.status} ${res.statusText}` }, 500);
     }
-    await fetch(testUrl, { method: "DELETE", headers: { Authorization: auth } }).catch(() => {});
+    await fetchWebdav(testUrl, { method: "DELETE", headers: { Authorization: auth } });
     return c.json({ success: true, path: remotePath || "/" });
   } catch (err) {
     return c.json({ error: `WebDAV 测试失败: ${err instanceof Error ? err.message : "未知错误"}` }, 500);
@@ -1462,7 +1574,9 @@ function convertHaloData(haloData: any): {
 // 预览 Halo 导入数据（不写入）
 app.post("/api/admin/import/halo/preview", async (c) => {
   try {
-    const haloData = await c.req.json();
+    const parsed = await readJson<any>(c);
+    if (!parsed.ok) return parsed.response;
+    const haloData = parsed.body;
     const result = convertHaloData(haloData);
     return c.json({
       success: true,
@@ -1478,7 +1592,9 @@ app.post("/api/admin/import/halo/preview", async (c) => {
 // 正式导入 Halo 数据
 app.post("/api/admin/import/halo", async (c) => {
   try {
-    const body = await c.req.json();
+    const parsed = await readJson<any>(c);
+    if (!parsed.ok) return parsed.response;
+    const body = parsed.body;
     const haloData = body.data || body;
     const mode = body.mode || "merge";
     const db = c.get("db");
@@ -1534,7 +1650,9 @@ app.get("/api/admin/pages/:slug", async (c) => {
 
 // 管理：创建或更新独立页
 app.post("/api/admin/pages", async (c) => {
-  const body = await c.req.json();
+  const parsed = await readJson<any>(c);
+  if (!parsed.ok) return parsed.response;
+  const body = parsed.body;
   const db = c.get("db");
   const result = await db.upsertPage(body);
   return c.json({ success: true, slug: body.slug, action: result.action });
@@ -1542,7 +1660,9 @@ app.post("/api/admin/pages", async (c) => {
 
 // 管理：删除独立页
 app.post("/api/admin/pages/delete", async (c) => {
-  const { slug } = await c.req.json<{ slug: string }>();
+  const parsed = await readJson<{ slug: string }>(c);
+  if (!parsed.ok) return parsed.response;
+  const { slug } = parsed.body;
   const db = c.get("db");
   await db.deletePage(slug);
   return c.json({ success: true });
