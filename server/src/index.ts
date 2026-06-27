@@ -7,6 +7,7 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { sign, verify } from "hono/jwt";
+import type { Context } from "hono";
 import { createDatabase, createObjectStorage } from "./storage/factory";
 import type { CreatePostInput, IDatabase } from "./storage/interfaces";
 import type { IObjectStorage } from "./storage/interfaces";
@@ -39,6 +40,7 @@ type Variables = {
 };
 
 const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
+type AppContext = Context<{ Bindings: Bindings; Variables: Variables }>;
 
 /* ── 全局中间件 ────────────────────────────── */
 app.use("*", cors({
@@ -119,9 +121,13 @@ type BackupPreviewOptions = {
   source?: string;
 };
 
-async function readJson<T>(c: any): Promise<{ ok: true; body: T } | { ok: false; response: Response }> {
+async function readJson<T>(c: AppContext): Promise<{ ok: true; body: T } | { ok: false; response: Response }> {
   try {
-    return { ok: true, body: await c.req.json() as T };
+    const body = await c.req.json();
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
+      return { ok: false, response: c.json({ error: "请求体必须是 JSON 对象" }, 400) };
+    }
+    return { ok: true, body: body as T };
   } catch {
     return { ok: false, response: c.json({ error: "请求体必须是有效 JSON" }, 400) };
   }
@@ -271,6 +277,14 @@ function validateWebdavTarget(url: string): { ok: true; baseUrl: string } | { ok
   } catch {
     return { ok: false, error: "无效的 WebDAV 地址" };
   }
+}
+
+async function fetchWebdav(url: string, init: RequestInit): Promise<Response> {
+  const res = await fetch(url, { ...init, redirect: "manual" });
+  if (res.status >= 300 && res.status < 400) {
+    throw new Error("WebDAV 目标返回重定向，已拒绝");
+  }
+  return res;
 }
 
 /* ── 健康检查端点 ──────────────────────────── */
@@ -1407,12 +1421,12 @@ app.post("/api/admin/backup/webdav", async (c) => {
   const fullUrl = `${target.baseUrl}${remotePath}/${filename}`;
 
   try {
-    await fetch(`${target.baseUrl}${remotePath}/`, {
+    await fetchWebdav(`${target.baseUrl}${remotePath}/`, {
       method: "MKCOL",
       headers: { Authorization: "Basic " + btoa(`${body.username}:${body.password}`) },
-    }).catch(() => {});
+    });
 
-    const res = await fetch(fullUrl, {
+    const res = await fetchWebdav(fullUrl, {
       method: "PUT",
       headers: {
         Authorization: "Basic " + btoa(`${body.username}:${body.password}`),
@@ -1449,8 +1463,8 @@ app.post("/api/admin/backup/webdav-test", async (c) => {
   const testUrl = `${target.baseUrl}${remotePath}/.monolith-webdav-test.txt`;
 
   try {
-    await fetch(directoryUrl, { method: "MKCOL", headers: { Authorization: auth } }).catch(() => {});
-    const res = await fetch(testUrl, {
+    await fetchWebdav(directoryUrl, { method: "MKCOL", headers: { Authorization: auth } });
+    const res = await fetchWebdav(testUrl, {
       method: "PUT",
       headers: { Authorization: auth, "Content-Type": "text/plain" },
       body: `monolith webdav test ${new Date().toISOString()}`,
@@ -1458,7 +1472,7 @@ app.post("/api/admin/backup/webdav-test", async (c) => {
     if (!res.ok && res.status !== 201 && res.status !== 204) {
       return c.json({ error: `WebDAV 写入测试失败: ${res.status} ${res.statusText}` }, 500);
     }
-    await fetch(testUrl, { method: "DELETE", headers: { Authorization: auth } }).catch(() => {});
+    await fetchWebdav(testUrl, { method: "DELETE", headers: { Authorization: auth } });
     return c.json({ success: true, path: remotePath || "/" });
   } catch (err) {
     return c.json({ error: `WebDAV 测试失败: ${err instanceof Error ? err.message : "未知错误"}` }, 500);
