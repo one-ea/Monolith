@@ -18,6 +18,7 @@ type PublicSettings = {
   hero_description: string;
   hero_actions: string;
   hero_topics: string;
+  site_icon: string;
   site_og_image: string;
   author_name: string;
   author_title: string;

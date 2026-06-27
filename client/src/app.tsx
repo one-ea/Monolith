@@ -56,6 +56,26 @@ function removeCustomInjection() {
   document.querySelectorAll("[data-monolith-custom-injection=\"true\"]").forEach((node) => node.remove());
 }
 
+function syncDocumentBrand(settings: { site_title?: string; site_description?: string; site_icon?: string }) {
+  const siteTitle = settings.site_title?.trim();
+  const description = settings.site_description?.trim();
+  const icon = settings.site_icon?.trim();
+
+  if (siteTitle && document.title.startsWith("Monolith")) {
+    document.title = description ? `${siteTitle} — ${description}` : siteTitle;
+  }
+
+  if (icon) {
+    let link = document.querySelector('link[rel="icon"]') as HTMLLinkElement | null;
+    if (!link) {
+      link = document.createElement("link");
+      link.rel = "icon";
+      document.head.appendChild(link);
+    }
+    link.href = icon;
+  }
+}
+
 function matchesPathPrefix(pathname: string, prefix: string) {
   return pathname === prefix || pathname.startsWith(`${prefix}/`);
 }
@@ -88,6 +108,7 @@ export function App() {
       .then((r) => r.json())
       .then((s) => {
         if (cancelled) return;
+        syncDocumentBrand(s);
         const hasThirdParty = (s.custom_header && /<script/i.test(s.custom_header))
           || (s.custom_footer && /<script/i.test(s.custom_footer));
 

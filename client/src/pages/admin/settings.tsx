@@ -11,6 +11,7 @@ type Settings = {
   hero_description: string;
   hero_actions: string;
   hero_topics: string;
+  site_icon: string;
   site_og_image: string;
   author_name: string;
   author_title: string;
@@ -43,6 +44,7 @@ const defaultSettings: Settings = {
     { title: "阅读体验", desc: "让长文、代码与目录保持同一节奏" },
     { title: "边缘部署", desc: "Workers / D1 / R2 的真实工程路径" },
   ]),
+  site_icon: "",
   site_og_image: "",
   author_name: "Monolith",
   author_title: "独立开发者",
@@ -443,6 +445,7 @@ export function AdminSettings() {
                   <SettingField label="站点标题" value={settings.site_title} onChange={(v) => updateSetting("site_title", v)} placeholder="Monolith" hint="用于首页 H1、SEO site_name 和 RSS 标题。" />
                   <SettingField label="站点描述" value={settings.site_description} onChange={(v) => updateSetting("site_description", v)} placeholder="一句话描述你的博客（建议 80-160 字）" multiline hint={`${settings.site_description.length} 个字符，首页 Hero 未单独设置时也会使用它。`} />
                   <SettingField label="首页标语" value={settings.site_tagline} onChange={(v) => updateSetting("site_tagline", v)} placeholder="显示在首页首屏小标题区域" hint="作为首页副标题的回退值，适合写短句而不是长段落。" />
+                  <SettingField label="站点图标 URL" value={settings.site_icon} onChange={(v) => updateSetting("site_icon", v)} placeholder="https://example.com/favicon.png" mono hint="用于浏览器 favicon 和左上角后台暗门入口，留空则使用默认图标。" />
                   <SettingField label="社交分享图 URL" value={settings.site_og_image} onChange={(v) => updateSetting("site_og_image", v)} placeholder="https://example.com/og-image.png" mono hint="用于首页 Open Graph / Twitter Card，留空则使用默认 og-default.png。" />
                   <SettingField label="页脚文本" value={settings.footer_text} onChange={(v) => updateSetting("footer_text", v)} placeholder="© 2026 ..." hint="显示在全站页脚，支持纯文本。" />
                 </div>

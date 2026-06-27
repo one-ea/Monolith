@@ -562,6 +562,7 @@ app.get("/api/settings/public", async (c) => {
     hero_description: all.hero_description || "",
     hero_actions: all.hero_actions || "",
     hero_topics: all.hero_topics || "",
+    site_icon: all.site_icon || "",
     site_og_image: all.site_og_image || "",
     footer_text: all.footer_text || "",
     author_name: all.author_name || "Monolith",

@@ -20,9 +20,19 @@ export function Navbar() {
   const [open, setOpen] = useState(false);
   const [gateOpen, setGateOpen] = useState(false);
   const [navPages, setNavPages] = useState<NavPage[]>([]);
+  const [brand, setBrand] = useState({ title: "Monolith", icon: "" });
 
   useEffect(() => {
     fetchNavPages().then(setNavPages);
+    fetch("/api/settings/public")
+      .then((r) => r.json())
+      .then((settings: { site_title?: string; site_icon?: string }) => {
+        setBrand({
+          title: settings.site_title?.trim() || "Monolith",
+          icon: settings.site_icon?.trim() || "",
+        });
+      })
+      .catch(() => {});
   }, []);
 
   const navLinks = useMemo(
@@ -62,11 +72,19 @@ export function Navbar() {
             className="group flex items-center gap-[10px] select-none animate-slide-in-left"
             onDoubleClick={handleLogoDoubleClick}
           >
-            <div className="relative flex h-[32px] w-[20px] items-center justify-center">
-              <div className="absolute inset-0 rounded-[3px] bg-gradient-to-b from-foreground/90 to-foreground/44 transition-all duration-300 group-hover:from-foreground group-hover:to-foreground/62" />
+            <div className="relative flex h-[32px] w-[32px] shrink-0 items-center justify-center">
+              {brand.icon ? (
+                <img
+                  src={brand.icon}
+                  alt=""
+                  className="h-[28px] w-[28px] rounded-md object-cover transition-transform duration-300 group-hover:-translate-y-[2px]"
+                />
+              ) : (
+                <div className="absolute inset-0 rounded-[3px] bg-gradient-to-b from-foreground/90 to-foreground/44 transition-all duration-300 group-hover:from-foreground group-hover:to-foreground/62" />
+              )}
             </div>
-            <span className="text-[18px] font-semibold tracking-[-0.03em] text-foreground">
-              Monolith
+            <span className="max-w-[180px] truncate text-[18px] font-semibold tracking-[-0.03em] text-foreground sm:max-w-[240px]">
+              {brand.title}
             </span>
           </Link>
 
