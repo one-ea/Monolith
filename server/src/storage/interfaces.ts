@@ -149,6 +149,39 @@ export type CreateCommentInput = {
   content: string;
 };
 
+export type FriendLinkStatus = "pending" | "approved" | "rejected";
+export type FriendLinkSource = "manual" | "submission" | "imported";
+
+export type FriendLink = {
+  id: number;
+  name: string;
+  url: string;
+  description: string;
+  avatarUrl: string;
+  ownerName: string;
+  ownerEmail: string;
+  status: FriendLinkStatus;
+  source: FriendLinkSource;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+  reviewedAt: string | null;
+};
+
+export type CreateFriendLinkInput = {
+  name: string;
+  url: string;
+  description?: string;
+  avatarUrl?: string;
+  ownerName?: string;
+  ownerEmail?: string;
+  status?: FriendLinkStatus;
+  source?: FriendLinkSource;
+  sortOrder?: number;
+};
+
+export type UpdateFriendLinkInput = Partial<CreateFriendLinkInput>;
+
 export type PostVersion = {
   id: number;
   postId: number;
@@ -223,6 +256,16 @@ export interface IDatabase {
   approveComment(id: number): Promise<boolean>;
   deleteComment(id: number): Promise<boolean>;
   getCommentCount(postSlug: string): Promise<number>;
+
+  /* 友链 */
+  getApprovedFriendLinks(): Promise<FriendLink[]>;
+  getAllFriendLinks(): Promise<FriendLink[]>;
+  createFriendLink(input: CreateFriendLinkInput): Promise<FriendLink>;
+  updateFriendLink(id: number, input: UpdateFriendLinkInput): Promise<FriendLink | null>;
+  approveFriendLink(id: number): Promise<boolean>;
+  rejectFriendLink(id: number): Promise<boolean>;
+  deleteFriendLink(id: number): Promise<boolean>;
+  importFriendLinks(input: CreateFriendLinkInput[]): Promise<number>;
 
   /* 系列 */
   getSeriesPosts(seriesSlug: string): Promise<{ slug: string; title: string; seriesOrder: number }[]>;

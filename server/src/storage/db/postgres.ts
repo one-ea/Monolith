@@ -7,11 +7,11 @@
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import { eq, desc, sql, inArray } from "drizzle-orm";
-import { pgPosts, pgTags, pgPostTags, pgPages, pgSettings, pgComments, pgReactions, pgVisits, pgPostVersions } from "../../db/schema-pg";
+import { pgPosts, pgTags, pgPostTags, pgPages, pgSettings, pgComments, pgFriendLinks, pgReactions, pgVisits, pgPostVersions } from "../../db/schema-pg";
 import type {
   IDatabase, Post, PostSummary, Tag, Page, PageSummary,
   CreatePostInput, UpdatePostInput, UpsertPageInput,
-  BackupData, ImportResult, ViewStats, Comment, CreateCommentInput, PostVersion
+  BackupData, ImportResult, ViewStats, Comment, CreateCommentInput, FriendLink, CreateFriendLinkInput, UpdateFriendLinkInput, PostVersion
 } from "../interfaces";
 
 type DrizzlePG = ReturnType<typeof drizzle>;
@@ -116,6 +116,24 @@ export class PostgresAdapter implements IDatabase {
     `;
     await this.client`CREATE INDEX IF NOT EXISTS pg_comments_post_id_idx ON comments(post_id)`;
     await this.client`
+      CREATE TABLE IF NOT EXISTS friend_links (
+        id SERIAL PRIMARY KEY,
+        name TEXT NOT NULL,
+        url TEXT NOT NULL UNIQUE,
+        description TEXT NOT NULL DEFAULT '',
+        avatar_url TEXT NOT NULL DEFAULT '',
+        owner_name TEXT NOT NULL DEFAULT '',
+        owner_email TEXT NOT NULL DEFAULT '',
+        status TEXT NOT NULL DEFAULT 'pending',
+        source TEXT NOT NULL DEFAULT 'manual',
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        reviewed_at TIMESTAMPTZ
+      )
+    `;
+    await this.client`CREATE INDEX IF NOT EXISTS pg_friend_links_status_idx ON friend_links(status)`;
+    await this.client`
       CREATE TABLE IF NOT EXISTS post_versions (
         id SERIAL PRIMARY KEY,
         post_id INTEGER NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
@@ -200,6 +218,10 @@ export class PostgresAdapter implements IDatabase {
   private ts(d: Date | string | null): string {
     if (!d) return new Date().toISOString();
     return d instanceof Date ? d.toISOString() : d;
+  }
+
+  private nullableTs(d: Date | string | null): string | null {
+    return d ? this.ts(d) : null;
   }
 
   /* ── 文章 ─────────────────────── */
@@ -968,6 +990,125 @@ export class PostgresAdapter implements IDatabase {
       WHERE p.slug = ${postSlug} AND c.approved = true
     `;
     return row?.count ?? 0;
+  }
+
+  /* ── 友链 ─────────────────── */
+
+  private toFriendLink(row: typeof pgFriendLinks.$inferSelect): FriendLink {
+    return {
+      id: row.id,
+      name: row.name,
+      url: row.url,
+      description: row.description,
+      avatarUrl: row.avatarUrl,
+      ownerName: row.ownerName,
+      ownerEmail: row.ownerEmail,
+      status: row.status as FriendLink["status"],
+      source: row.source as FriendLink["source"],
+      sortOrder: row.sortOrder,
+      createdAt: this.ts(row.createdAt),
+      updatedAt: this.ts(row.updatedAt),
+      reviewedAt: this.nullableTs(row.reviewedAt),
+    };
+  }
+
+  async getApprovedFriendLinks(): Promise<FriendLink[]> {
+    await this.ensureCoreTables();
+    const rows = await this.db
+      .select()
+      .from(pgFriendLinks)
+      .where(eq(pgFriendLinks.status, "approved"))
+      .orderBy(pgFriendLinks.sortOrder, pgFriendLinks.name);
+    return rows.map((row) => this.toFriendLink(row));
+  }
+
+  async getAllFriendLinks(): Promise<FriendLink[]> {
+    await this.ensureCoreTables();
+    const rows = await this.db
+      .select()
+      .from(pgFriendLinks)
+      .orderBy(pgFriendLinks.sortOrder, desc(pgFriendLinks.createdAt));
+    return rows.map((row) => this.toFriendLink(row));
+  }
+
+  async createFriendLink(input: CreateFriendLinkInput): Promise<FriendLink> {
+    await this.ensureCoreTables();
+    const [created] = await this.db
+      .insert(pgFriendLinks)
+      .values({
+        name: input.name,
+        url: input.url,
+        description: input.description || "",
+        avatarUrl: input.avatarUrl || "",
+        ownerName: input.ownerName || "",
+        ownerEmail: input.ownerEmail || "",
+        status: input.status || "pending",
+        source: input.source || "manual",
+        sortOrder: input.sortOrder ?? 0,
+        reviewedAt: input.status === "approved" || input.status === "rejected" ? new Date() : null,
+      })
+      .returning();
+    return this.toFriendLink(created);
+  }
+
+  async updateFriendLink(id: number, input: UpdateFriendLinkInput): Promise<FriendLink | null> {
+    await this.ensureCoreTables();
+    const patch = {
+      ...(input.name !== undefined && { name: input.name }),
+      ...(input.url !== undefined && { url: input.url }),
+      ...(input.description !== undefined && { description: input.description }),
+      ...(input.avatarUrl !== undefined && { avatarUrl: input.avatarUrl }),
+      ...(input.ownerName !== undefined && { ownerName: input.ownerName }),
+      ...(input.ownerEmail !== undefined && { ownerEmail: input.ownerEmail }),
+      ...(input.status !== undefined && { status: input.status }),
+      ...(input.source !== undefined && { source: input.source }),
+      ...(input.sortOrder !== undefined && { sortOrder: input.sortOrder }),
+      ...(input.status === "approved" || input.status === "rejected" ? { reviewedAt: new Date() } : {}),
+      updatedAt: new Date(),
+    };
+    const [updated] = await this.db.update(pgFriendLinks).set(patch).where(eq(pgFriendLinks.id, id)).returning();
+    return updated ? this.toFriendLink(updated) : null;
+  }
+
+  async approveFriendLink(id: number): Promise<boolean> {
+    return Boolean(await this.updateFriendLink(id, { status: "approved" }));
+  }
+
+  async rejectFriendLink(id: number): Promise<boolean> {
+    return Boolean(await this.updateFriendLink(id, { status: "rejected" }));
+  }
+
+  async deleteFriendLink(id: number): Promise<boolean> {
+    await this.ensureCoreTables();
+    const result = await this.db.delete(pgFriendLinks).where(eq(pgFriendLinks.id, id)).returning();
+    return result.length > 0;
+  }
+
+  async importFriendLinks(input: CreateFriendLinkInput[]): Promise<number> {
+    await this.ensureCoreTables();
+    let imported = 0;
+    for (const item of input) {
+      await this.db
+        .insert(pgFriendLinks)
+        .values({
+          name: item.name,
+          url: item.url,
+          description: item.description || "",
+          avatarUrl: item.avatarUrl || "",
+          ownerName: item.ownerName || "",
+          ownerEmail: item.ownerEmail || "",
+          status: item.status || "approved",
+          source: item.source || "imported",
+          sortOrder: item.sortOrder ?? 0,
+          reviewedAt: new Date(),
+        })
+        .onConflictDoNothing()
+        .returning()
+        .then((rows) => {
+          imported += rows.length;
+        });
+    }
+    return imported;
   }
 
   async getSeriesPosts(seriesSlug: string): Promise<{ slug: string; title: string; seriesOrder: number }[]> {

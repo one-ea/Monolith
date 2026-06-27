@@ -86,6 +86,34 @@ export const comments = sqliteTable(
   })
 );
 
+/* ── 友链表 ──────────────────────────────── */
+export const friendLinks = sqliteTable(
+  "friend_links",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    name: text("name").notNull(),
+    url: text("url").notNull(),
+    description: text("description").notNull().default(""),
+    avatarUrl: text("avatar_url").notNull().default(""),
+    ownerName: text("owner_name").notNull().default(""),
+    ownerEmail: text("owner_email").notNull().default(""),
+    status: text("status").notNull().default("pending"),
+    source: text("source").notNull().default("manual"),
+    sortOrder: integer("sort_order").notNull().default(0),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`(datetime('now'))`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`(datetime('now'))`),
+    reviewedAt: text("reviewed_at"),
+  },
+  (table) => ({
+    urlIdx: uniqueIndex("friend_links_url_idx").on(table.url),
+    statusIdx: index("friend_links_status_idx").on(table.status),
+  })
+);
+
 /* ── 表情反应表 ────────────────────────────── */
 export const reactions = sqliteTable("reactions", {
   id: integer("id").primaryKey({ autoIncrement: true }),

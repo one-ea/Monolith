@@ -5,6 +5,7 @@ import {
   LayoutDashboard,
   StickyNote,
   MessageCircle,
+  Link2,
   ImageIcon,
   BarChart3,
   HardDrive,
@@ -29,6 +30,7 @@ const NAV_GROUPS = [
       { href: "/admin", icon: LayoutDashboard, label: "运营总览" },
       { href: "/admin/pages", icon: StickyNote, label: "页面管理" },
       { href: "/admin/comments", icon: MessageCircle, label: "互动审核" },
+      { href: "/admin/friends", icon: Link2, label: "友链管理" },
     ],
   },
   {
