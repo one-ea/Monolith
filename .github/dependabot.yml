@@ -8,7 +8,6 @@ updates:
     directory: "/"
     schedule:
       interval: "monthly"
-      day: "monday"
       time: "09:00"
       timezone: "Asia/Shanghai"
     open-pull-requests-limit: 1
@@ -32,7 +31,6 @@ updates:
     directory: "/client"
     schedule:
       interval: "monthly"
-      day: "monday"
       time: "09:00"
       timezone: "Asia/Shanghai"
     open-pull-requests-limit: 1
@@ -57,7 +55,6 @@ updates:
     directory: "/server"
     schedule:
       interval: "monthly"
-      day: "monday"
       time: "09:00"
       timezone: "Asia/Shanghai"
     open-pull-requests-limit: 1
@@ -82,7 +79,6 @@ updates:
     directory: "/"
     schedule:
       interval: "monthly"
-      day: "monday"
       time: "09:00"
       timezone: "Asia/Shanghai"
     open-pull-requests-limit: 1
