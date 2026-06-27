@@ -732,11 +732,26 @@ function pruneLoginAttempts(now: number) {
   }
 }
 
+function getMissingAuthSecrets(env: Partial<Bindings>) {
+  return [
+    ["ADMIN_PASSWORD", env.ADMIN_PASSWORD],
+    ["JWT_SECRET", env.JWT_SECRET],
+  ].filter(([, value]) => typeof value !== "string" || value.length === 0).map(([key]) => key);
+}
+
 /* ── 认证 API ──────────────────────────────── */
 
 // 登录
 app.post("/api/auth/login", async (c) => {
   c.header("Cache-Control", "no-store");
+  const missingSecrets = getMissingAuthSecrets(c.env);
+  if (missingSecrets.length > 0) {
+    return c.json({
+      error: "后台认证未完成配置，请在 Cloudflare Workers 中配置 ADMIN_PASSWORD 和 JWT_SECRET 后重新部署。",
+      missing: missingSecrets,
+    }, 503);
+  }
+
   const ip = getClientIp(c);
 
   // 速率限制

@@ -70,7 +70,7 @@ function failStep(title, command, result) {
   if (result.error) {
     console.error(`\n[error] 步骤 "${title}" 启动失败：${result.error.message}`);
     if (result.error.code === "ENOENT") {
-      console.error(`[hint] 找不到命令 "${command}"。请确认已安装 Node.js (>=20) 与 npm，并将其加入 PATH。`);
+      console.error(`[hint] 找不到命令 "${command}"。请确认已安装 Node.js (>=22) 与 npm，并将其加入 PATH。`);
       console.error(`[hint] Windows 用户请通过官网安装包或 nvm-windows 安装；macOS/Linux 推荐用 fnm/nvm。`);
     }
     process.exit(1);
@@ -105,7 +105,7 @@ function runCapture(title, command, args) {
   return `${result.stdout || ""}\n${result.stderr || ""}`;
 }
 
-function checkPrerequisites() {
+function checkPrerequisites(options) {
   const errors = [];
   // wrangler 登录态检测：API_TOKEN 或本机 oauth 二选一
   const tokenPresent = !!process.env.CLOUDFLARE_API_TOKEN;
@@ -129,6 +129,18 @@ function checkPrerequisites() {
   if (!process.env.CLOUDFLARE_ACCOUNT_ID && tokenPresent) {
     errors.push(
       "已设置 CLOUDFLARE_API_TOKEN 但未设置 CLOUDFLARE_ACCOUNT_ID。Token 模式下必须显式提供账户 ID。",
+    );
+  }
+
+  if (!options.skipServer && !process.env.ADMIN_PASSWORD) {
+    errors.push(
+      "未设置 ADMIN_PASSWORD。请先在当前 shell 中设置后台登录密码，例如：`export ADMIN_PASSWORD='换成强密码'`。",
+    );
+  }
+
+  if (!options.skipServer && !process.env.JWT_SECRET) {
+    errors.push(
+      "未设置 JWT_SECRET。请先生成并设置 JWT 签名密钥，例如：`export JWT_SECRET=\"$(openssl rand -base64 32)\"`。",
     );
   }
 
@@ -212,7 +224,7 @@ function printPrerequisiteHints() {
 
 const options = parseArgs(process.argv.slice(2));
 printPrerequisiteHints();
-checkPrerequisites();
+checkPrerequisites(options);
 
 if (!options.skipMigrate) {
   // 绕过 npm workspace shim 直接调 wrangler，避免 Windows 双层 shell 转发吞 stdin
@@ -231,16 +243,13 @@ if (!options.skipMigrate) {
 }
 
 if (!options.skipServer) {
-  if (process.env.ADMIN_PASSWORD) {
-    runStep("写入 Backend 的 ADMIN_PASSWORD", "npx", [
-      "wrangler", "secret", "put", "ADMIN_PASSWORD", "--name", "monolith-server"
-    ], { input: `${process.env.ADMIN_PASSWORD}\n`, cwd: `${projectRoot}/server` });
-  }
-  if (process.env.JWT_SECRET) {
-    runStep("写入 Backend 的 JWT_SECRET", "npx", [
-      "wrangler", "secret", "put", "JWT_SECRET", "--name", "monolith-server"
-    ], { input: `${process.env.JWT_SECRET}\n`, cwd: `${projectRoot}/server` });
-  }
+  runStep("写入 Backend 的 ADMIN_PASSWORD", "npx", [
+    "wrangler", "secret", "put", "ADMIN_PASSWORD", "--name", "monolith-server"
+  ], { input: `${process.env.ADMIN_PASSWORD}\n`, cwd: `${projectRoot}/server` });
+
+  runStep("写入 Backend 的 JWT_SECRET", "npx", [
+    "wrangler", "secret", "put", "JWT_SECRET", "--name", "monolith-server"
+  ], { input: `${process.env.JWT_SECRET}\n`, cwd: `${projectRoot}/server` });
 
   const deployOutput = runCapture("部署 Cloudflare Workers 后端", "npm", ["run", "deploy:server"]);
   if (!options.apiBase) {
