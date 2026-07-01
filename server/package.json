@@ -17,20 +17,20 @@
     "lint": "eslint . --max-warnings 0"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.1037.0",
-    "@libsql/client": "^0.17.3",
+    "@aws-sdk/client-s3": "^3.1077.0",
+    "@libsql/client": "^0.17.4",
     "drizzle-orm": "^0.45.2",
-    "hono": "^4.12.25",
+    "hono": "^4.12.27",
     "postgres": "^3.4.9"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20260426.1",
-    "@typescript-eslint/eslint-plugin": "^8.59.0",
+    "@cloudflare/workers-types": "^4.20260630.1",
+    "@typescript-eslint/eslint-plugin": "^8.62.1",
     "@typescript-eslint/parser": "^8.58.2",
     "drizzle-kit": "^0.31.10",
-    "eslint": "^10.2.1",
-    "eslint-plugin-security": "^4.0.0",
+    "eslint": "^10.6.0",
+    "eslint-plugin-security": "^4.0.1",
     "typescript": "^5.7.0",
-    "wrangler": "^4.105.0"
+    "wrangler": "^4.106.0"
   }
 }
