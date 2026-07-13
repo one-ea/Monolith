@@ -27,7 +27,7 @@ type Bindings = {
   AUTO_SCHEMA_MIGRATION?: string;
   STORAGE_PROVIDER?: string;
   WEBHOOK_URLS?: string; // 逗号分隔的 Webhook 目标地址
-  SITE_ORIGIN?: string; // 对外公开域名（如 https://monolith-client.pages.dev），用于 sitemap/robots
+  SITE_ORIGIN?: string; // 对外公开域名（如 https://monolith-client.pages.dev），用于 sitemap/robots/RSS
   CLOUDFLARE_ACCOUNT_ID?: string; // AE GraphQL 查询用
   CLOUDFLARE_API_TOKEN?: string; // AE GraphQL 查询用（需要 Account Analytics:Read 权限）
   ANALYTICS_WEBSITE_WHITELIST?: string; // 站点白名单，格式: domain1|domain2 (空=放行所有)
@@ -605,7 +605,9 @@ app.get("/rss.xml", async (c) => {
   const settings = await db.getSettings();
   const siteTitle = settings.site_title || "Monolith";
   const siteDesc = settings.site_description || "";
-  const siteUrl = new URL(c.req.url).origin;
+  // Prefer public origin: /rss.xml is reverse-proxied via Pages Functions, so
+  // request origin may be *.workers.dev. Keep consistent with sitemap/robots.
+  const siteUrl = c.env.SITE_ORIGIN || new URL(c.req.url).origin;
 
   // 获取最新 20 篇文章
   const allPosts = await db.getRecentPublishedPosts(20);
@@ -676,10 +678,10 @@ app.get("/sitemap.xml", async (c) => {
   </url>`);
   }
 
-  // 独立页面
+  // 独立页面 — frontend route is /page/:slug (see client/src/app.tsx)
   for (const page of allPages) {
     urls.push(`  <url>
-    <loc>${escXml(siteUrl)}/pages/${escXml(page.slug)}</loc>
+    <loc>${escXml(siteUrl)}/page/${escXml(page.slug)}</loc>
     <changefreq>monthly</changefreq>
     <priority>0.5</priority>
   </url>`);
