@@ -15,6 +15,8 @@ export const pgPosts = pgTable("posts", {
   excerpt: text("excerpt").default(""),
   coverColor: text("cover_color").default("from-gray-500/20 to-gray-600/20"),
   coverImage: text("cover_image").default(""),
+  cardWidth: integer("card_width").notNull().default(100),
+  cardHeight: integer("card_height").notNull().default(220),
   published: boolean("published").notNull().default(true),
   listed: boolean("listed").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -84,6 +86,22 @@ export const pgComments = pgTable(
   },
   (table) => ({
     postIdIdx: index("pg_comments_post_id_idx").on(table.postId),
+  })
+);
+
+/* ── 留言板表 ──────────────────────────────── */
+export const pgGuestbookMessages = pgTable(
+  "guestbook_messages",
+  {
+    id: serial("id").primaryKey(),
+    authorName: text("author_name").notNull(),
+    authorEmail: text("author_email").notNull().default(""),
+    content: text("content").notNull(),
+    approved: boolean("approved").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    approvedIdx: index("pg_guestbook_messages_approved_idx").on(table.approved, table.id),
   })
 );
 

@@ -103,6 +103,8 @@ const POST_COLUMNS = [
   { name: "series_slug", sql: "series_slug TEXT" },
   { name: "series_order", sql: "series_order INTEGER NOT NULL DEFAULT 0" },
   { name: "category", sql: "category TEXT DEFAULT ''" },
+  { name: "card_width", sql: "card_width INTEGER NOT NULL DEFAULT 100" },
+  { name: "card_height", sql: "card_height INTEGER NOT NULL DEFAULT 220" },
 ];
 
 const options = parseArgs(process.argv.slice(2));

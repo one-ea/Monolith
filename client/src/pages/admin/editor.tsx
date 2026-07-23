@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useLocation } from "wouter";
 import { fetchPost, createPost, updatePost, uploadImage, localizePostImages, fetchPostVersions, restorePostVersion, type PostVersion } from "@/lib/api";
+import { CARD_GRID_SIZE_LABEL, CARD_IMAGE_MODE_LABEL, clampCardHeight, clampCardWidth, getArticleCardImageMode, getCardGridSize } from "@/lib/card-layout";
 import { renderMarkdown } from "@/lib/markdown";
-import { Save, Eye, EyeOff, Upload, Image, ChevronDown, ChevronUp, Bold, Italic, Heading2, Heading3, Link2, Code, Quote, List, ListOrdered, Minus, Maximize2, Minimize2, Table, CheckSquare, FileCode, ImageDown, History, Check, X, ArrowDownUp, PanelRightClose, PanelRight, ArrowLeft } from "lucide-react";
+import { Save, Eye, EyeOff, Upload, Image, ChevronDown, ChevronUp, Bold, Italic, Heading2, Heading3, Link2, Code, Quote, List, ListOrdered, Minus, Maximize2, Minimize2, Table, CheckSquare, FileCode, ImageDown, History, Check, X, ArrowDownUp, PanelRightClose, PanelRight, ArrowLeft, RotateCcw, SlidersHorizontal } from "lucide-react";
 import { Link } from "wouter";
 import Editor, { type Monaco } from "@monaco-editor/react";
 import type * as MonacoTypes from "monaco-editor";
@@ -101,6 +102,13 @@ function clearDraft(slug: string) {
   try { localStorage.removeItem(`${DRAFT_KEY}_${slug || "new"}`); } catch { /* 忽略 */ }
 }
 
+const CARD_LAYOUT_PRESETS = [
+  { label: "三列紧凑", width: 48, height: 168 },
+  { label: "双列标准", width: 72, height: 220 },
+  { label: "横幅", width: 100, height: 292 },
+  { label: "整行画报", width: 86, height: 360 },
+];
+
 export function AdminEditor() {
   const params = useParams<{ slug?: string }>();
   const [, setLocation] = useLocation();
@@ -115,6 +123,8 @@ export function AdminEditor() {
     excerpt: "",
     coverColor: "from-zinc-500/20 to-slate-500/20",
     coverImage: "",
+    cardWidth: 100,
+    cardHeight: 220,
     tags: "",
     published: true,
     pinned: false,
@@ -140,6 +150,12 @@ export function AdminEditor() {
   const [syncScroll, setSyncScroll] = useState(true);
   const syncScrollRef = useRef(true);
   const previewRef = useRef<HTMLDivElement>(null);
+  const hasCardCover = Boolean(form.coverImage.trim());
+  const cardImageMode = getArticleCardImageMode(form.cardWidth, form.cardHeight, hasCardCover);
+  const cardImageModeLabel = CARD_IMAGE_MODE_LABEL[cardImageMode];
+  const cardDensity = CARD_GRID_SIZE_LABEL[getCardGridSize(form.cardWidth)];
+  const previewCardWidth = Math.min(228, Math.max(112, Math.round(form.cardWidth * 2.2)));
+  const previewCardHeight = Math.min(154, Math.max(72, Math.round(form.cardHeight / 2.35)));
 
   // 保持 ref 与 state 同步（避免 onMount 闭包陷阱）
   useEffect(() => { syncScrollRef.current = syncScroll; }, [syncScroll]);
@@ -162,6 +178,8 @@ export function AdminEditor() {
           excerpt: post.excerpt || "",
           coverColor: post.coverColor || "",
           coverImage: post.coverImage || "",
+          cardWidth: post.cardWidth ?? 100,
+          cardHeight: post.cardHeight ?? 220,
           tags: post.tags.join(", "),
           published: post.published,
           pinned: post.pinned,
@@ -230,6 +248,8 @@ export function AdminEditor() {
         excerpt: form.excerpt,
         coverColor: form.coverColor,
         coverImage: form.coverImage,
+        cardWidth: form.cardWidth,
+        cardHeight: form.cardHeight,
         published: form.published,
         tags: tagsList,
         pinned: form.pinned,
@@ -360,7 +380,7 @@ export function AdminEditor() {
     }
   }, []);
 
-  const updateField = (key: keyof typeof form, value: string | boolean) => {
+  const updateField = <K extends keyof typeof form>(key: K, value: (typeof form)[K]) => {
     setForm((prev) => {
       const next = { ...prev, [key]: value };
       // 标题变化时自动更新 Slug
@@ -664,6 +684,184 @@ export function AdminEditor() {
                     className="h-[34px] w-full rounded-md border border-border/25 bg-background/28 px-[10px] text-[12px] text-foreground outline-none transition-colors placeholder:text-muted-foreground/50 focus:border-foreground/25"
                   />
                 </div>
+                <div className="sm:col-span-3 lg:col-span-5">
+                  <div className="grid gap-[12px] rounded-md border border-border/18 bg-card/8 p-[12px] lg:grid-cols-[minmax(0,1fr)_280px]">
+                    <div className="min-w-0 space-y-[12px]">
+                      <div className="flex flex-col gap-[8px] md:flex-row md:items-center md:justify-between">
+                        <div className="flex items-center gap-[8px]">
+                          <span className="flex h-[28px] w-[28px] items-center justify-center rounded-md bg-foreground/[0.06] text-muted-foreground/78">
+                            <SlidersHorizontal className="h-[14px] w-[14px]" />
+                          </span>
+                          <div>
+                            <p className="text-[12px] font-medium text-foreground/82">展示块</p>
+                            <p className="mt-[2px] font-mono text-[10px] text-muted-foreground/45">
+                              {cardDensity} / {form.cardHeight}px · {cardImageModeLabel}
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            updateField("cardWidth", 100);
+                            updateField("cardHeight", 220);
+                          }}
+                          className="inline-flex h-[32px] w-fit items-center gap-[6px] rounded-md border border-border/20 px-[10px] text-[11px] text-muted-foreground/72 transition-colors hover:bg-accent/16 hover:text-foreground"
+                        >
+                          <RotateCcw className="h-[12px] w-[12px]" />
+                          重置
+                        </button>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-[8px] md:grid-cols-4">
+                        {CARD_LAYOUT_PRESETS.map((preset) => {
+                          const active = form.cardWidth === preset.width && form.cardHeight === preset.height;
+                          return (
+                            <button
+                              key={preset.label}
+                              type="button"
+                              onClick={() => {
+                                updateField("cardWidth", preset.width);
+                                updateField("cardHeight", preset.height);
+                              }}
+                              className={`rounded-md border px-[10px] py-[8px] text-left transition-colors ${
+                                active
+                                  ? "border-foreground/32 bg-foreground/[0.07] text-foreground"
+                                  : "border-border/18 bg-background/24 text-muted-foreground/70 hover:border-border/32 hover:bg-card/18 hover:text-foreground/82"
+                              }`}
+                            >
+                              <span className="block text-[12px] font-medium">{preset.label}</span>
+                              <span className="mt-[4px] block font-mono text-[10px] opacity-58">{CARD_GRID_SIZE_LABEL[getCardGridSize(preset.width)]} / {preset.height}px</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      <div className="grid gap-[8px] md:grid-cols-3">
+                        <div className="rounded-md border border-border/14 bg-background/18 px-[10px] py-[8px]">
+                          <span className="block text-[10px] uppercase tracking-normal text-muted-foreground/55">列表密度</span>
+                          <span className="mt-[4px] block text-[12px] font-medium text-foreground/78">{cardDensity}</span>
+                        </div>
+                        <div className="rounded-md border border-border/14 bg-background/18 px-[10px] py-[8px]">
+                          <span className="block text-[10px] uppercase tracking-normal text-muted-foreground/55">自动图位</span>
+                          <span className="mt-[4px] block text-[12px] font-medium text-foreground/78">{cardImageModeLabel}</span>
+                        </div>
+                        <div className="rounded-md border border-border/14 bg-background/18 px-[10px] py-[8px]">
+                          <span className="block text-[10px] uppercase tracking-normal text-muted-foreground/55">封面状态</span>
+                          <span className="mt-[4px] block text-[12px] font-medium text-foreground/78">{hasCardCover ? "已设置" : "未设置"}</span>
+                        </div>
+                      </div>
+
+                      <div className="grid gap-[12px] md:grid-cols-2">
+                        <div className="rounded-md border border-border/14 bg-background/20 p-[10px]">
+                          <div className="mb-[8px] flex items-center justify-between gap-[8px]">
+                            <label htmlFor="card-width-number" className="text-[10px] uppercase tracking-normal text-muted-foreground/68">布局权重</label>
+                            <div className="flex items-center gap-[6px]">
+                              <input
+                                id="card-width-number"
+                                type="number"
+                                min={42}
+                                max={100}
+                                value={form.cardWidth}
+                                onChange={(e) => updateField("cardWidth", clampCardWidth(Number(e.target.value)))}
+                                className="h-[30px] w-[64px] rounded-md border border-border/25 bg-background/28 px-[8px] text-right font-mono text-[11px] text-foreground outline-none focus:border-foreground/25"
+                              />
+                              <span className="font-mono text-[10px] text-muted-foreground/42">%</span>
+                            </div>
+                          </div>
+                          <input
+                            aria-label="卡片布局权重"
+                            type="range"
+                            min={42}
+                            max={100}
+                            value={form.cardWidth}
+                            onChange={(e) => updateField("cardWidth", Number(e.target.value))}
+                            className="w-full accent-foreground"
+                          />
+                          <div className="mt-[6px] flex justify-between font-mono text-[9px] text-muted-foreground/35">
+                            <span>42</span>
+                            <span>100</span>
+                          </div>
+                        </div>
+
+                        <div className="rounded-md border border-border/14 bg-background/20 p-[10px]">
+                          <div className="mb-[8px] flex items-center justify-between gap-[8px]">
+                            <label htmlFor="card-height-number" className="text-[10px] uppercase tracking-normal text-muted-foreground/68">固定高度</label>
+                            <div className="flex items-center gap-[6px]">
+                              <input
+                                id="card-height-number"
+                                type="number"
+                                min={156}
+                                max={420}
+                                value={form.cardHeight}
+                                onChange={(e) => updateField("cardHeight", clampCardHeight(Number(e.target.value)))}
+                                className="h-[30px] w-[72px] rounded-md border border-border/25 bg-background/28 px-[8px] text-right font-mono text-[11px] text-foreground outline-none focus:border-foreground/25"
+                              />
+                              <span className="font-mono text-[10px] text-muted-foreground/42">px</span>
+                            </div>
+                          </div>
+                          <input
+                            aria-label="卡片固定高度"
+                            type="range"
+                            min={156}
+                            max={420}
+                            value={form.cardHeight}
+                            onChange={(e) => updateField("cardHeight", Number(e.target.value))}
+                            className="w-full accent-foreground"
+                          />
+                          <div className="mt-[6px] flex justify-between font-mono text-[9px] text-muted-foreground/35">
+                            <span>156</span>
+                            <span>420</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="rounded-md border border-border/16 bg-background/24 p-[12px]">
+                      <div className="mb-[10px] flex items-center justify-between gap-[8px]">
+                        <span className="text-[10px] uppercase tracking-normal text-muted-foreground/60">实时预览</span>
+                        <span className="rounded-md bg-foreground/[0.06] px-[8px] py-[4px] font-mono text-[10px] text-muted-foreground/72">
+                          {cardImageModeLabel}
+                        </span>
+                      </div>
+                      <div className="relative h-[214px] overflow-hidden rounded-md border border-border/16 bg-background/38">
+                        <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(120,120,120,0.08)_1px,transparent_1px),linear-gradient(to_bottom,rgba(120,120,120,0.08)_1px,transparent_1px)] bg-[size:24px_24px]" />
+                        <div
+                          className="absolute left-[50%] top-[44%] flex -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-md border border-foreground/16 bg-background/82 shadow-sm"
+                          style={{
+                            width: `${previewCardWidth}px`,
+                            height: `${previewCardHeight}px`,
+                          }}
+                        >
+                          {cardImageMode === "background" && (
+                            <img src={form.coverImage} alt="" className="absolute inset-0 h-full w-full object-cover opacity-38" />
+                          )}
+                          {cardImageMode === "top" && (
+                            <img src={form.coverImage} alt="" className="h-[42%] w-full shrink-0 object-cover opacity-78" />
+                          )}
+                          <div className="relative flex min-h-0 flex-1 gap-[8px] p-[10px]">
+                            {(cardImageMode === "side" || cardImageMode === "thumbnail") && (
+                              <img
+                                src={form.coverImage}
+                                alt=""
+                                className={`${cardImageMode === "side" ? "h-full w-[42%]" : "h-[44px] w-[44px]"} shrink-0 rounded-md object-cover opacity-78`}
+                              />
+                            )}
+                            <div className="min-w-0 flex-1 space-y-[6px]">
+                              <div className="h-[8px] w-[76%] rounded-full bg-foreground/24" />
+                              <div className="h-[6px] w-[58%] rounded-full bg-foreground/14" />
+                              <div className="h-[6px] w-[84%] rounded-full bg-foreground/10" />
+                            </div>
+                          </div>
+                        </div>
+                        <div className="absolute bottom-[12px] left-[12px] right-[12px] flex items-center justify-between gap-[8px] rounded-md border border-border/12 bg-background/70 px-[10px] py-[8px] backdrop-blur">
+                          <span className="font-mono text-[10px] text-muted-foreground/58">{cardDensity}</span>
+                          <span className="font-mono text-[10px] text-muted-foreground/58">{form.cardHeight}px</span>
+                          <span className="font-mono text-[10px] text-muted-foreground/58">{cardDensity}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
               <input
                 value={form.title} onChange={(e) => updateField("title", e.target.value)}
@@ -681,12 +879,12 @@ export function AdminEditor() {
       )}
 
       {/* ─── 编辑器 + 预览 ─── */}
-      <div className={`grid min-h-0 flex-1 ${showPreview ? "grid-cols-1 lg:grid-cols-2 lg:gap-[1px]" : "grid-cols-1"} overflow-hidden rounded-md border border-border/22 bg-background/35`}>
+      <div className={`grid min-h-0 flex-1 ${showPreview ? "grid-cols-1 lg:grid-cols-2 lg:gap-[2px]" : "grid-cols-1"} overflow-hidden rounded-md border border-border/22 bg-background/35`}>
         {/* 左侧 Monaco 编辑器 */}
         <div className="flex flex-col min-h-0">
           {/* 工具栏 */}
           <div className="flex shrink-0 items-center justify-between overflow-x-auto border-b border-border/15 bg-card/10 px-[8px] py-[4px]">
-            <div className="flex items-center gap-[1px] shrink-0">
+            <div className="flex shrink-0 items-center gap-[2px]">
               {toolbarActions.map((item) => {
                 if (!item.icon) return <div key={item.label} className="w-px h-[16px] bg-border/15 mx-[4px]" />;
                 const Icon = item.icon;

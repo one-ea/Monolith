@@ -14,6 +14,8 @@ export type Post = {
   excerpt: string;
   coverColor: string;
   coverImage: string;
+  cardWidth: number;
+  cardHeight: number;
   published: boolean;
   listed: boolean;
   createdAt: string;
@@ -33,6 +35,8 @@ export type PostSummary = {
   excerpt: string;
   coverColor: string;
   coverImage: string;
+  cardWidth: number;
+  cardHeight: number;
   createdAt: string;
   tags: string[];
   pinned: boolean;
@@ -72,6 +76,8 @@ export type CreatePostInput = {
   excerpt?: string;
   coverColor?: string;
   coverImage?: string;
+  cardWidth?: number;
+  cardHeight?: number;
   published?: boolean;
   listed?: boolean;
   tags?: string[];
@@ -89,6 +95,8 @@ export type UpdatePostInput = {
   excerpt?: string;
   coverColor?: string;
   coverImage?: string;
+  cardWidth?: number;
+  cardHeight?: number;
   published?: boolean;
   listed?: boolean;
   tags?: string[];
@@ -144,6 +152,21 @@ export type Comment = {
 
 export type CreateCommentInput = {
   postSlug: string;
+  authorName: string;
+  authorEmail?: string;
+  content: string;
+};
+
+export type GuestbookMessage = {
+  id: number;
+  authorName: string;
+  authorEmail: string;
+  content: string;
+  approved: boolean;
+  createdAt: string;
+};
+
+export type CreateGuestbookMessageInput = {
   authorName: string;
   authorEmail?: string;
   content: string;
@@ -256,6 +279,13 @@ export interface IDatabase {
   approveComment(id: number): Promise<boolean>;
   deleteComment(id: number): Promise<boolean>;
   getCommentCount(postSlug: string): Promise<number>;
+
+  /* 留言板 */
+  getApprovedGuestbookMessages(limit?: number, beforeId?: number): Promise<GuestbookMessage[]>;
+  addGuestbookMessage(input: CreateGuestbookMessageInput): Promise<GuestbookMessage>;
+  getAllGuestbookMessages(limit?: number, beforeId?: number): Promise<GuestbookMessage[]>;
+  approveGuestbookMessage(id: number): Promise<boolean>;
+  deleteGuestbookMessage(id: number): Promise<boolean>;
 
   /* 友链 */
   getApprovedFriendLinks(): Promise<FriendLink[]>;
