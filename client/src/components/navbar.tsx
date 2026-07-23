@@ -13,6 +13,7 @@ const fixedStart = [{ href: "/", label: "首页" }];
 const fixedEnd = [
   { href: "/archive", label: "归档" },
   { href: "/friends", label: "友链" },
+  { href: "/guestbook", label: "留言" },
   { href: "/about", label: "关于" },
 ];
 

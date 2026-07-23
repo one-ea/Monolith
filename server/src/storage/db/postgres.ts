@@ -6,15 +6,18 @@
 
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
-import { eq, desc, sql, inArray } from "drizzle-orm";
-import { pgPosts, pgTags, pgPostTags, pgPages, pgSettings, pgComments, pgFriendLinks, pgReactions, pgVisits, pgPostVersions } from "../../db/schema-pg";
+import { and, eq, desc, inArray, lt, sql } from "drizzle-orm";
+import { pgPosts, pgTags, pgPostTags, pgPages, pgSettings, pgComments, pgGuestbookMessages, pgFriendLinks, pgReactions, pgVisits, pgPostVersions } from "../../db/schema-pg";
 import type {
   IDatabase, Post, PostSummary, Tag, Page, PageSummary,
   CreatePostInput, UpdatePostInput, UpsertPageInput,
-  BackupData, ImportResult, ViewStats, Comment, CreateCommentInput, FriendLink, CreateFriendLinkInput, UpdateFriendLinkInput, PostVersion
+  BackupData, ImportResult, ViewStats, Comment, CreateCommentInput, GuestbookMessage, CreateGuestbookMessageInput, FriendLink, CreateFriendLinkInput, UpdateFriendLinkInput, PostVersion
 } from "../interfaces";
 
 type DrizzlePG = ReturnType<typeof drizzle>;
+
+const normalizeCardWidth = (value: number | undefined | null) => Math.min(100, Math.max(42, Math.round(value ?? 100)));
+const normalizeCardHeight = (value: number | undefined | null) => Math.min(420, Math.max(156, Math.round(value ?? 220)));
 
 export class PostgresAdapter implements IDatabase {
   private db: DrizzlePG;
@@ -42,6 +45,8 @@ export class PostgresAdapter implements IDatabase {
         excerpt TEXT DEFAULT '',
         cover_color TEXT DEFAULT 'from-gray-500/20 to-gray-600/20',
         cover_image TEXT DEFAULT '',
+        card_width INTEGER NOT NULL DEFAULT 100,
+        card_height INTEGER NOT NULL DEFAULT 220,
         published BOOLEAN NOT NULL DEFAULT true,
         listed BOOLEAN NOT NULL DEFAULT true,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -70,6 +75,12 @@ export class PostgresAdapter implements IDatabase {
     `.catch(() => {});
     await this.client`
       ALTER TABLE posts ADD COLUMN IF NOT EXISTS cover_image TEXT DEFAULT ''
+    `.catch(() => {});
+    await this.client`
+      ALTER TABLE posts ADD COLUMN IF NOT EXISTS card_width INTEGER NOT NULL DEFAULT 100
+    `.catch(() => {});
+    await this.client`
+      ALTER TABLE posts ADD COLUMN IF NOT EXISTS card_height INTEGER NOT NULL DEFAULT 220
     `.catch(() => {});
     await this.client`
       CREATE TABLE IF NOT EXISTS tags (
@@ -115,6 +126,17 @@ export class PostgresAdapter implements IDatabase {
       )
     `;
     await this.client`CREATE INDEX IF NOT EXISTS pg_comments_post_id_idx ON comments(post_id)`;
+    await this.client`
+      CREATE TABLE IF NOT EXISTS guestbook_messages (
+        id SERIAL PRIMARY KEY,
+        author_name TEXT NOT NULL,
+        author_email TEXT NOT NULL DEFAULT '',
+        content TEXT NOT NULL,
+        approved BOOLEAN NOT NULL DEFAULT false,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `;
+    await this.client`CREATE INDEX IF NOT EXISTS pg_guestbook_messages_approved_idx ON guestbook_messages(approved, id DESC)`;
     await this.client`
       CREATE TABLE IF NOT EXISTS friend_links (
         id SERIAL PRIMARY KEY,
@@ -235,6 +257,8 @@ export class PostgresAdapter implements IDatabase {
         excerpt: pgPosts.excerpt,
         coverColor: pgPosts.coverColor,
         coverImage: pgPosts.coverImage,
+        cardWidth: pgPosts.cardWidth,
+        cardHeight: pgPosts.cardHeight,
         createdAt: pgPosts.createdAt,
         pinned: pgPosts.pinned,
         publishAt: pgPosts.publishAt,
@@ -256,6 +280,8 @@ export class PostgresAdapter implements IDatabase {
       excerpt: post.excerpt || "",
       coverColor: post.coverColor || "",
       coverImage: post.coverImage || "",
+      cardWidth: normalizeCardWidth(post.cardWidth),
+      cardHeight: normalizeCardHeight(post.cardHeight),
       createdAt: this.ts(post.createdAt),
       tags: tagMap.get(post.id) || [],
       pinned: post.pinned,
@@ -281,6 +307,8 @@ export class PostgresAdapter implements IDatabase {
       excerpt: post.excerpt || "",
       coverColor: post.coverColor || "",
       coverImage: post.coverImage || "",
+      cardWidth: normalizeCardWidth(post.cardWidth),
+      cardHeight: normalizeCardHeight(post.cardHeight),
       published: post.published,
       listed: post.listed,
       createdAt: this.ts(post.createdAt),
@@ -312,6 +340,8 @@ export class PostgresAdapter implements IDatabase {
       excerpt: post.excerpt || "",
       coverColor: post.coverColor || "",
       coverImage: post.coverImage || "",
+      cardWidth: normalizeCardWidth(post.cardWidth),
+      cardHeight: normalizeCardHeight(post.cardHeight),
       published: post.published,
       listed: post.listed,
       createdAt: this.ts(post.createdAt),
@@ -336,6 +366,8 @@ export class PostgresAdapter implements IDatabase {
         excerpt: data.excerpt || "",
         coverColor: data.coverColor || "from-gray-500/20 to-gray-600/20",
         coverImage: data.coverImage || "",
+        cardWidth: normalizeCardWidth(data.cardWidth),
+        cardHeight: normalizeCardHeight(data.cardHeight),
         published: data.published ?? true,
         listed: data.listed ?? true,
         pinned: data.pinned ?? false,
@@ -358,6 +390,8 @@ export class PostgresAdapter implements IDatabase {
       excerpt: newPost.excerpt || "",
       coverColor: newPost.coverColor || "",
       coverImage: newPost.coverImage || "",
+      cardWidth: normalizeCardWidth(newPost.cardWidth),
+      cardHeight: normalizeCardHeight(newPost.cardHeight),
       published: newPost.published,
       listed: newPost.listed,
       createdAt: this.ts(newPost.createdAt),
@@ -389,6 +423,8 @@ export class PostgresAdapter implements IDatabase {
         ...(data.excerpt !== undefined && { excerpt: data.excerpt }),
         ...(data.coverColor !== undefined && { coverColor: data.coverColor }),
         ...(data.coverImage !== undefined && { coverImage: data.coverImage }),
+        ...(data.cardWidth !== undefined && { cardWidth: normalizeCardWidth(data.cardWidth) }),
+        ...(data.cardHeight !== undefined && { cardHeight: normalizeCardHeight(data.cardHeight) }),
         ...(data.published !== undefined && { published: data.published }),
         ...(data.listed !== undefined && { listed: data.listed }),
         ...(data.pinned !== undefined && { pinned: data.pinned }),
@@ -413,6 +449,8 @@ export class PostgresAdapter implements IDatabase {
       excerpt: updated.excerpt || "",
       coverColor: updated.coverColor || "",
       coverImage: updated.coverImage || "",
+      cardWidth: normalizeCardWidth(updated.cardWidth),
+      cardHeight: normalizeCardHeight(updated.cardHeight),
       published: updated.published,
       listed: updated.listed,
       createdAt: this.ts(updated.createdAt),
@@ -688,6 +726,8 @@ export class PostgresAdapter implements IDatabase {
         excerpt: p.excerpt || "",
         coverColor: p.coverColor || "",
         coverImage: p.coverImage || "",
+        cardWidth: normalizeCardWidth(p.cardWidth),
+        cardHeight: normalizeCardHeight(p.cardHeight),
         published: p.published,
         listed: p.listed,
         createdAt: this.ts(p.createdAt),
@@ -742,6 +782,8 @@ export class PostgresAdapter implements IDatabase {
               excerpt: post.excerpt || "",
               coverColor: post.coverColor || "",
               coverImage: post.coverImage || "",
+              cardWidth: normalizeCardWidth(post.cardWidth),
+              cardHeight: normalizeCardHeight(post.cardHeight),
               published: post.published ?? true,
               listed: post.listed ?? true,
               pinned: post.pinned ?? false,
@@ -764,6 +806,8 @@ export class PostgresAdapter implements IDatabase {
             excerpt: post.excerpt || "",
             coverColor: post.coverColor || "",
             coverImage: post.coverImage || "",
+            cardWidth: normalizeCardWidth(post.cardWidth),
+            cardHeight: normalizeCardHeight(post.cardHeight),
             published: post.published ?? true,
             listed: post.listed ?? true,
             pinned: post.pinned ?? false,
@@ -800,6 +844,8 @@ export class PostgresAdapter implements IDatabase {
         excerpt: pgPosts.excerpt,
         coverColor: pgPosts.coverColor,
         coverImage: pgPosts.coverImage,
+        cardWidth: pgPosts.cardWidth,
+        cardHeight: pgPosts.cardHeight,
         createdAt: pgPosts.createdAt,
         pinned: pgPosts.pinned,
         publishAt: pgPosts.publishAt,
@@ -821,6 +867,8 @@ export class PostgresAdapter implements IDatabase {
         excerpt: post.excerpt || "",
         coverColor: post.coverColor || "",
         coverImage: post.coverImage || "",
+        cardWidth: normalizeCardWidth(post.cardWidth),
+        cardHeight: normalizeCardHeight(post.cardHeight),
         createdAt: this.ts(post.createdAt),
         tags: await this.getPostTags(post.id),
         pinned: post.pinned,
@@ -990,6 +1038,72 @@ export class PostgresAdapter implements IDatabase {
       WHERE p.slug = ${postSlug} AND c.approved = true
     `;
     return row?.count ?? 0;
+  }
+
+  /* ── 留言板 ─────────────────── */
+
+  private toGuestbookMessage(row: typeof pgGuestbookMessages.$inferSelect): GuestbookMessage {
+    return {
+      id: row.id,
+      authorName: row.authorName,
+      authorEmail: row.authorEmail,
+      content: row.content,
+      approved: row.approved,
+      createdAt: this.ts(row.createdAt),
+    };
+  }
+
+  async getApprovedGuestbookMessages(limit = 21, beforeId?: number): Promise<GuestbookMessage[]> {
+    const rows = await this.db
+      .select()
+      .from(pgGuestbookMessages)
+      .where(and(
+        eq(pgGuestbookMessages.approved, true),
+        beforeId === undefined ? undefined : lt(pgGuestbookMessages.id, beforeId),
+      ))
+      .orderBy(desc(pgGuestbookMessages.id))
+      .limit(limit);
+    return rows.map((row) => this.toGuestbookMessage(row));
+  }
+
+  async addGuestbookMessage(input: CreateGuestbookMessageInput): Promise<GuestbookMessage> {
+    const [created] = await this.db
+      .insert(pgGuestbookMessages)
+      .values({
+        authorName: input.authorName,
+        authorEmail: input.authorEmail || "",
+        content: input.content,
+        approved: false,
+      })
+      .returning();
+    return this.toGuestbookMessage(created);
+  }
+
+  async getAllGuestbookMessages(limit = 51, beforeId?: number): Promise<GuestbookMessage[]> {
+    const rows = await this.db
+      .select()
+      .from(pgGuestbookMessages)
+      .where(beforeId === undefined ? undefined : lt(pgGuestbookMessages.id, beforeId))
+      .orderBy(desc(pgGuestbookMessages.id))
+      .limit(limit);
+    return rows.map((row) => this.toGuestbookMessage(row));
+  }
+
+  async approveGuestbookMessage(id: number): Promise<boolean> {
+    const result = await this.db
+      .update(pgGuestbookMessages)
+      .set({ approved: true })
+      .where(eq(pgGuestbookMessages.id, id))
+      .returning();
+    return result.length > 0;
+  }
+
+  async deleteGuestbookMessage(id: number): Promise<boolean> {
+    const result = await this.db
+      .delete(pgGuestbookMessages)
+      .where(eq(pgGuestbookMessages.id, id))
+      .returning();
+    return result.length > 0;
   }
 
   /* ── 友链 ─────────────────── */

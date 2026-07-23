@@ -48,6 +48,8 @@ export type PostMeta = {
   excerpt: string | null;
   coverColor: string | null;
   coverImage: string | null;
+  cardWidth: number;
+  cardHeight: number;
   createdAt: string;
   tags: string[];
   pinned: boolean;
@@ -242,6 +244,9 @@ export async function createPost(data: {
   content: string;
   excerpt?: string;
   coverColor?: string;
+  coverImage?: string;
+  cardWidth?: number;
+  cardHeight?: number;
   published?: boolean;
   tags?: string[];
   pinned?: boolean;
@@ -551,6 +556,20 @@ export type AdminComment = CommentData & {
   postTitle: string;
 };
 
+export type GuestbookMessage = {
+  id: number;
+  authorName: string;
+  authorEmail?: string;
+  content: string;
+  approved: boolean;
+  createdAt: string;
+};
+
+export type GuestbookPage = {
+  items: GuestbookMessage[];
+  nextCursor: number | null;
+};
+
 export async function fetchComments(slug: string): Promise<CommentData[]> {
   const res = await fetch(`${API_BASE}/api/posts/${slug}/comments`);
   if (!res.ok) throw new Error("获取评论失败");
@@ -571,11 +590,39 @@ export async function submitComment(slug: string, data: {
   return res.json();
 }
 
+export async function fetchGuestbookMessages(before?: number): Promise<GuestbookPage> {
+  const query = before ? `?before=${before}` : "";
+  return fetchJsonWithCache<GuestbookPage>(`/api/guestbook${query}`, 60_000);
+}
+
+export async function submitGuestbookMessage(data: {
+  authorName: string;
+  authorEmail?: string;
+  content: string;
+  _hp?: string;
+}): Promise<{ success: boolean; message?: string; error?: string }> {
+  const res = await fetch(`${API_BASE}/api/guestbook`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  return res.json();
+}
+
 export async function fetchAdminComments(): Promise<AdminComment[]> {
   const res = await fetch(`${API_BASE}/api/admin/comments`, {
     headers: authHeaders(),
   });
   if (!res.ok) throw new Error("获取评论失败");
+  return res.json();
+}
+
+export async function fetchAdminGuestbookMessages(before?: number): Promise<GuestbookPage> {
+  const query = before ? `?before=${before}` : "";
+  const res = await fetch(`${API_BASE}/api/admin/guestbook${query}`, {
+    headers: authHeaders(),
+  });
+  if (!res.ok) throw new Error("获取留言失败");
   return res.json();
 }
 
@@ -654,6 +701,22 @@ export async function deleteComment(id: number): Promise<void> {
     headers: authHeaders(),
   });
   if (!res.ok) throw new Error("删除失败");
+}
+
+export async function approveGuestbookMessage(id: number): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/admin/guestbook/${id}/approve`, {
+    method: "POST",
+    headers: authHeaders(),
+  });
+  if (!res.ok) throw new Error(await readError(res, "审核失败"));
+}
+
+export async function deleteGuestbookMessage(id: number): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/admin/guestbook/${id}`, {
+    method: "DELETE",
+    headers: authHeaders(),
+  });
+  if (!res.ok) throw new Error(await readError(res, "删除失败"));
 }
 
 /* ── 媒体管理 ──────────────────────────────── */

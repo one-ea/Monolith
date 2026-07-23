@@ -197,6 +197,22 @@ function publicFriendLink(link: FriendLink) {
   };
 }
 
+function publicGuestbookMessage(message: {
+  id: number;
+  authorName: string;
+  content: string;
+  approved: boolean;
+  createdAt: string;
+}) {
+  return {
+    id: message.id,
+    authorName: message.authorName,
+    content: message.content,
+    approved: message.approved,
+    createdAt: message.createdAt,
+  };
+}
+
 async function readObjectBody(body: ReadableStream<Uint8Array>): Promise<string> {
   const reader = body.getReader();
   const chunks: Uint8Array[] = [];
@@ -578,6 +594,60 @@ app.post("/api/posts/:slug/comments", async (c) => {
   }
 });
 
+// 获取留言板留言（仅已审核，不暴露邮箱）
+app.get("/api/guestbook", async (c) => {
+  const beforeId = Number.parseInt(c.req.query("before") || "", 10);
+  const pageSize = 20;
+  const messages = await c.get("db").getApprovedGuestbookMessages(
+    pageSize + 1,
+    Number.isInteger(beforeId) && beforeId > 0 ? beforeId : undefined,
+  );
+  const hasMore = messages.length > pageSize;
+  const items = messages.slice(0, pageSize).map(publicGuestbookMessage);
+  return c.json({
+    items,
+    nextCursor: hasMore ? items.at(-1)?.id ?? null : null,
+  });
+});
+
+// 提交留言板留言（公开接口，需审核后才显示）
+app.post("/api/guestbook", async (c) => {
+  const ip = getClientIp(c);
+  if (isGuestbookRateLimited(ip, Date.now())) {
+    return c.json({ error: "提交过于频繁，请稍后再试" }, 429);
+  }
+
+  const parsed = await readJson<{
+    authorName: string;
+    authorEmail?: string;
+    content: string;
+    _hp?: string;
+  }>(c);
+  if (!parsed.ok) return parsed.response;
+  const body = parsed.body;
+
+  if (body._hp) return c.json({ success: true, message: "留言已提交，等待审核" });
+
+  const authorName = normalizeText(body.authorName, 50);
+  const authorEmail = normalizeOptionalEmail(body.authorEmail);
+  const content = normalizeText(body.content, 2000);
+
+  if (!authorName || !content) {
+    return c.json({ error: "昵称和留言内容不能为空" }, 400);
+  }
+  if (body.authorEmail && !authorEmail) {
+    return c.json({ error: "邮箱格式无效" }, 400);
+  }
+
+  const message = await c.get("db").addGuestbookMessage({
+    authorName,
+    authorEmail,
+    content,
+  });
+  await triggerWebhook(c, "guestbook_message_submitted", { id: message.id, authorName });
+  return c.json({ success: true, message: "留言已提交，等待审核" }, 201);
+});
+
 // 获取文章表情反应统计
 app.get("/api/posts/:slug/reactions", async (c) => {
   const slug = c.req.param("slug");
@@ -843,6 +913,10 @@ const friendLinkAttempts = new Map<string, { count: number; firstAttempt: number
 const FRIEND_LINK_RATE_LIMIT = 3;
 const FRIEND_LINK_RATE_WINDOW = 60 * 60 * 1000;
 const FRIEND_LINK_RATE_MAX_KEYS = 1000;
+const guestbookAttempts = new Map<string, { count: number; firstAttempt: number }>();
+const GUESTBOOK_RATE_LIMIT = 5;
+const GUESTBOOK_RATE_WINDOW = 60 * 60 * 1000;
+const GUESTBOOK_RATE_MAX_KEYS = 1000;
 
 function getClientIp(c: any): string {
   const cfIp = c.req.header("CF-Connecting-IP")?.trim();
@@ -880,6 +954,31 @@ function isFriendLinkRateLimited(ip: string, now: number): boolean {
   }
   if (!record || (now - record.firstAttempt) >= FRIEND_LINK_RATE_WINDOW) {
     friendLinkAttempts.set(ip, { count: 1, firstAttempt: now });
+  } else {
+    record.count++;
+  }
+  return false;
+}
+
+function pruneGuestbookAttempts(now: number) {
+  for (const [ip, record] of guestbookAttempts.entries()) {
+    if ((now - record.firstAttempt) >= GUESTBOOK_RATE_WINDOW) guestbookAttempts.delete(ip);
+  }
+  while (guestbookAttempts.size > GUESTBOOK_RATE_MAX_KEYS) {
+    const oldest = guestbookAttempts.keys().next().value;
+    if (!oldest) break;
+    guestbookAttempts.delete(oldest);
+  }
+}
+
+function isGuestbookRateLimited(ip: string, now: number): boolean {
+  pruneGuestbookAttempts(now);
+  const record = guestbookAttempts.get(ip);
+  if (record && record.count >= GUESTBOOK_RATE_LIMIT && (now - record.firstAttempt) < GUESTBOOK_RATE_WINDOW) {
+    return true;
+  }
+  if (!record || (now - record.firstAttempt) >= GUESTBOOK_RATE_WINDOW) {
+    guestbookAttempts.set(ip, { count: 1, firstAttempt: now });
   } else {
     record.count++;
   }
@@ -1068,6 +1167,42 @@ app.delete("/api/admin/comments/:id", async (c) => {
   const db = c.get("db");
   const ok = await db.deleteComment(id);
   if (!ok) return c.json({ error: "评论不存在" }, 404);
+  return c.json({ success: true });
+});
+
+// 获取所有留言（管理后台）
+app.get("/api/admin/guestbook", async (c) => {
+  const db = c.get("db");
+  const beforeId = Number.parseInt(c.req.query("before") || "", 10);
+  const pageSize = 50;
+  const messages = await db.getAllGuestbookMessages(
+    pageSize + 1,
+    Number.isInteger(beforeId) && beforeId > 0 ? beforeId : undefined,
+  );
+  const items = messages.slice(0, pageSize);
+  return c.json({
+    items,
+    nextCursor: messages.length > pageSize ? items.at(-1)?.id ?? null : null,
+  });
+});
+
+// 审核留言
+app.post("/api/admin/guestbook/:id/approve", async (c) => {
+  const id = parseInt(c.req.param("id"), 10);
+  if (isNaN(id)) return c.json({ error: "无效 ID" }, 400);
+  const db = c.get("db");
+  const ok = await db.approveGuestbookMessage(id);
+  if (!ok) return c.json({ error: "留言不存在" }, 404);
+  return c.json({ success: true });
+});
+
+// 删除留言
+app.delete("/api/admin/guestbook/:id", async (c) => {
+  const id = parseInt(c.req.param("id"), 10);
+  if (isNaN(id)) return c.json({ error: "无效 ID" }, 400);
+  const db = c.get("db");
+  const ok = await db.deleteGuestbookMessage(id);
+  if (!ok) return c.json({ error: "留言不存在" }, 404);
   return c.json({ success: true });
 });
 

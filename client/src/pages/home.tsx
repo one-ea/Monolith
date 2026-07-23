@@ -414,10 +414,10 @@ export function HomePage() {
               ))}
             </div>
           ) : (
-            <div className="flex flex-col gap-[16px]">
+            <div className="grid grid-cols-1 items-stretch gap-[16px] sm:grid-cols-6 xl:grid-cols-12">
               {posts.length > 0 ? (
                 posts.map((post, i) => (
-                  <AnimateIn key={post.slug} delay={`delay-${Math.min(i, 6)}`}>
+                  <AnimateIn key={post.slug} delay={`delay-${Math.min(i, 6)}`} className="contents">
                     <ArticleCard post={post} />
                   </AnimateIn>
                 ))
