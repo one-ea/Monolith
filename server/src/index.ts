@@ -158,6 +158,21 @@ function normalizePublicUrl(value: unknown): string {
   }
 }
 
+function isUniqueConstraintError(error: unknown): boolean {
+  const details = error && typeof error === "object"
+    ? error as { code?: unknown; message?: unknown; cause?: unknown }
+    : {};
+  const code = String(details.code || "");
+  const message = String(details.message || error || "").toLowerCase();
+  return code === "23505"
+    || code === "SQLITE_CONSTRAINT_UNIQUE"
+    || code === "SQLITE_CONSTRAINT"
+    || message.includes("unique constraint")
+    || message.includes("duplicate key")
+    || message.includes("already exists")
+    || (details.cause !== error && isUniqueConstraintError(details.cause));
+}
+
 function parseSocialLinksSetting(value: string): CreateFriendLinkInput[] {
   if (!value.trim()) return [];
   try {
@@ -698,8 +713,12 @@ app.post("/api/friends/apply", async (c) => {
     });
     await triggerWebhook(c, "friend_link_submitted", { id: link.id, name, url });
     return c.json({ success: true }, 201);
-  } catch {
-    return c.json({ error: "该站点 URL 已提交或已存在" }, 409);
+  } catch (error) {
+    if (isUniqueConstraintError(error)) {
+      return c.json({ error: "该站点 URL 已提交或已存在" }, 409);
+    }
+    console.error("Failed to create friend link submission", error);
+    return c.json({ error: "友链申请暂时无法提交，请稍后再试" }, 500);
   }
 });
 

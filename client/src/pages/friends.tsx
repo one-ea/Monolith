@@ -30,17 +30,27 @@ function getInitial(name: string) {
 export function FriendsPage() {
   const [links, setLinks] = useState<FriendLink[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [retryKey, setRetryKey] = useState(0);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   useEffect(() => {
     document.title = "友链 | Monolith";
+    setLoading(true);
+    setLoadError(null);
     fetchFriends()
-      .then(setLinks)
-      .catch(() => setLinks([]))
+      .then((nextLinks) => {
+        setLinks(nextLinks);
+        setLoadError(null);
+      })
+      .catch((error) => {
+        setLinks([]);
+        setLoadError(error instanceof Error ? error.message : "获取友链失败");
+      })
       .finally(() => setLoading(false));
-  }, []);
+  }, [retryKey]);
 
   const sortedLinks = useMemo(
     () => [...links].sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name, "zh-CN")),
@@ -102,6 +112,17 @@ export function FriendsPage() {
               {[1, 2, 3, 4].map((item) => (
                 <div key={item} className="h-[116px] animate-pulse rounded-md border border-border/20 bg-card/15" />
               ))}
+            </div>
+          ) : loadError ? (
+            <div className="rounded-md border border-dashed border-red-500/25 bg-red-500/5 px-[18px] py-[40px] text-center">
+              <p className="text-[13px] text-red-500/80">{loadError}</p>
+              <button
+                type="button"
+                onClick={() => setRetryKey((value) => value + 1)}
+                className="mt-[12px] inline-flex h-[38px] items-center justify-center rounded-md border border-border/30 px-[12px] text-[12px] text-muted-foreground transition-colors hover:border-foreground/25 hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+              >
+                重试
+              </button>
             </div>
           ) : sortedLinks.length === 0 ? (
             <div className="rounded-md border border-dashed border-border/25 px-[18px] py-[48px] text-center">

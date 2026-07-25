@@ -583,7 +583,7 @@ export async function fetchAdminFriends(): Promise<FriendLink[]> {
   const res = await fetch(`${API_BASE}/api/admin/friends`, {
     headers: authHeaders(),
   });
-  if (!res.ok) throw new Error("获取友链失败");
+  if (!res.ok) throw new Error(await readError(res, "获取友链失败"));
   return res.json();
 }
 
