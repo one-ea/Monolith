@@ -5,11 +5,11 @@
 
 import { drizzle } from "drizzle-orm/d1";
 import { eq, desc, sql, inArray } from "drizzle-orm";
-import { posts, tags, postTags, pages, comments, reactions, visits, postVersions } from "../../db/schema";
+import { posts, tags, postTags, pages, comments, friendLinks, reactions, visits, postVersions } from "../../db/schema";
 import type {
   IDatabase, Post, PostSummary, Tag, Page, PageSummary,
   CreatePostInput, UpdatePostInput, UpsertPageInput,
-  BackupData, ImportResult, ViewStats, Comment, CreateCommentInput, PostVersion,
+  BackupData, ImportResult, ViewStats, Comment, CreateCommentInput, FriendLink, CreateFriendLinkInput, UpdateFriendLinkInput, PostVersion,
 } from "../interfaces";
 
 type DrizzleD1 = ReturnType<typeof drizzle>;
@@ -34,6 +34,7 @@ export class D1Adapter implements IDatabase {
         await this.ensureSettingsTable();
         await this.ensurePagesTable();
         await this.ensureCommentsTable();
+        await this.ensureFriendLinksTable();
         await this.ensureSeriesColumns();
         await this.ensureReactionsTable();
         await this.ensureVisitsTable();
@@ -68,6 +69,7 @@ export class D1Adapter implements IDatabase {
       settings: ["key", "value"],
       pages: ["id", "slug", "title", "content", "sort_order", "published", "show_in_nav", "created_at", "updated_at"],
       comments: ["id", "post_id", "author_name", "author_email", "content", "approved", "created_at"],
+      friend_links: ["id", "name", "url", "description", "avatar_url", "owner_name", "owner_email", "status", "source", "sort_order", "created_at", "updated_at", "reviewed_at"],
       reactions: ["id", "post_slug", "type", "ip_hash", "created_at"],
       visits: ["id", "path", "country", "referer_domain", "device_type", "created_at"],
     };
@@ -227,6 +229,25 @@ export class D1Adapter implements IDatabase {
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     )`);
     await this.db.run(sql`CREATE INDEX IF NOT EXISTS comments_post_id_idx ON comments(post_id)`);
+  }
+
+  private async ensureFriendLinksTable(): Promise<void> {
+    await this.db.run(sql`CREATE TABLE IF NOT EXISTS friend_links (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      url TEXT NOT NULL UNIQUE,
+      description TEXT NOT NULL DEFAULT '',
+      avatar_url TEXT NOT NULL DEFAULT '',
+      owner_name TEXT NOT NULL DEFAULT '',
+      owner_email TEXT NOT NULL DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'pending',
+      source TEXT NOT NULL DEFAULT 'manual',
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      reviewed_at TEXT
+    )`);
+    await this.db.run(sql`CREATE INDEX IF NOT EXISTS friend_links_status_idx ON friend_links(status)`);
   }
 
   /* ── 文章 ─────────────────────── */
@@ -1002,6 +1023,125 @@ export class D1Adapter implements IDatabase {
           WHERE p.slug = ${postSlug} AND c.approved = 1`
     );
     return (result.results?.[0] as { count: number } | undefined)?.count ?? 0;
+  }
+
+  /* ── 友链 ─────────────────── */
+
+  private toFriendLink(row: typeof friendLinks.$inferSelect): FriendLink {
+    return {
+      id: row.id,
+      name: row.name,
+      url: row.url,
+      description: row.description,
+      avatarUrl: row.avatarUrl,
+      ownerName: row.ownerName,
+      ownerEmail: row.ownerEmail,
+      status: row.status as FriendLink["status"],
+      source: row.source as FriendLink["source"],
+      sortOrder: row.sortOrder,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+      reviewedAt: row.reviewedAt,
+    };
+  }
+
+  async getApprovedFriendLinks(): Promise<FriendLink[]> {
+    await this.ensureFriendLinksTable();
+    const rows = await this.db
+      .select()
+      .from(friendLinks)
+      .where(eq(friendLinks.status, "approved"))
+      .orderBy(friendLinks.sortOrder, friendLinks.name);
+    return rows.map((row) => this.toFriendLink(row));
+  }
+
+  async getAllFriendLinks(): Promise<FriendLink[]> {
+    await this.ensureFriendLinksTable();
+    const rows = await this.db
+      .select()
+      .from(friendLinks)
+      .orderBy(friendLinks.sortOrder, desc(friendLinks.createdAt));
+    return rows.map((row) => this.toFriendLink(row));
+  }
+
+  async createFriendLink(input: CreateFriendLinkInput): Promise<FriendLink> {
+    await this.ensureFriendLinksTable();
+    const [created] = await this.db
+      .insert(friendLinks)
+      .values({
+        name: input.name,
+        url: input.url,
+        description: input.description || "",
+        avatarUrl: input.avatarUrl || "",
+        ownerName: input.ownerName || "",
+        ownerEmail: input.ownerEmail || "",
+        status: input.status || "pending",
+        source: input.source || "manual",
+        sortOrder: input.sortOrder ?? 0,
+        reviewedAt: input.status === "approved" || input.status === "rejected" ? sql`datetime('now')` as never : null,
+      })
+      .returning();
+    return this.toFriendLink(created);
+  }
+
+  async updateFriendLink(id: number, input: UpdateFriendLinkInput): Promise<FriendLink | null> {
+    await this.ensureFriendLinksTable();
+    const patch = {
+      ...(input.name !== undefined && { name: input.name }),
+      ...(input.url !== undefined && { url: input.url }),
+      ...(input.description !== undefined && { description: input.description }),
+      ...(input.avatarUrl !== undefined && { avatarUrl: input.avatarUrl }),
+      ...(input.ownerName !== undefined && { ownerName: input.ownerName }),
+      ...(input.ownerEmail !== undefined && { ownerEmail: input.ownerEmail }),
+      ...(input.status !== undefined && { status: input.status }),
+      ...(input.source !== undefined && { source: input.source }),
+      ...(input.sortOrder !== undefined && { sortOrder: input.sortOrder }),
+      ...(input.status === "approved" || input.status === "rejected" ? { reviewedAt: sql`datetime('now')` as never } : {}),
+      updatedAt: sql`datetime('now')` as never,
+    };
+    const [updated] = await this.db.update(friendLinks).set(patch).where(eq(friendLinks.id, id)).returning();
+    return updated ? this.toFriendLink(updated) : null;
+  }
+
+  async approveFriendLink(id: number): Promise<boolean> {
+    return Boolean(await this.updateFriendLink(id, { status: "approved" }));
+  }
+
+  async rejectFriendLink(id: number): Promise<boolean> {
+    return Boolean(await this.updateFriendLink(id, { status: "rejected" }));
+  }
+
+  async deleteFriendLink(id: number): Promise<boolean> {
+    await this.ensureFriendLinksTable();
+    const result = await this.db.delete(friendLinks).where(eq(friendLinks.id, id)).returning();
+    return result.length > 0;
+  }
+
+  async importFriendLinks(input: CreateFriendLinkInput[]): Promise<number> {
+    await this.ensureFriendLinksTable();
+    let imported = 0;
+    for (const item of input) {
+      await this.db
+        .insert(friendLinks)
+        .values({
+          name: item.name,
+          url: item.url,
+          description: item.description || "",
+          avatarUrl: item.avatarUrl || "",
+          ownerName: item.ownerName || "",
+          ownerEmail: item.ownerEmail || "",
+          status: item.status || "approved",
+          source: item.source || "imported",
+          sortOrder: item.sortOrder ?? 0,
+          reviewedAt: sql`datetime('now')` as never,
+        })
+        .onConflictDoNothing()
+        .returning()
+        .then((rows) => {
+          imported += rows.length;
+        });
+    }
+    return imported;
   }
 
   async getSeriesPosts(seriesSlug: string): Promise<{ slug: string; title: string; seriesOrder: number }[]> {

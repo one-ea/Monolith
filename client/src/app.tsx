@@ -14,6 +14,7 @@ const HomePage = lazy(() => import("@/pages/home").then((m) => ({ default: m.Hom
 const PostPage = lazy(() => import("@/pages/post").then((m) => ({ default: m.PostPage })));
 const ArchivePage = lazy(() => import("@/pages/archive").then((m) => ({ default: m.ArchivePage })));
 const AboutPage = lazy(() => import("@/pages/about").then((m) => ({ default: m.AboutPage })));
+const FriendsPage = lazy(() => import("@/pages/friends").then((m) => ({ default: m.FriendsPage })));
 const AdminLogin = lazy(() => import("@/pages/admin/login").then((m) => ({ default: m.AdminLogin })));
 const AdminDashboard = lazy(() => import("@/pages/admin/dashboard").then((m) => ({ default: m.AdminDashboard })));
 const AdminEditor = lazy(() => import("@/pages/admin/editor").then((m) => ({ default: m.AdminEditor })));
@@ -21,6 +22,7 @@ const AdminSettings = lazy(() => import("@/pages/admin/settings").then((m) => ({
 const AdminBackup = lazy(() => import("@/pages/admin/backup").then((m) => ({ default: m.AdminBackup })));
 const AdminPages = lazy(() => import("@/pages/admin/pages").then((m) => ({ default: m.AdminPages })));
 const AdminComments = lazy(() => import("@/pages/admin/comments").then((m) => ({ default: m.AdminComments })));
+const AdminFriends = lazy(() => import("@/pages/admin/friends").then((m) => ({ default: m.AdminFriends })));
 const AdminMedia = lazy(() => import("@/pages/admin/media").then((m) => ({ default: m.AdminMedia })));
 const AdminAnalytics = lazy(() => import("@/pages/admin/analytics").then((m) => ({ default: m.AdminAnalytics })));
 const AdminSeo = lazy(() => import("@/pages/admin/seo").then((m) => ({ default: m.AdminSeo })));
@@ -166,6 +168,7 @@ export function App() {
                 <Route path="/posts/:slug" component={PostPage} />
                 <Route path="/archive" component={ArchivePage} />
                 <Route path="/about" component={AboutPage} />
+                <Route path="/friends" component={FriendsPage} />
                 <Route path="/privacy" component={PrivacyPage} />
                 <Route path="/page/:slug" component={DynamicPage} />
                 <Route>
@@ -215,6 +218,7 @@ export function App() {
                 <Route path="/admin/backup"><AdminBackup /></Route>
                 <Route path="/admin/pages"><AdminPages /></Route>
                 <Route path="/admin/comments"><AdminComments /></Route>
+                <Route path="/admin/friends"><AdminFriends /></Route>
                 <Route path="/admin/media"><AdminMedia /></Route>
                 <Route path="/admin/analytics"><AdminAnalytics /></Route>
                 <Route path="/admin/seo"><AdminSeo /></Route>

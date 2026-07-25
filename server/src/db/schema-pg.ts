@@ -87,6 +87,30 @@ export const pgComments = pgTable(
   })
 );
 
+/* ── 友链表 ──────────────────────────────── */
+export const pgFriendLinks = pgTable(
+  "friend_links",
+  {
+    id: serial("id").primaryKey(),
+    name: text("name").notNull(),
+    url: text("url").notNull(),
+    description: text("description").notNull().default(""),
+    avatarUrl: text("avatar_url").notNull().default(""),
+    ownerName: text("owner_name").notNull().default(""),
+    ownerEmail: text("owner_email").notNull().default(""),
+    status: text("status").notNull().default("pending"),
+    source: text("source").notNull().default("manual"),
+    sortOrder: integer("sort_order").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+    reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+  },
+  (table) => ({
+    urlIdx: uniqueIndex("pg_friend_links_url_idx").on(table.url),
+    statusIdx: index("pg_friend_links_status_idx").on(table.status),
+  })
+);
+
 /* ── 表情反应表 ────────────────────────────── */
 export const pgReactions = pgTable("reactions", {
   id: serial("id").primaryKey(),
