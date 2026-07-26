@@ -27,6 +27,9 @@ type Bindings = {
   AUTO_SCHEMA_MIGRATION?: string;
   STORAGE_PROVIDER?: string;
   WEBHOOK_URLS?: string; // 逗号分隔的 Webhook 目标地址
+  RESEND_API_KEY?: string;
+  RESEND_FROM?: string;
+  ADMIN_EMAIL?: string;
   SITE_ORIGIN?: string; // 对外公开域名（如 https://monolith-client.pages.dev），用于 sitemap/robots/RSS
   CLOUDFLARE_ACCOUNT_ID?: string; // AE GraphQL 查询用
   CLOUDFLARE_API_TOKEN?: string; // AE GraphQL 查询用（需要 Account Analytics:Read 权限）
@@ -105,6 +108,57 @@ async function triggerWebhook(c: any, eventName: string, payload: any) {
   } else {
     Promise.allSettled(promises);
   }
+}
+
+function escapeEmailHtml(value: string): string {
+  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+}
+
+function publicSiteOrigin(c: AppContext): string {
+  return c.env.SITE_ORIGIN || new URL(c.req.url).origin;
+}
+
+function sendEmail(c: AppContext, message: { to: string; subject: string; html: string }): void {
+  const { RESEND_API_KEY, RESEND_FROM } = c.env;
+  if (!RESEND_API_KEY || !RESEND_FROM || !message.to) return;
+
+  const request = fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${RESEND_API_KEY}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ from: RESEND_FROM, to: [message.to], subject: message.subject, html: message.html }),
+  }).catch((error) => console.error("Resend email notification failed", error));
+
+  if (c.executionCtx?.waitUntil) c.executionCtx.waitUntil(request);
+}
+
+function notifyFriendSubmission(c: AppContext, link: FriendLink): void {
+  const adminEmail = c.env.ADMIN_EMAIL;
+  if (!adminEmail) return;
+  const origin = publicSiteOrigin(c);
+  sendEmail(c, {
+    to: adminEmail,
+    subject: `[Monolith] 新友链申请待审核: ${link.name}`,
+    html: `<p><strong>${escapeEmailHtml(link.name)}</strong> 提交了友链申请。</p>
+      <p>站点：<a href="${escapeEmailHtml(link.url)}">${escapeEmailHtml(link.url)}</a></p>
+      <p>简介：${escapeEmailHtml(link.description || "无")}</p>
+      <p>联系人：${escapeEmailHtml(link.ownerName || "无")}；邮箱：${escapeEmailHtml(link.ownerEmail || "未填写")}</p>
+      <p><a href="${origin}/admin/friends">前往后台审核</a></p>`,
+  });
+}
+
+function notifyFriendReview(c: AppContext, link: FriendLink, approved: boolean): void {
+  if (!link.ownerEmail) return;
+  const origin = publicSiteOrigin(c);
+  const status = approved ? "已通过" : "未通过";
+  const detail = approved
+    ? `<p>你的站点现已展示在 <a href="${origin}/friends">友链页面</a>。</p>`
+    : "<p>感谢你的申请；本次暂未能收录，敬请谅解。</p>";
+  sendEmail(c, {
+    to: link.ownerEmail,
+    subject: `[Monolith] 友链申请${status}: ${link.name}`,
+    html: `<p>你好，${escapeEmailHtml(link.ownerName || link.name)}：</p>
+      <p>你提交的站点 <a href="${escapeEmailHtml(link.url)}">${escapeEmailHtml(link.name)}</a> 友链申请${status}。</p>${detail}`,
+  });
 }
 
 type BackupPreviewPayload = {
@@ -782,6 +836,7 @@ app.post("/api/friends/apply", async (c) => {
       source: "submission",
     });
     await triggerWebhook(c, "friend_link_submitted", { id: link.id, name, url });
+    notifyFriendSubmission(c, link);
     return c.json({ success: true }, 201);
   } catch (error) {
     if (isUniqueConstraintError(error)) {
@@ -1630,16 +1685,24 @@ app.put("/api/admin/friends/:id", async (c) => {
 app.post("/api/admin/friends/:id/approve", async (c) => {
   const id = Number(c.req.param("id"));
   if (!Number.isInteger(id)) return c.json({ error: "无效 ID" }, 400);
-  const ok = await c.get("db").approveFriendLink(id);
+  const db = c.get("db");
+  const link = (await db.getAllFriendLinks()).find((item) => item.id === id);
+  if (!link) return c.json({ error: "友链不存在" }, 404);
+  const ok = await db.approveFriendLink(id);
   if (!ok) return c.json({ error: "友链不存在" }, 404);
+  notifyFriendReview(c, link, true);
   return c.json({ success: true });
 });
 
 app.post("/api/admin/friends/:id/reject", async (c) => {
   const id = Number(c.req.param("id"));
   if (!Number.isInteger(id)) return c.json({ error: "无效 ID" }, 400);
-  const ok = await c.get("db").rejectFriendLink(id);
+  const db = c.get("db");
+  const link = (await db.getAllFriendLinks()).find((item) => item.id === id);
+  if (!link) return c.json({ error: "友链不存在" }, 404);
+  const ok = await db.rejectFriendLink(id);
   if (!ok) return c.json({ error: "友链不存在" }, 404);
+  notifyFriendReview(c, link, false);
   return c.json({ success: true });
 });
 
