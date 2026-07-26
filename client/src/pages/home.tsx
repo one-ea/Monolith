@@ -427,7 +427,7 @@ export function HomePage() {
                   </AnimateIn>
                 ))
               ) : (
-                <div className="rounded-md border border-dashed border-border/25 bg-background/20 px-[20px] py-[52px] text-center">
+                <div className="col-span-full rounded-md border border-dashed border-border/25 bg-background/20 px-[20px] py-[52px] text-center">
                   <p className="text-[15px] font-medium text-foreground/80">还没有发布文章</p>
                   <p className="mx-auto mt-[8px] max-w-[360px] text-[13px] leading-[1.7] text-muted-foreground/60">
                     本地数据库初始化后，最新文章会直接出现在这里。
