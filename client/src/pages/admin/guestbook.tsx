@@ -209,7 +209,7 @@ export function AdminGuestbook() {
                   </p>
                   <span className="text-[11px] text-muted-foreground/30">{formatDate(message.createdAt)}</span>
                 </div>
-                <div className="flex shrink-0 items-center gap-[2px] md:opacity-0 md:transition-opacity md:group-hover:opacity-100">
+                <div className="flex shrink-0 items-center gap-[2px] md:opacity-0 md:transition-opacity md:group-hover:opacity-100 md:group-focus-within:opacity-100">
                   {!message.approved && (
                     <button
                       type="button"
@@ -217,7 +217,7 @@ export function AdminGuestbook() {
                       disabled={processing === message.id}
                       title="通过审核"
                       aria-label={`通过 ${message.authorName} 的留言`}
-                      className="flex h-[44px] w-[44px] items-center justify-center rounded-md text-muted-foreground/55 transition-colors hover:bg-emerald-500/10 hover:text-emerald-600 disabled:opacity-40 dark:hover:text-emerald-400 md:h-[36px] md:w-[36px]"
+                      className="flex h-[44px] w-[44px] items-center justify-center rounded-md text-muted-foreground/55 transition-colors hover:bg-emerald-500/10 hover:text-emerald-600 disabled:opacity-40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring dark:hover:text-emerald-400 md:h-[36px] md:w-[36px]"
                     >
                       <Check className="h-[14px] w-[14px]" />
                     </button>
@@ -228,7 +228,7 @@ export function AdminGuestbook() {
                     disabled={processing === message.id}
                     title="删除"
                     aria-label={`删除 ${message.authorName} 的留言`}
-                    className="flex h-[44px] w-[44px] items-center justify-center rounded-md text-muted-foreground/55 transition-colors hover:bg-red-500/10 hover:text-red-600 disabled:opacity-40 dark:hover:text-red-400 md:h-[36px] md:w-[36px]"
+                    className="flex h-[44px] w-[44px] items-center justify-center rounded-md text-muted-foreground/55 transition-colors hover:bg-red-500/10 hover:text-red-600 disabled:opacity-40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring dark:hover:text-red-400 md:h-[36px] md:w-[36px]"
                   >
                     <Trash2 className="h-[14px] w-[14px]" />
                   </button>

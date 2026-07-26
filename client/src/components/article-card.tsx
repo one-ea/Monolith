@@ -1,7 +1,7 @@
 import { Link } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import type { PostMeta } from "@/lib/api";
-import { clampCardHeight, clampCardWidth, getArticleCardImageMode, getCardGridSize } from "@/lib/card-layout";
+import { clampCardHeight, clampCardWidth, getArticleCardGridClass, getArticleCardImageMode } from "@/lib/card-layout";
 import { ArrowRight, CalendarDays, FolderOpen, Pin } from "lucide-react";
 import type { CSSProperties } from "react";
 
@@ -15,17 +15,12 @@ export function ArticleCard({ post }: { post: PostMeta }) {
   const height = clampCardHeight(post.cardHeight);
   const cover = post.coverImage?.trim() || "";
   const imageMode = getArticleCardImageMode(width, height, Boolean(cover));
-  const gridSize = getCardGridSize(width);
   const isBackground = imageMode === "background";
   const compact = height < 190;
   const style = {
     "--article-card-height": `${height}px`,
   } as CSSProperties;
-  const gridClass = gridSize === "full"
-    ? "sm:col-span-6 xl:col-span-12"
-    : gridSize === "half"
-      ? "sm:col-span-3 xl:col-span-6"
-      : "sm:col-span-3 xl:col-span-4";
+  const gridClass = getArticleCardGridClass(width);
   const titleClass = "line-clamp-2 font-heading text-[20px] font-semibold leading-snug tracking-[-0.018em] text-foreground transition-colors duration-200 group-hover:text-foreground/90 lg:text-[23px]";
   const excerptClass = compact
     ? "mt-[8px] line-clamp-1 text-[13px] leading-[1.65] text-muted-foreground"

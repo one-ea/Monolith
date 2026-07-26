@@ -32,6 +32,13 @@ export const CARD_GRID_SIZE_LABEL: Record<CardGridSize, string> = {
   third: "三列",
 };
 
+export function getArticleCardGridClass(width: number): string {
+  const gridSize = getCardGridSize(width);
+  if (gridSize === "full") return "sm:col-span-6 md:col-span-12";
+  if (gridSize === "half") return "sm:col-span-3 md:col-span-6";
+  return "sm:col-span-2 md:col-span-4";
+}
+
 export function getArticleCardImageMode(width: number, height: number, hasCover: boolean): CardImageMode {
   if (!hasCover) return "text";
   if (width >= 82 && height >= 260) return "background";

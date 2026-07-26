@@ -8,6 +8,7 @@ import { fetchPosts, fetchCategories, type PostMeta, type CategoryInfo } from "@
 import { AnimateIn } from "@/hooks/use-animate";
 import { SeoHead } from "@/components/seo-head";
 import { ExternalLink, Mail, Rss, Eye, FolderOpen, Hash, ChevronDown, Link2 } from "lucide-react";
+import { clampCardWidth, getArticleCardGridClass } from "@/lib/card-layout";
 
 type PublicSettings = {
   site_title: string;
@@ -414,10 +415,14 @@ export function HomePage() {
               ))}
             </div>
           ) : (
-            <div className="grid grid-cols-1 items-stretch gap-[16px] sm:grid-cols-6 xl:grid-cols-12">
+            <div className="grid grid-cols-1 items-stretch gap-[16px] sm:grid-cols-6 md:grid-cols-12">
               {posts.length > 0 ? (
                 posts.map((post, i) => (
-                  <AnimateIn key={post.slug} delay={`delay-${Math.min(i, 6)}`} className="contents">
+                  <AnimateIn
+                    key={post.slug}
+                    delay={`delay-${Math.min(i, 6)}`}
+                    className={getArticleCardGridClass(clampCardWidth(post.cardWidth))}
+                  >
                     <ArticleCard post={post} />
                   </AnimateIn>
                 ))

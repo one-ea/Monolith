@@ -856,7 +856,7 @@ export function AdminEditor() {
                         <div className="absolute bottom-[12px] left-[12px] right-[12px] flex items-center justify-between gap-[8px] rounded-md border border-border/12 bg-background/70 px-[10px] py-[8px] backdrop-blur">
                           <span className="font-mono text-[10px] text-muted-foreground/58">{cardDensity}</span>
                           <span className="font-mono text-[10px] text-muted-foreground/58">{form.cardHeight}px</span>
-                          <span className="font-mono text-[10px] text-muted-foreground/58">{cardDensity}</span>
+                          <span className="font-mono text-[10px] text-muted-foreground/58">{cardImageModeLabel}</span>
                         </div>
                       </div>
                     </div>

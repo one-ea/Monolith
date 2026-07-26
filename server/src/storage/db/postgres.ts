@@ -13,11 +13,9 @@ import type {
   CreatePostInput, UpdatePostInput, UpsertPageInput,
   BackupData, ImportResult, ViewStats, Comment, CreateCommentInput, GuestbookMessage, CreateGuestbookMessageInput, FriendLink, CreateFriendLinkInput, UpdateFriendLinkInput, PostVersion
 } from "../interfaces";
+import { normalizeCardHeight, normalizeCardWidth } from "./card-layout";
 
 type DrizzlePG = ReturnType<typeof drizzle>;
-
-const normalizeCardWidth = (value: number | undefined | null) => Math.min(100, Math.max(42, Math.round(value ?? 100)));
-const normalizeCardHeight = (value: number | undefined | null) => Math.min(420, Math.max(156, Math.round(value ?? 220)));
 
 export class PostgresAdapter implements IDatabase {
   private db: DrizzlePG;
