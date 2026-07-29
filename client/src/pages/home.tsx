@@ -8,28 +8,7 @@ import { fetchPosts, fetchCategories, type PostMeta, type CategoryInfo } from "@
 import { AnimateIn } from "@/hooks/use-animate";
 import { SeoHead } from "@/components/seo-head";
 import { ExternalLink, Mail, Rss, Eye, FolderOpen, Hash, ChevronDown, Link2 } from "lucide-react";
-
-type PublicSettings = {
-  site_title: string;
-  site_description: string;
-  site_tagline: string;
-  hero_kicker: string;
-  hero_subtitle: string;
-  hero_description: string;
-  hero_actions: string;
-  hero_topics: string;
-  site_icon: string;
-  site_og_image: string;
-  author_name: string;
-  author_title: string;
-  author_bio: string;
-  author_avatar: string;
-  github_url: string;
-  twitter_url: string;
-  email: string;
-  social_links: string;
-  rss_enabled: string;
-};
+import { useSiteSettings, type PublicSiteSettings } from "@/lib/site-settings";
 
 const DEFAULT_HERO_ACTIONS: HeroAction[] = [
   { label: "最新文章", href: "#latest-posts" },
@@ -112,7 +91,7 @@ function normalizeSocialHref(link: SocialLinkConfig) {
   }
 }
 
-function getPublicSocialLinks(settings: PublicSettings | null): { id: string; icon: React.ElementType; href: string; label: string }[] {
+function getPublicSocialLinks(settings: PublicSiteSettings | null): { id: string; icon: React.ElementType; href: string; label: string }[] {
   if (!settings) return [];
 
   const configuredLinks = settings.social_links.trim() ? parseSocialLinks(settings.social_links) : [];
@@ -292,9 +271,9 @@ function SparkLine({ data, width = 240, height = 48 }: { data: number[]; width?:
 }
 
 export function HomePage() {
+  const { settings } = useSiteSettings();
   const [posts, setPosts] = useState<PostMeta[]>([]);
   const [loading, setLoading] = useState(true);
-  const [settings, setSettings] = useState<PublicSettings | null>(null);
   const [traffic, setTraffic] = useState<TrafficData | null>(null);
   const [categories, setCategories] = useState<CategoryInfo[]>([]);
 
@@ -303,11 +282,6 @@ export function HomePage() {
       .then(setPosts)
       .catch(console.error)
       .finally(() => setLoading(false));
-
-    fetch("/api/settings/public")
-      .then((r) => r.json())
-      .then((data) => setSettings(data))
-      .catch(() => {});
 
     fetch("/api/stats/traffic")
       .then((r) => r.json())
@@ -327,15 +301,15 @@ export function HomePage() {
   const sortedTags = Array.from(tagCounts.entries()).sort((a, b) => b[1] - a[1]);
   const maxTagCount = sortedTags.length > 0 ? sortedTags[0][1] : 1;
 
-  const authorName = settings?.author_name || "Monolith";
-  const authorTitle = settings?.author_title || "独立开发者";
-  const authorBio = settings?.author_bio || "热衷于前端架构、设计系统与边缘计算。相信技术应当服务于人，而非反过来。";
-  const authorAvatar = settings?.author_avatar || "";
-  const siteTitle = settings?.site_title || "Monolith";
-  const siteDescription = settings?.site_description || "书写代码、设计与边缘计算的个人博客。";
-  const heroDescription = settings?.hero_description || settings?.site_description || undefined;
-  const heroActions = parseHeroActions(settings?.hero_actions);
-  const heroTopics = parseHeroTopics(settings?.hero_topics);
+  const authorName = settings.author_name;
+  const authorTitle = settings.author_title;
+  const authorBio = settings.author_bio;
+  const authorAvatar = settings.author_avatar;
+  const siteTitle = settings.site_title;
+  const siteDescription = settings.site_description;
+  const heroDescription = settings.hero_description || settings.site_description || undefined;
+  const heroActions = parseHeroActions(settings.hero_actions);
+  const heroTopics = parseHeroTopics(settings.hero_topics);
 
   // 社交链接（优先读取新版可扩展列表，旧字段作为兼容回退）
   const socialLinks = getPublicSocialLinks(settings);
@@ -346,13 +320,13 @@ export function HomePage() {
       <SeoHead
         siteName={siteTitle}
         description={siteDescription}
-        image={settings?.site_og_image || undefined}
+        image={settings.site_og_image || undefined}
         url="/"
       />
       <Hero
         title={siteTitle}
-        kicker={settings?.hero_kicker || undefined}
-        subtitle={settings?.hero_subtitle || settings?.site_tagline || undefined}
+        kicker={settings.hero_kicker || undefined}
+        subtitle={settings.hero_subtitle || settings.site_tagline || undefined}
         description={heroDescription}
         actions={heroActions}
         topics={heroTopics}

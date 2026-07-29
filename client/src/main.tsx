@@ -3,6 +3,7 @@ import ReactDOM from "react-dom/client";
 import { App } from "./app";
 import "./globals.css";
 import { registerSW } from "virtual:pwa-register";
+import { SiteSettingsProvider } from "@/lib/site-settings";
 
 const updateSW = registerSW({
   onNeedRefresh() {
@@ -17,6 +18,8 @@ const updateSW = registerSW({
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <App />
+    <SiteSettingsProvider>
+      <App />
+    </SiteSettingsProvider>
   </React.StrictMode>
 );

@@ -23,6 +23,8 @@ import {
   type FriendLinkStatus,
 } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
+import { useSiteSettings } from "@/lib/site-settings";
+import { formatSiteDate } from "@/lib/date-format";
 
 type FilterType = "all" | FriendLinkStatus;
 type FormState = {
@@ -57,17 +59,6 @@ const STATUS_META: Record<FriendLinkStatus, { label: string; className: string }
 
 const inputClass = "h-[36px] w-full rounded-md border border-border/25 bg-background/30 px-[10px] text-[13px] text-foreground outline-none transition-colors placeholder:text-muted-foreground/30 focus:border-foreground/20";
 
-function formatDate(value?: string | null) {
-  if (!value) return "未记录";
-  return new Date(value).toLocaleDateString("zh-CN", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
 function toForm(link: FriendLink): FormState {
   return {
     id: link.id,
@@ -83,6 +74,7 @@ function toForm(link: FriendLink): FormState {
 }
 
 export function AdminFriends() {
+  const { dateSettings } = useSiteSettings();
   const [links, setLinks] = useState<FriendLink[]>([]);
   const [filter, setFilter] = useState<FilterType>("all");
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
@@ -304,7 +296,7 @@ export function AdminFriends() {
                             {link.url}
                           </a>
                           <span>排序 {link.sortOrder}</span>
-                          <span>{formatDate(link.createdAt)}</span>
+                          <span>{link.createdAt ? formatSiteDate(link.createdAt, dateSettings) : "未记录"}</span>
                         </div>
                       </div>
                       <div className="flex shrink-0 items-center gap-[2px] md:opacity-0 md:transition-opacity md:group-hover:opacity-100">

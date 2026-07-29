@@ -14,10 +14,8 @@ import { RelatedPosts } from "@/components/related-posts";
 import { SeriesNav } from "@/components/series-nav";
 import { PostReactions } from "@/components/post-reactions";
 import { ShareButtons } from "@/components/share-buttons";
-
-function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString("zh-CN", { year: "numeric", month: "long", day: "numeric" });
-}
+import { useSiteSettings } from "@/lib/site-settings";
+import { formatSiteDate } from "@/lib/date-format";
 
 const renderedPostCache = new Map<string, {
   htmlContent: string;
@@ -29,6 +27,7 @@ function getRenderedPostCacheKey(post: Pick<Post, "slug" | "updatedAt">) {
 }
 
 export function PostPage() {
+  const { dateSettings } = useSiteSettings();
   const params = useParams<{ slug: string }>();
   const [post, setPost] = useState<Post | null>(null);
   const [loading, setLoading] = useState(true);
@@ -224,15 +223,15 @@ export function PostPage() {
               {post.tags.map((tag) => (
                 <Badge key={tag} variant="secondary" className="h-[22px] rounded-[4px] px-[8px] text-[12px] font-normal">{tag}</Badge>
               ))}
-              <span className="text-[12px] text-muted-foreground/50">{formatDate(post.createdAt)}</span>
+              <span className="text-[12px] text-muted-foreground/50">{formatSiteDate(post.createdAt, dateSettings)}</span>
               <span className="text-[12px] text-muted-foreground/50 inline-flex items-center gap-[4px]"><Eye className="h-[12px] w-[12px]" />{(post.viewCount ?? 0).toLocaleString()}</span>
             </div>
             <h1 className="font-heading text-[30px] font-semibold tracking-[-0.035em] leading-[1.08] sm:text-[40px] lg:text-[48px]">{post.title}</h1>
             <p className="mt-[18px] max-w-[680px] text-[16px] leading-[1.85] text-muted-foreground">{post.excerpt}</p>
             <div className="mt-[20px] grid grid-cols-2 gap-[8px] border-t border-border/16 pt-[14px] text-[12px] text-muted-foreground/52 sm:grid-cols-3">
-              <span>发布：{formatDate(post.createdAt)}</span>
+              <span>发布：{formatSiteDate(post.createdAt, dateSettings)}</span>
               <span>浏览：{(post.viewCount ?? 0).toLocaleString()}</span>
-              <span className="col-span-2 sm:col-span-1">更新：{formatDate(post.updatedAt)}</span>
+              <span className="col-span-2 sm:col-span-1">更新：{formatSiteDate(post.updatedAt, dateSettings)}</span>
             </div>
           </header>
 
@@ -277,7 +276,7 @@ export function PostPage() {
               <Link href="/" className="inline-flex min-h-[44px] items-center gap-[6px] rounded-md text-[13px] text-muted-foreground/60 transition-all duration-200 hover:-translate-x-[2px] hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
                 <ArrowLeft className="h-[14px] w-[14px]" />返回首页
               </Link>
-              <span className="text-[12px] text-muted-foreground/40 hidden sm:inline-block">发布于 {formatDate(post.createdAt)}</span>
+              <span className="text-[12px] text-muted-foreground/40 hidden sm:inline-block">发布于 {formatSiteDate(post.createdAt, dateSettings)}</span>
             </div>
             
             {/* 分享按钮组件 */}

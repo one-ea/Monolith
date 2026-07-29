@@ -5,12 +5,11 @@ import { Separator } from "@/components/ui/separator";
 import { fetchPosts, type PostMeta } from "@/lib/api";
 import { AnimateIn } from "@/hooks/use-animate";
 import { SeoHead } from "@/components/seo-head";
-
-function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString("zh-CN", { year: "numeric", month: "long", day: "numeric" });
-}
+import { useSiteSettings } from "@/lib/site-settings";
+import { formatSiteDate } from "@/lib/date-format";
 
 export function ArchivePage() {
+  const { dateSettings } = useSiteSettings();
   const searchString = useSearch();
   const [posts, setPosts] = useState<PostMeta[]>([]);
   const [loading, setLoading] = useState(true);
@@ -110,7 +109,7 @@ export function ArchivePage() {
             <div className="overflow-hidden rounded-md border border-border/16 bg-background/22">
               {grouped.get(year)!.map((post) => (
                 <Link key={post.slug} href={`/posts/${post.slug}`} className="group grid min-h-[52px] grid-cols-[86px_minmax(0,1fr)] items-center gap-[12px] border-b border-border/10 px-[12px] py-[10px] transition-all duration-200 last:border-b-0 hover:bg-accent/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring sm:grid-cols-[106px_minmax(0,1fr)_160px]">
-                  <span className="shrink-0 font-mono text-[12px] tabular-nums text-muted-foreground/40">{formatDate(post.createdAt).replace(/\d{4}年/, "")}</span>
+                  <span className="shrink-0 font-mono text-[12px] tabular-nums text-muted-foreground/40">{formatSiteDate(post.createdAt, dateSettings).replace(/\d{4}年/, "")}</span>
                   <span className="min-w-0 truncate text-[15px] text-foreground transition-colors duration-200 group-hover:text-foreground/82">{post.title}</span>
                   <div className="ml-auto hidden shrink-0 gap-[4px] sm:flex">
                     {post.tags.slice(0, 1).map((tag) => (

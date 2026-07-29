@@ -8,10 +8,12 @@ import { ProtectedRoute } from "@/components/protected-route";
 import { AdminLayout } from "@/components/admin-layout";
 import { CookieConsent, getCookieConsent } from "@/components/cookie-consent";
 import { trackPageview, bindUnloadTracker } from "@/lib/analytics";
+import { useSiteSettings } from "@/lib/site-settings";
 
 // 代码分割 (Code Splitting)
 const HomePage = lazy(() => import("@/pages/home").then((m) => ({ default: m.HomePage })));
 const PostPage = lazy(() => import("@/pages/post").then((m) => ({ default: m.PostPage })));
+const DocsPage = lazy(() => import("@/pages/docs").then((m) => ({ default: m.DocsPage })));
 const ArchivePage = lazy(() => import("@/pages/archive").then((m) => ({ default: m.ArchivePage })));
 const AboutPage = lazy(() => import("@/pages/about").then((m) => ({ default: m.AboutPage })));
 const FriendsPage = lazy(() => import("@/pages/friends").then((m) => ({ default: m.FriendsPage })));
@@ -86,6 +88,7 @@ function matchesPathPrefix(pathname: string, prefix: string) {
 
 export function App() {
   const [location] = useLocation();
+  const { settings, ready: siteSettingsReady } = useSiteSettings();
 
   // 访客埋点：路由变化触发 pageview，页面卸载触发 duration 上报
   useEffect(() => {
@@ -103,70 +106,66 @@ export function App() {
   // 注入自定义 header/footer 代码（需 Cookie 同意后加载第三方脚本）
   useEffect(() => {
     removeCustomInjection();
-    if (isAdminRoot) return undefined;
+    if (isAdminRoot || !siteSettingsReady) return undefined;
 
     let cancelled = false;
     let cleanupConsentListener: (() => void) | undefined;
 
-    fetch("/api/settings/public")
-      .then((r) => r.json())
-      .then((s) => {
-        if (cancelled) return;
-        syncDocumentBrand(s);
-        const hasThirdParty = (s.custom_header && /<script/i.test(s.custom_header))
-          || (s.custom_footer && /<script/i.test(s.custom_footer));
+    const s = settings;
+    syncDocumentBrand(s);
+    const hasThirdParty = (s.custom_header && /<script/i.test(s.custom_header))
+      || (s.custom_footer && /<script/i.test(s.custom_footer));
 
-        const inject = () => {
-          if (cancelled) return;
-          removeCustomInjection();
-          if (s.custom_header) {
-            const container = document.createElement("div");
-            container.id = "monolith-custom-header";
-            injectHtml(container, s.custom_header);
-            Array.from(container.childNodes).forEach((n) => {
-              if (n instanceof HTMLElement) n.dataset.monolithCustomInjection = "true";
-              document.head.appendChild(n);
-            });
-          }
-          if (s.custom_footer) {
-            const container = document.createElement("div");
-            container.id = "monolith-custom-footer";
-            container.dataset.monolithCustomInjection = "true";
-            injectHtml(container, s.custom_footer);
-            document.body.appendChild(container);
-          }
-        };
+    const inject = () => {
+      if (cancelled) return;
+      removeCustomInjection();
+      if (s.custom_header) {
+        const container = document.createElement("div");
+        container.id = "monolith-custom-header";
+        injectHtml(container, s.custom_header);
+        Array.from(container.childNodes).forEach((n) => {
+          if (n instanceof HTMLElement) n.dataset.monolithCustomInjection = "true";
+          document.head.appendChild(n);
+        });
+      }
+      if (s.custom_footer) {
+        const container = document.createElement("div");
+        container.id = "monolith-custom-footer";
+        container.dataset.monolithCustomInjection = "true";
+        injectHtml(container, s.custom_footer);
+        document.body.appendChild(container);
+      }
+    };
 
-        // 无第三方脚本则直接注入；有则等 Cookie 同意
-        if (!hasThirdParty) {
-          inject();
-        } else if (getCookieConsent()) {
-          inject();
-        } else {
-          window.addEventListener("cookie-consent-accepted", inject, { once: true });
-          cleanupConsentListener = () => window.removeEventListener("cookie-consent-accepted", inject);
-        }
-      })
-      .catch(() => {});
+    // 无第三方脚本则直接注入；有则等 Cookie 同意
+    if (!hasThirdParty) {
+      inject();
+    } else if (getCookieConsent()) {
+      inject();
+    } else {
+      window.addEventListener("cookie-consent-accepted", inject, { once: true });
+      cleanupConsentListener = () => window.removeEventListener("cookie-consent-accepted", inject);
+    }
     return () => {
       cancelled = true;
       cleanupConsentListener?.();
       removeCustomInjection();
     };
-  }, [isAdminRoot]);
+  }, [isAdminRoot, settings, siteSettingsReady]);
 
   return (
     <>
       <SearchOverlay />
 
       {/* ======== 1. 公开前台展示区 ======== */}
-      {isPublicPage && (
+      {isPublicPage && siteSettingsReady && (
         <>
           <Navbar />
           <main className="mx-auto w-full max-w-[1440px] px-[20px] lg:px-[40px] flex-1 flex flex-col">
             <Suspense fallback={<div className="p-8 flex justify-center text-zinc-500">Loading...</div>}>
               <Switch>
                 <Route path="/" component={HomePage} />
+                <Route path="/docs/:seriesSlug/:slug?" component={DocsPage} />
                 <Route path="/posts/:slug" component={PostPage} />
                 <Route path="/archive" component={ArchivePage} />
                 <Route path="/about" component={AboutPage} />
@@ -183,6 +182,12 @@ export function App() {
           <Footer />
           <CookieConsent />
         </>
+      )}
+
+      {isPublicPage && !siteSettingsReady && (
+        <main className="mx-auto flex w-full max-w-[1440px] flex-1 items-center justify-center px-[20px] lg:px-[40px]">
+          <div className="h-[180px] w-full max-w-[720px] animate-pulse rounded-md bg-card/20" aria-label="正在加载站点设置" />
+        </main>
       )}
 
       {/* ======== 2. 后台全屏编辑器区 ======== */}

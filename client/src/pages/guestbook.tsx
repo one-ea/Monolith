@@ -6,6 +6,8 @@ import {
   submitGuestbookMessage,
   type GuestbookMessage,
 } from "@/lib/api";
+import { useSiteSettings } from "@/lib/site-settings";
+import { formatSiteDate } from "@/lib/date-format";
 
 type FormState = {
   authorName: string;
@@ -23,21 +25,12 @@ const EMPTY_FORM: FormState = {
 
 const inputClass = "h-[42px] w-full rounded-md border border-border/25 bg-background/35 px-[12px] text-[13px] text-foreground outline-none transition-colors placeholder:text-muted-foreground/35 focus:border-foreground/25";
 
-function formatDate(value: string) {
-  return new Date(value).toLocaleDateString("zh-CN", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
 function getInitial(name: string) {
   return name.trim().slice(0, 1).toUpperCase() || "M";
 }
 
 export function GuestbookPage() {
+  const { dateSettings } = useSiteSettings();
   const [messages, setMessages] = useState<GuestbookMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -161,7 +154,7 @@ export function GuestbookPage() {
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-baseline gap-x-[8px] gap-y-[2px]">
                         <h3 className="text-[14px] font-medium text-foreground">{message.authorName}</h3>
-                        <span className="text-[12px] text-muted-foreground/38">{formatDate(message.createdAt)}</span>
+                        <span className="text-[12px] text-muted-foreground/38">{formatSiteDate(message.createdAt, dateSettings)}</span>
                       </div>
                       <p className="mt-[8px] whitespace-pre-wrap break-words text-[13px] leading-[1.8] text-muted-foreground/72">
                         {message.content}

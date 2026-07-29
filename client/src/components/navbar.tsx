@@ -8,6 +8,7 @@ import { AdminGate } from "@/components/admin-gate";
 import { SearchTrigger } from "@/components/search";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { fetchNavPages, type NavPage } from "@/lib/api";
+import { useSiteSettings } from "@/lib/site-settings";
 
 const fixedStart = [{ href: "/", label: "首页" }];
 const fixedEnd = [
@@ -22,19 +23,10 @@ export function Navbar() {
   const [open, setOpen] = useState(false);
   const [gateOpen, setGateOpen] = useState(false);
   const [navPages, setNavPages] = useState<NavPage[]>([]);
-  const [brand, setBrand] = useState({ title: "Monolith", icon: "" });
+  const { settings } = useSiteSettings();
 
   useEffect(() => {
     fetchNavPages().then(setNavPages);
-    fetch("/api/settings/public")
-      .then((r) => r.json())
-      .then((settings: { site_title?: string; site_icon?: string }) => {
-        setBrand({
-          title: settings.site_title?.trim() || "Monolith",
-          icon: settings.site_icon?.trim() || "",
-        });
-      })
-      .catch(() => {});
   }, []);
 
   const navLinks = useMemo(
@@ -75,9 +67,9 @@ export function Navbar() {
             onDoubleClick={handleLogoDoubleClick}
           >
             <div className="relative flex h-[32px] w-[32px] shrink-0 items-center justify-center">
-              {brand.icon ? (
+              {settings.site_icon ? (
                 <img
-                  src={brand.icon}
+                  src={settings.site_icon}
                   alt=""
                   className="h-[28px] w-[28px] rounded-md object-cover transition-transform duration-300 group-hover:-translate-y-[2px]"
                 />
@@ -86,7 +78,7 @@ export function Navbar() {
               )}
             </div>
             <span className="max-w-[180px] truncate text-[18px] font-semibold tracking-[-0.03em] text-foreground sm:max-w-[240px]">
-              {brand.title}
+              {settings.site_title}
             </span>
           </Link>
 
