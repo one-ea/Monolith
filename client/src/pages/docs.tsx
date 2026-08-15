@@ -67,10 +67,11 @@ export function DocsPage() {
       .then(async (items) => {
         if (cancelled) return;
         setSeriesPosts(items);
-        const currentSlug = params.slug && items.some((item) => item.slug === params.slug)
-          ? params.slug
-          : items[0]?.slug;
+        const currentSlug = params.slug ?? items[0]?.slug;
         if (!currentSlug) throw new Error("文档系列不存在");
+        if (params.slug && !items.some((item) => item.slug === params.slug)) {
+          throw new Error("文章不存在");
+        }
         const currentPost = await fetchPost(currentSlug);
         if (!cancelled) setPost(currentPost);
       })
