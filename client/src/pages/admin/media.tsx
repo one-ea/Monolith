@@ -9,18 +9,13 @@ import {
   Trash2, Image as ImageIcon, Grid, List, Upload,
   Copy, Check, X, Eye, ImageDown,
 } from "lucide-react";
+import { useSiteSettings } from "@/lib/site-settings";
+import { formatSiteDate } from "@/lib/date-format";
 
 function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString("zh-CN", {
-    year: "numeric", month: "short", day: "numeric",
-    hour: "2-digit", minute: "2-digit",
-  });
 }
 
 function isImageFile(name: string): boolean {
@@ -30,6 +25,7 @@ function isImageFile(name: string): boolean {
 type ViewMode = "grid" | "list";
 
 export function AdminMedia() {
+  const { dateSettings } = useSiteSettings();
   const [media, setMedia] = useState<MediaItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
@@ -344,7 +340,7 @@ export function AdminMedia() {
               {/* 文件信息 */}
               <div className="flex-1 min-w-0">
                 <p className="text-[13px] text-foreground truncate">{item.name}</p>
-                <p className="text-[11px] text-muted-foreground/30">{formatSize(item.size)} · {formatDate(item.uploaded)}</p>
+                <p className="text-[11px] text-muted-foreground/30">{formatSize(item.size)} · {formatSiteDate(item.uploaded, dateSettings)}</p>
               </div>
 
               {/* 操作 */}
@@ -400,7 +396,7 @@ export function AdminMedia() {
             <div className="mt-[12px] flex items-center justify-between">
               <div>
                 <p className="text-[14px] text-foreground">{preview.name}</p>
-                <p className="text-[12px] text-muted-foreground/40">{formatSize(preview.size)} · {formatDate(preview.uploaded)}</p>
+                <p className="text-[12px] text-muted-foreground/40">{formatSize(preview.size)} · {formatSiteDate(preview.uploaded, dateSettings)}</p>
               </div>
               <div className="flex gap-[4px]">
                 <button

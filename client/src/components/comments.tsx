@@ -2,13 +2,8 @@ import { useEffect, useState, useCallback } from "react";
 import { Separator } from "@/components/ui/separator";
 import { fetchComments, submitComment, type CommentData } from "@/lib/api";
 import { MessageCircle, Send, User, ChevronDown, ChevronUp } from "lucide-react";
-
-function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString("zh-CN", {
-    year: "numeric", month: "long", day: "numeric",
-    hour: "2-digit", minute: "2-digit",
-  });
-}
+import { useSiteSettings } from "@/lib/site-settings";
+import { formatSiteDate } from "@/lib/date-format";
 
 /** 通过昵称生成 DiceBear 头像 URL（不再传输邮箱） */
 function avatarUrl(name: string, size = 40): string {
@@ -18,6 +13,7 @@ function avatarUrl(name: string, size = 40): string {
 
 /* ── 单条评论 ──────────────────────────── */
 function CommentItem({ comment }: { comment: CommentData }) {
+  const { dateSettings } = useSiteSettings();
   return (
     <div className="group flex gap-[12px] py-[16px]">
       <div className="shrink-0">
@@ -31,7 +27,7 @@ function CommentItem({ comment }: { comment: CommentData }) {
       <div className="flex-1 min-w-0">
         <div className="flex items-baseline gap-[8px] mb-[4px]">
           <span className="text-[14px] font-medium text-foreground">{comment.authorName}</span>
-          <span className="text-[12px] text-muted-foreground/50">{formatDate(comment.createdAt)}</span>
+          <span className="text-[12px] text-muted-foreground/50">{formatSiteDate(comment.createdAt, dateSettings)}</span>
         </div>
         <p className="text-[14px] leading-[1.7] text-muted-foreground/80 whitespace-pre-wrap break-words">
           {comment.content}

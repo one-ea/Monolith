@@ -38,6 +38,9 @@ export function SeriesNav({ seriesSlug, currentSlug }: SeriesNavProps) {
             {currentIndex + 1} / {posts.length}
           </span>
         </button>
+        <Link href={`/docs/${seriesSlug}/${currentSlug}`} className="series-nav__docs-link" aria-label={`以文档模式打开系列 ${seriesSlug}`}>
+          文档模式
+        </Link>
       </div>
 
       {/* 可折叠目录 */}

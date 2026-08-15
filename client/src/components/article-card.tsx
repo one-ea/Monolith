@@ -4,13 +4,11 @@ import type { PostMeta } from "@/lib/api";
 import { clampCardHeight, clampCardWidth, getArticleCardGridClass, getArticleCardImageMode } from "@/lib/card-layout";
 import { ArrowRight, CalendarDays, FolderOpen, Pin } from "lucide-react";
 import type { CSSProperties } from "react";
-
-function formatDate(dateStr: string): string {
-  const date = new Date(dateStr);
-  return date.toLocaleDateString("zh-CN", { year: "numeric", month: "long", day: "numeric" });
-}
+import { useSiteSettings } from "@/lib/site-settings";
+import { formatSiteDate } from "@/lib/date-format";
 
 export function ArticleCard({ post }: { post: PostMeta }) {
+  const { dateSettings } = useSiteSettings();
   const width = clampCardWidth(post.cardWidth);
   const height = clampCardHeight(post.cardHeight);
   const cover = post.coverImage?.trim() || "";
@@ -39,7 +37,7 @@ export function ArticleCard({ post }: { post: PostMeta }) {
       ))}
       <span className="inline-flex items-center gap-[4px] text-[12px] text-muted-foreground/55">
         <CalendarDays className="h-[12px] w-[12px]" />
-        {formatDate(post.createdAt)}
+        {formatSiteDate(post.createdAt, dateSettings)}
       </span>
     </div>
   );

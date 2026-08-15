@@ -3,8 +3,10 @@ import { Link } from "wouter";
 import { fetchAdminPosts, deletePost, batchOperatePosts, fetchViewStats, type Post, type ViewStats } from "@/lib/api";
 import { Plus, Edit, Trash2, Eye, FileText, Clock, Search, ExternalLink, Globe, CheckSquare, Square, EyeOff, TrendingUp, ArrowRight, BarChart3 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { useSiteSettings } from "@/lib/site-settings";
+import { formatSiteDate } from "@/lib/date-format";
 
-function timeAgo(d: string): string {
+function timeAgo(d: string, dateSettings: Parameters<typeof formatSiteDate>[1]): string {
   const diff = Date.now() - new Date(d).getTime();
   const mins = Math.floor(diff / 60000);
   if (mins < 1) return "刚刚";
@@ -13,12 +15,13 @@ function timeAgo(d: string): string {
   if (hours < 24) return `${hours} 小时前`;
   const days = Math.floor(hours / 24);
   if (days < 30) return `${days} 天前`;
-  return new Date(d).toLocaleDateString("zh-CN", { year: "numeric", month: "short", day: "numeric" });
+  return formatSiteDate(d, dateSettings);
 }
 
 type FilterType = "all" | "published" | "draft";
 
 export function AdminDashboard() {
+  const { dateSettings } = useSiteSettings();
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState<string | null>(null);
@@ -311,7 +314,7 @@ export function AdminDashboard() {
                       {post.pinned && <Badge variant="outline" className="h-[16px] rounded-[3px] px-[4px] text-[9px] font-medium text-amber-500/80 border-amber-500/20 bg-amber-500/5">置顶</Badge>}
                     </div>
                     <div className="flex items-center gap-[8px] text-[11px] text-muted-foreground/30">
-                      <span>{timeAgo(post.updatedAt || post.createdAt)}</span>
+                      <span>{timeAgo(post.updatedAt || post.createdAt, dateSettings)}</span>
                       <span className="flex items-center gap-[2px] font-mono"><Eye className="h-[9px] w-[9px]" />{(post.viewCount ?? 0).toLocaleString()}</span>
                       {post.tags.length > 0 && <span>{post.tags.slice(0, 2).join(" · ")}</span>}
                     </div>

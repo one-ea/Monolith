@@ -785,6 +785,8 @@ app.get("/api/settings/public", async (c) => {
     rss_enabled: all.rss_enabled || "true",
     custom_header: all.custom_header || "",
     custom_footer: all.custom_footer || "",
+    site_timezone: all.site_timezone || "Asia/Shanghai",
+    date_precision: all.date_precision === "datetime" ? "datetime" : "date",
   });
 });
 

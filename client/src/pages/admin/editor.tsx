@@ -7,6 +7,8 @@ import { Save, Eye, EyeOff, Upload, Image, ChevronDown, ChevronUp, Bold, Italic,
 import { Link } from "wouter";
 import Editor, { type Monaco } from "@monaco-editor/react";
 import type * as MonacoTypes from "monaco-editor";
+import { useSiteSettings } from "@/lib/site-settings";
+import { formatSiteDate } from "@/lib/date-format";
 
 /** 注册 Monolith 暗色主题 — 暗夜琥珀：黑 + 金点缀 */
 function handleEditorWillMount(monaco: Monaco) {
@@ -110,6 +112,7 @@ const CARD_LAYOUT_PRESETS = [
 ];
 
 export function AdminEditor() {
+  const { dateSettings } = useSiteSettings();
   const params = useParams<{ slug?: string }>();
   const [, setLocation] = useLocation();
   const isEdit = !!params.slug;
@@ -280,7 +283,7 @@ export function AdminEditor() {
 
   const handleRestore = async (version: PostVersion) => {
     if (!params.slug) return;
-    if (!confirm(`确定要恢复到 ${new Date(version.createdAt).toLocaleString()} 的版本吗？当前未保存的修改将丢失。`)) return;
+    if (!confirm(`确定要恢复到 ${formatSiteDate(version.createdAt, dateSettings)} 的版本吗？当前未保存的修改将丢失。`)) return;
     setRestoring(true);
     try {
       const { post } = await restorePostVersion(params.slug, version.id);
@@ -1044,7 +1047,7 @@ export function AdminEditor() {
                 versions.map((v, i) => (
                   <div key={v.id} className="group flex items-center justify-between rounded-md border border-border/15 bg-card/5 p-[14px] transition-all hover:border-border/35 hover:bg-foreground/[0.035]">
                     <div>
-                      <div className="text-[14px] font-medium text-foreground/90 mb-[4px]">{new Date(v.createdAt).toLocaleString()}</div>
+                      <div className="text-[14px] font-medium text-foreground/90 mb-[4px]">{formatSiteDate(v.createdAt, dateSettings)}</div>
                       <div className="text-[12px] text-muted-foreground/50">
                         {v.content.length} 字符
                         {i === 0 && <span className="ml-[8px] text-[10px] bg-emerald-500/10 text-emerald-400 px-[6px] py-[2px] rounded-[4px]">最新快照</span>}

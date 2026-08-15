@@ -9,17 +9,13 @@ import {
   ExternalLink,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-
-function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString("zh-CN", {
-    year: "numeric", month: "short", day: "numeric",
-    hour: "2-digit", minute: "2-digit",
-  });
-}
+import { useSiteSettings } from "@/lib/site-settings";
+import { formatSiteDate } from "@/lib/date-format";
 
 type FilterType = "all" | "pending" | "approved";
 
 export function AdminComments() {
+  const { dateSettings } = useSiteSettings();
   const [comments, setComments] = useState<AdminComment[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<FilterType>("all");
@@ -204,7 +200,7 @@ export function AdminComments() {
                       {comment.postTitle}
                     </Link>
                     <span className="text-border/40">·</span>
-                    <span>{formatDate(comment.createdAt)}</span>
+                    <span>{formatSiteDate(comment.createdAt, dateSettings)}</span>
                   </div>
                 </div>
 

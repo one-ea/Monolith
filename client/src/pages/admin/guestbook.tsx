@@ -14,20 +14,13 @@ import {
   type GuestbookMessage,
 } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
+import { useSiteSettings } from "@/lib/site-settings";
+import { formatSiteDate } from "@/lib/date-format";
 
 type FilterType = "all" | "pending" | "approved";
 
-function formatDate(value: string) {
-  return new Date(value).toLocaleDateString("zh-CN", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
 export function AdminGuestbook() {
+  const { dateSettings } = useSiteSettings();
   const [messages, setMessages] = useState<GuestbookMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -207,7 +200,7 @@ export function AdminGuestbook() {
                   <p className="mb-[8px] whitespace-pre-wrap break-words text-[13px] leading-[1.7] text-muted-foreground/72">
                     {message.content}
                   </p>
-                  <span className="text-[11px] text-muted-foreground/30">{formatDate(message.createdAt)}</span>
+                  <span className="text-[11px] text-muted-foreground/30">{formatSiteDate(message.createdAt, dateSettings)}</span>
                 </div>
                 <div className="flex shrink-0 items-center gap-[2px] md:opacity-0 md:transition-opacity md:group-hover:opacity-100 md:group-focus-within:opacity-100">
                   {!message.approved && (

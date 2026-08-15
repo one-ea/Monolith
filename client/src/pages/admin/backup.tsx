@@ -19,6 +19,8 @@ import {
 } from "lucide-react";
 import { getToken } from "@/lib/api";
 import { platforms, type ImportResult, type PlatformInfo } from "@/lib/importers";
+import { useSiteSettings } from "@/lib/site-settings";
+import { formatSiteDate } from "@/lib/date-format";
 
 type RestoreMode = "merge" | "overwrite";
 type RiskLevel = "low" | "medium" | "high";
@@ -84,7 +86,7 @@ function formatSize(bytes: number): string {
   return `${(bytes / 1048576).toFixed(1)} MB`;
 }
 
-function timeAgo(value: string): string {
+function timeAgo(value: string, dateSettings: Parameters<typeof formatSiteDate>[1]): string {
   const diff = Date.now() - new Date(value).getTime();
   const mins = Math.floor(diff / 60000);
   if (mins < 1) return "刚刚";
@@ -92,7 +94,7 @@ function timeAgo(value: string): string {
   const hours = Math.floor(mins / 60);
   if (hours < 24) return `${hours} 小时前`;
   const days = Math.floor(hours / 24);
-  return days < 30 ? `${days} 天前` : new Date(value).toLocaleDateString("zh-CN");
+  return days < 30 ? `${days} 天前` : formatSiteDate(value, dateSettings);
 }
 
 function riskCopy(riskLevel: RiskLevel): { label: string; className: string } {
@@ -108,6 +110,7 @@ function sampleStatusCopy(status: "create" | "update" | "skip") {
 }
 
 export function AdminBackup() {
+  const { dateSettings } = useSiteSettings();
   const [message, setMessage] = useState<Toast>({ text: "", type: "" });
   const [r2Backups, setR2Backups] = useState<R2Backup[]>([]);
   const [r2Loading, setR2Loading] = useState(false);
@@ -418,7 +421,7 @@ export function AdminBackup() {
       </div>
 
       <div className="mb-[20px] grid gap-[8px] md:grid-cols-4">
-        <StatusCard label="最近恢复点" value={latestBackup ? timeAgo(latestBackup.uploaded) : "暂无"} detail={latestBackup ? latestBackup.name : "请先创建 R2 或本地备份"} />
+        <StatusCard label="最近恢复点" value={latestBackup ? timeAgo(latestBackup.uploaded, dateSettings) : "暂无"} detail={latestBackup ? latestBackup.name : "请先创建 R2 或本地备份"} />
         <StatusCard label="R2 备份数" value={String(r2Backups.length)} detail={`累计 ${formatSize(totalBackupSize)}`} />
         <StatusCard label="WebDAV 状态" value={webdavConfig.url ? "已配置" : "未配置"} detail={webdavConfig.url || "建议配置第二远程副本"} />
         <StatusCard label="默认恢复策略" value={restoreMode === "merge" ? "合并" : "覆盖"} detail={restoreMode === "merge" ? "跳过已有文章" : "更新已有文章"} />
@@ -505,7 +508,7 @@ export function AdminBackup() {
                         <p className="mt-[2px] text-[11px] text-muted-foreground/35">{backup.key}</p>
                       </div>
                       <span className="text-[12px] text-muted-foreground/55">{formatSize(backup.size)}</span>
-                      <span className="text-[12px] text-muted-foreground/55">{timeAgo(backup.uploaded)}</span>
+                      <span className="text-[12px] text-muted-foreground/55">{timeAgo(backup.uploaded, dateSettings)}</span>
                       <div className="flex justify-end gap-[6px]">
                         <IconButton
                           label="预检并恢复"
