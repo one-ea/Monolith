@@ -470,6 +470,7 @@ export function AdminSettings() {
                       <select value={settings.date_precision} onChange={(e) => updateSetting("date_precision", e.target.value)} className="settings-input h-[40px] w-full">
                         <option value="date">仅日期</option>
                         <option value="datetime">日期 + 时分</option>
+                        <option value="datetime_seconds">日期 + 时分秒</option>
                       </select>
                       <span className="mt-[6px] block text-[11px] leading-[1.5] text-muted-foreground/40">默认仅显示日期，适合保持当前首页与归档的密度。</span>
                     </label>

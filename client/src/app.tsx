@@ -35,15 +35,21 @@ const DynamicPage = lazy(() => import("@/pages/dynamic-page").then((m) => ({ def
 const NotFoundPage = lazy(() => import("@/pages/not-found").then((m) => ({ default: m.NotFoundPage })));
 
 
+const CUSTOM_INJECTION_SANITIZE_CONFIG = {
+  ADD_TAGS: ["script"],
+  ADD_ATTR: ["src", "async", "defer"],
+  FORBID_TAGS: ["style", "iframe", "object", "embed", "form"],
+  FORBID_ATTR: ["onerror", "onload", "onclick", "onmouseover", "onfocus", "onblur"],
+};
+
+function sanitizeCustomHtml(html: string) {
+  return DOMPurify.sanitize(html, CUSTOM_INJECTION_SANITIZE_CONFIG);
+}
+
 /** 将设置中的 HTML/JS 代码安全注入到页面（仅允许外部脚本 src） */
 function injectHtml(container: HTMLElement, html: string) {
   const temp = document.createElement("div");
-  temp.innerHTML = DOMPurify.sanitize(html, {
-    ADD_TAGS: ["script"],
-    ADD_ATTR: ["src", "async", "defer"],
-    FORBID_TAGS: ["style", "iframe", "object", "embed", "form"],
-    FORBID_ATTR: ["onerror", "onload", "onclick", "onmouseover", "onfocus", "onblur"],
-  });
+  temp.innerHTML = sanitizeCustomHtml(html);
   Array.from(temp.childNodes).forEach((node) => {
     if (node instanceof HTMLScriptElement) {
       if (!node.src) return; // 禁止内联脚本，只允许带 src 的外部脚本
@@ -55,6 +61,37 @@ function injectHtml(container: HTMLElement, html: string) {
     } else {
       container.appendChild(node.cloneNode(true));
     }
+  });
+}
+
+const EXTERNAL_RESOURCE_TAGS = new Set(["audio", "embed", "img", "link", "object", "script", "source", "track", "video"]);
+
+function isExternalResourceUrl(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.startsWith("#") || trimmed.startsWith("data:") || trimmed.startsWith("blob:")) return false;
+
+  try {
+    const url = new URL(trimmed, window.location.href);
+    return (url.protocol === "http:" || url.protocol === "https:") && url.origin !== window.location.origin;
+  } catch {
+    return false;
+  }
+}
+
+function hasExternalResources(html: string) {
+  const temp = document.createElement("div");
+  temp.innerHTML = sanitizeCustomHtml(html);
+  return Array.from(temp.querySelectorAll<HTMLElement>("*")).some((node) => {
+    const tagName = node.tagName.toLowerCase();
+    if (EXTERNAL_RESOURCE_TAGS.has(tagName)) {
+      return ["src", "href", "poster", "data"].some((attribute) => {
+        const value = node.getAttribute(attribute);
+        return value ? isExternalResourceUrl(value) : false;
+      });
+    }
+
+    const style = node.getAttribute("style");
+    return Boolean(style && /url\(\s*["']?(?:https?:|\/\/)/i.test(style));
   });
 }
 
@@ -113,8 +150,8 @@ export function App() {
 
     const s = settings;
     syncDocumentBrand(s);
-    const hasThirdParty = (s.custom_header && /<script/i.test(s.custom_header))
-      || (s.custom_footer && /<script/i.test(s.custom_footer));
+    const hasExternalResource = [s.custom_header, s.custom_footer]
+      .some((html) => Boolean(html && hasExternalResources(html)));
 
     const inject = () => {
       if (cancelled) return;
@@ -137,8 +174,8 @@ export function App() {
       }
     };
 
-    // 无第三方脚本则直接注入；有则等 Cookie 同意
-    if (!hasThirdParty) {
+    // 无外部资源则直接注入；有则等 Cookie 同意，避免未同意时发起第三方请求
+    if (!hasExternalResource) {
       inject();
     } else if (getCookieConsent()) {
       inject();

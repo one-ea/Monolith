@@ -32,9 +32,12 @@ export function formatSiteDate(value: string | null | undefined, settings: SiteD
     day: "numeric",
   };
 
-  if (settings.datePrecision === "datetime") {
+  if (settings.datePrecision === "datetime" || settings.datePrecision === "datetime_seconds") {
     options.hour = "2-digit";
     options.minute = "2-digit";
+  }
+  if (settings.datePrecision === "datetime_seconds") {
+    options.second = "2-digit";
   }
 
   try {

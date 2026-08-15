@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "wouter";
 import { BookOpen, ChevronLeft, ChevronRight, List, Menu } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { SeoHead } from "@/components/seo-head";
 import { TableOfContents, ReadingProgressBar } from "@/components/toc";
 import { fetchPost, fetchSeriesPosts, type Post, type SeriesPost } from "@/lib/api";
@@ -148,7 +148,7 @@ export function DocsPage() {
       />
       <ReadingProgressBar />
 
-      <div className="mx-auto w-full max-w-[1180px] px-[16px] sm:px-[20px] lg:px-[32px]">
+      <div className="mx-auto w-full max-w-[1240px] px-[16px] sm:px-[20px] lg:px-[32px] xl:px-[20px]">
         <div className="flex items-center gap-[8px] py-[18px] text-[12px] text-muted-foreground/50">
           <Link href="/" className="transition-colors hover:text-foreground">首页</Link>
           <ChevronRight className="h-[12px] w-[12px]" />
@@ -164,13 +164,13 @@ export function DocsPage() {
               打开文档目录
             </SheetTrigger>
             <SheetContent side="left" className="w-[min(88vw,340px)] bg-background/95 p-[20px] backdrop-blur-xl">
-              <div className="mb-[20px] flex items-center gap-[8px] text-[15px] font-medium text-foreground"><BookOpen className="h-[16px] w-[16px]" />{seriesTitle}</div>
+              <SheetTitle className="mb-[20px] flex items-center gap-[8px] text-[15px]"><BookOpen className="h-[16px] w-[16px]" />{seriesTitle}</SheetTitle>
               <SeriesDirectory seriesSlug={params.seriesSlug} currentSlug={post.slug} posts={seriesPosts} mobile />
             </SheetContent>
           </Sheet>
         </div>
 
-        <div className="grid gap-[28px] pb-[64px] xl:grid-cols-[240px_minmax(0,720px)] xl:gap-[44px]">
+        <div className="grid gap-[28px] pb-[64px] xl:grid-cols-[200px_minmax(0,720px)_180px] xl:gap-[28px]">
           <aside className="hidden xl:block">
             <SeriesDirectory seriesSlug={params.seriesSlug} currentSlug={post.slug} posts={seriesPosts} />
           </aside>
@@ -209,7 +209,7 @@ export function DocsPage() {
             </div>
           </article>
 
-          <div className="hidden xl:block xl:col-start-2">
+          <div className="hidden xl:col-start-3 xl:block">
             {headings.length >= 2 && <TableOfContents headings={headings} />}
           </div>
         </div>

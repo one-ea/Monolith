@@ -1412,6 +1412,10 @@
   background: oklch(0.92 0 0 / 50%);
 }
 
+[data-theme="light"] .series-nav__docs-link:focus-visible {
+  outline-color: oklch(0.35 0 0);
+}
+
 [data-theme="light"] .series-nav__title {
   color: oklch(0.45 0.12 220);
 }

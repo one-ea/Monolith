@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 
-export type SiteDatePrecision = "date" | "datetime";
+export type SiteDatePrecision = "date" | "datetime" | "datetime_seconds";
 
 export type SiteDateSettings = {
   timezone: string;
@@ -70,6 +70,7 @@ type SiteSettingsContextValue = {
 const SiteSettingsContext = createContext<SiteSettingsContextValue | null>(null);
 
 function normalizeDatePrecision(value: string): SiteDatePrecision {
+  if (value === "datetime_seconds") return "datetime_seconds";
   return value === "datetime" ? "datetime" : "date";
 }
 
@@ -79,7 +80,10 @@ export function SiteSettingsProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let cancelled = false;
-    fetch("/api/settings/public")
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), 10_000);
+
+    fetch("/api/settings/public", { signal: controller.signal })
       .then((response) => {
         if (!response.ok) throw new Error("settings request failed");
         return response.json() as Promise<Partial<PublicSiteSettings>>;
@@ -90,11 +94,14 @@ export function SiteSettingsProvider({ children }: { children: ReactNode }) {
       })
       .catch(() => {})
       .finally(() => {
+        window.clearTimeout(timeoutId);
         if (!cancelled) setReady(true);
       });
 
     return () => {
       cancelled = true;
+      window.clearTimeout(timeoutId);
+      controller.abort();
     };
   }, []);
 
