@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { spawnSync } from "node:child_process";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -5,8 +7,18 @@ import process from "node:process";
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const serverRoot = resolve(projectRoot, "server");
-const IS_WIN = process.platform === "win32";
-const SHELL = IS_WIN;
+
+function resolveWranglerCli() {
+  const requireFromServer = createRequire(resolve(serverRoot, "package.json"));
+  const packageJsonPath = requireFromServer.resolve("wrangler/package.json");
+  const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf8"));
+  const bin = typeof packageJson.bin === "string"
+    ? packageJson.bin
+    : packageJson.bin?.wrangler || packageJson.bin?.["cf-wrangler"];
+
+  if (!bin) throw new Error("依赖 wrangler 未声明 CLI 入口");
+  return resolve(dirname(packageJsonPath), bin);
+}
 
 function parseArgs(argv) {
   const options = {
@@ -37,10 +49,9 @@ function parseArgs(argv) {
 }
 
 function runWrangler(args, title) {
-  const result = spawnSync("npx", ["wrangler", ...args], {
+  const result = spawnSync(process.execPath, [resolveWranglerCli(), ...args], {
     cwd: serverRoot,
     encoding: "utf8",
-    shell: SHELL,
   });
 
   if (result.stdout) process.stdout.write(result.stdout);

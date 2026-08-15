@@ -1,12 +1,36 @@
+import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
+import { dirname, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import process from "node:process";
 
 const projectRoot = process.cwd();
-const clientRoot = `${projectRoot}/client`;
+const serverRoot = resolve(projectRoot, "server");
+const clientRoot = resolve(projectRoot, "client");
 const DEFAULT_CLOUDFLARE_ACCOUNT_ID = "9d9474f286c406f50848ac46c7a15877";
-// Windows 下 npm/npx 实际是 .cmd 脚本，必须 shell:true 才能找到
-const IS_WIN = process.platform === "win32";
-const SHELL = IS_WIN;
+
+function resolvePackageBin(packageName, cwd, binName = packageName) {
+  const requireFromCwd = createRequire(resolve(cwd, "package.json"));
+  let packageJsonPath;
+
+  try {
+    packageJsonPath = requireFromCwd.resolve(`${packageName}/package.json`);
+  } catch (error) {
+    throw new Error(`未找到项目依赖 ${packageName}：${error.message}`);
+  }
+
+  const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf8"));
+  const bin = typeof packageJson.bin === "string"
+    ? packageJson.bin
+    : packageJson.bin?.[binName] || packageJson.bin?.[packageName];
+
+  if (!bin) throw new Error(`依赖 ${packageName} 未声明 ${binName} CLI`);
+  return resolve(dirname(packageJsonPath), bin);
+}
+
+function getWranglerCli() {
+  return resolvePackageBin("wrangler", serverRoot);
+}
 
 function parseArgs(argv) {
   const options = {
@@ -67,7 +91,13 @@ function runResult(command, args, extra = {}) {
     stdio: extra.stdio || (extra.input ? ["pipe", "inherit", "inherit"] : "inherit"),
     input: extra.input,
     encoding: "utf8",
-    shell: SHELL,
+  });
+}
+
+function runWrangler(args, extra = {}) {
+  return runResult(process.execPath, [getWranglerCli(), ...args], {
+    ...extra,
+    cwd: extra.cwd || serverRoot,
   });
 }
 
@@ -100,9 +130,9 @@ function runStep(title, command, args, extra = {}) {
   }
 }
 
-function runCapture(title, command, args) {
+function runCapture(title, command, args, extra = {}) {
   console.log(`\n==> ${title}`);
-  const result = runResult(command, args, { stdio: "pipe" });
+  const result = runResult(command, args, { ...extra, stdio: "pipe" });
 
   if (result.stdout) process.stdout.write(result.stdout);
   if (result.stderr) process.stderr.write(result.stderr);
@@ -119,11 +149,7 @@ function checkPrerequisites(options) {
   // wrangler 登录态检测：API_TOKEN 或本机 oauth 二选一
   const tokenPresent = !!process.env.CLOUDFLARE_API_TOKEN;
   if (!tokenPresent) {
-    const probe = spawnSync("npx", ["wrangler", "whoami"], {
-      cwd: projectRoot,
-      encoding: "utf8",
-      shell: SHELL,
-    });
+    const probe = runWrangler(["whoami"], { stdio: "pipe" });
     if (probe.status !== 0) {
       errors.push(
         "未检测到 CLOUDFLARE_API_TOKEN，且本机 wrangler 未登录。请先 `npx wrangler login`，或导出 CLOUDFLARE_API_TOKEN 后重试。",
@@ -161,11 +187,10 @@ function checkPrerequisites(options) {
   }
 
   // Windows 环境卫生提示（非阻断，仅警告）
-  if (IS_WIN) {
+  if (process.platform === "win32") {
     const autocrlfProbe = spawnSync("git", ["config", "--get", "core.autocrlf"], {
       cwd: projectRoot,
       encoding: "utf8",
-      shell: SHELL,
     });
     const autocrlf = (autocrlfProbe.stdout || "").trim();
     if (autocrlf === "true") {
@@ -199,9 +224,9 @@ function ensurePagesProject(projectName, branch) {
   console.log(`[info] 未发现 Pages 项目 "${projectName}"，将自动创建（生产分支：${branch}）。`);
   runStep(
     `创建 Cloudflare Pages 项目 "${projectName}"`,
-    "npx",
+    process.execPath,
     [
-      "wrangler",
+      getWranglerCli(),
       "pages",
       "project",
       "create",
@@ -209,6 +234,7 @@ function ensurePagesProject(projectName, branch) {
       "--production-branch",
       branch,
     ],
+    { cwd: serverRoot },
   );
 }
 
@@ -236,31 +262,34 @@ printPrerequisiteHints();
 checkPrerequisites(options);
 
 if (!options.skipMigrate) {
-  // 绕过 npm workspace shim 直接调 wrangler，避免 Windows 双层 shell 转发吞 stdin
-  // 显式 pipe "y\n" 兜底 wrangler "Ok to proceed?" 交互（非 TTY 环境下也能放行）
   runStep(
     "应用远程数据库迁移",
-    "npx",
-    ["wrangler", "d1", "migrations", "apply", "monolith-db", "--remote"],
-    { cwd: `${projectRoot}/server`, input: "y\n" },
+    process.execPath,
+    [getWranglerCli(), "d1", "migrations", "apply", "monolith-db", "--remote"],
+    { cwd: serverRoot, input: "y\n" },
   );
   runStep(
     "补齐远程 D1 schema 兼容列",
-    "node",
-    ["scripts/reconcile-d1-schema.mjs", "--remote"],
+    process.execPath,
+    [resolve(projectRoot, "scripts/reconcile-d1-schema.mjs"), "--remote"],
   );
 }
 
 if (!options.skipServer) {
-  runStep("写入 Backend 的 ADMIN_PASSWORD", "npx", [
-    "wrangler", "secret", "put", "ADMIN_PASSWORD", "--name", "monolith-server"
-  ], { input: `${process.env.ADMIN_PASSWORD}\n`, cwd: `${projectRoot}/server` });
+  runStep("写入 Backend 的 ADMIN_PASSWORD", process.execPath, [
+    getWranglerCli(), "secret", "put", "ADMIN_PASSWORD", "--name", "monolith-server"
+  ], { input: `${process.env.ADMIN_PASSWORD}\n`, cwd: serverRoot });
 
-  runStep("写入 Backend 的 JWT_SECRET", "npx", [
-    "wrangler", "secret", "put", "JWT_SECRET", "--name", "monolith-server"
-  ], { input: `${process.env.JWT_SECRET}\n`, cwd: `${projectRoot}/server` });
+  runStep("写入 Backend 的 JWT_SECRET", process.execPath, [
+    getWranglerCli(), "secret", "put", "JWT_SECRET", "--name", "monolith-server"
+  ], { input: `${process.env.JWT_SECRET}\n`, cwd: serverRoot });
 
-  const deployOutput = runCapture("部署 Cloudflare Workers 后端", "npm", ["run", "deploy:server"]);
+  const deployOutput = runCapture(
+    "部署 Cloudflare Workers 后端",
+    process.execPath,
+    [getWranglerCli(), "deploy"],
+    { cwd: serverRoot },
+  );
   if (!options.apiBase) {
     options.apiBase = detectWorkersUrl(deployOutput);
   }
@@ -275,7 +304,6 @@ if (!options.skipClient) {
   const pagesEnv = resolvePagesEnv(options.branch);
 
   const pagesSecretArgs = [
-    "wrangler",
     "pages",
     "secret",
     "put",
@@ -286,27 +314,33 @@ if (!options.skipClient) {
     pagesEnv,
   ];
   console.log(`\n==> 写入 Cloudflare Pages 的 API_BASE`);
-  let pagesSecret = runResult("npx", pagesSecretArgs, { input: `${options.apiBase}\n`, stdio: "pipe" });
+  let pagesSecret = runWrangler(pagesSecretArgs, { input: `${options.apiBase}\n`, stdio: "pipe" });
   printResultOutput(pagesSecret);
 
   if (pagesSecret.error || pagesSecret.status !== 0) {
     if (!shouldCreatePagesProject(pagesSecret)) {
-      failStep("写入 Cloudflare Pages 的 API_BASE", "npx", pagesSecret);
+      failStep("写入 Cloudflare Pages 的 API_BASE", "wrangler", pagesSecret);
     }
     console.warn("[warn] Pages 项目不存在，创建后重试 API_BASE 写入。");
     ensurePagesProject(options.pagesProject, options.branch);
     console.log(`\n==> 重试写入 Cloudflare Pages 的 API_BASE`);
-    pagesSecret = runResult("npx", pagesSecretArgs, { input: `${options.apiBase}\n`, stdio: "pipe" });
+    pagesSecret = runWrangler(pagesSecretArgs, { input: `${options.apiBase}\n`, stdio: "pipe" });
     printResultOutput(pagesSecret);
   }
 
   if (pagesSecret.error || pagesSecret.status !== 0) {
-    failStep("写入 Cloudflare Pages 的 API_BASE", "npx", pagesSecret);
+    failStep("写入 Cloudflare Pages 的 API_BASE", "wrangler", pagesSecret);
   }
 
-  runStep("构建前端", "npm", ["run", "build"]);
-  runStep("部署 Cloudflare Pages 前端", "npx", [
-    "wrangler",
+  runStep("编译前端 TypeScript", process.execPath, [
+    resolvePackageBin("typescript", clientRoot, "tsc"),
+  ], { cwd: clientRoot });
+  runStep("构建前端资源", process.execPath, [
+    resolvePackageBin("vite", clientRoot, "vite"),
+    "build",
+  ], { cwd: clientRoot });
+  runStep("部署 Cloudflare Pages 前端", process.execPath, [
+    getWranglerCli(),
     "pages",
     "deploy",
     "dist",
