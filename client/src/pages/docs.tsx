@@ -75,8 +75,16 @@ export function DocsPage() {
         const currentPost = await fetchPost(currentSlug);
         if (!cancelled) setPost(currentPost);
       })
-      .catch(() => {
-        if (!cancelled) setError("文档系列加载失败，请检查链接或稍后重试。");
+      .catch((cause: unknown) => {
+        if (cancelled) return;
+        if (
+          cause instanceof Error
+          && (cause.message === "文档系列不存在" || cause.message === "文章不存在")
+        ) {
+          setError(cause.message);
+          return;
+        }
+        setError("文档系列加载失败，请检查链接或稍后重试。");
       })
       .finally(() => {
         if (!cancelled) setLoading(false);

@@ -203,6 +203,30 @@ function normalizeOptionalEmail(value: unknown): string {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? email : "";
 }
 
+const DEFAULT_SITE_TIMEZONE = "Asia/Shanghai";
+
+function normalizeSiteTimezone(value: unknown): string {
+  if (typeof value !== "string") return DEFAULT_SITE_TIMEZONE;
+  const timezone = value.trim();
+  if (!timezone) return DEFAULT_SITE_TIMEZONE;
+
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: timezone }).format();
+    return timezone;
+  } catch {
+    return DEFAULT_SITE_TIMEZONE;
+  }
+}
+
+function normalizeSettings(settings: unknown): Record<string, string> | undefined {
+  if (!settings || typeof settings !== "object" || Array.isArray(settings)) return undefined;
+  const normalized = { ...(settings as Record<string, string>) };
+  if (Object.prototype.hasOwnProperty.call(normalized, "site_timezone")) {
+    normalized.site_timezone = normalizeSiteTimezone(normalized.site_timezone);
+  }
+  return normalized;
+}
+
 function normalizePublicUrl(value: unknown): string {
   const raw = normalizeText(value, 500);
   if (!raw) return "";
@@ -785,7 +809,7 @@ app.get("/api/settings/public", async (c) => {
     rss_enabled: all.rss_enabled || "true",
     custom_header: all.custom_header || "",
     custom_footer: all.custom_footer || "",
-    site_timezone: all.site_timezone || "Asia/Shanghai",
+    site_timezone: normalizeSiteTimezone(all.site_timezone),
     date_precision: all.date_precision === "datetime_seconds"
       ? "datetime_seconds"
       : all.date_precision === "datetime" ? "datetime" : "date",
@@ -1633,8 +1657,7 @@ app.put("/api/admin/settings", async (c) => {
   const db = c.get("db");
   const parsed = await readJson<Record<string, string>>(c);
   if (!parsed.ok) return parsed.response;
-  const body = parsed.body;
-  await db.saveSettings(body);
+  await db.saveSettings(normalizeSettings(parsed.body) || {});
   return c.json({ success: true });
 });
 
@@ -1833,7 +1856,7 @@ app.post("/api/admin/backup/restore", async (c) => {
     const imported = await db.importAll({
       posts: body.posts,
       tags: body.tags,
-      settings: includeSettings ? body.settings : undefined,
+      settings: includeSettings ? normalizeSettings(body.settings) : undefined,
       mode: body.mode || "merge",
     });
     return c.json({ success: true, imported, mode: body.mode || "merge" });
@@ -1872,7 +1895,7 @@ app.post("/api/admin/backup/r2-restore", async (c) => {
     const imported = await db.importAll({
       posts: data.posts as Parameters<typeof db.importAll>[0]["posts"],
       tags: data.tags as Parameters<typeof db.importAll>[0]["tags"],
-      settings: (includeSettings ?? true) ? data.settings : undefined,
+      settings: (includeSettings ?? true) ? normalizeSettings(data.settings) : undefined,
       mode: mode || "merge",
     });
     return c.json({ success: true, imported, source: name, mode: mode || "merge" });
