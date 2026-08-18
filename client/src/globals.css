@@ -2868,7 +2868,8 @@
 
 /* ── 玻璃卡片：半透明表面 + 渐变高光边框 ── */
 [data-style="fluid"] .bg-card[class*="border"],
-[data-style="fluid"] .bg-popover {
+[data-style="fluid"] .bg-popover,
+[data-style="fluid"] article[class*="border"] {
   background:
     linear-gradient(color-mix(in oklch, var(--card) 96%, transparent), color-mix(in oklch, var(--card) 96%, transparent)) padding-box,
     linear-gradient(135deg, var(--glass-border), color-mix(in oklch, var(--card) 35%, transparent), var(--glass-border)) border-box;
