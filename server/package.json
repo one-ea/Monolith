@@ -31,6 +31,6 @@
     "eslint": "^10.9.1",
     "eslint-plugin-security": "^4.0.1",
     "typescript": "^5.7.0",
-    "wrangler": "^4.127.1"
+    "wrangler": "^4.131.0"
   }
 }
