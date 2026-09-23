@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "skills": {
+    "find-skills": {
+      "source": "vercel-labs/skills",
+      "sourceType": "github",
+      "skillPath": "skills/find-skills/SKILL.md",
+      "computedHash": "b146008599c31057cef1c145774cea5d5afb30e8f43fa802e47a4b461419aaaf"
+    },
+    "human-writing": {
+      "source": "KKKKhazix/human-writing",
+      "sourceType": "github",
+      "skillPath": "human-writing/SKILL.md",
+      "computedHash": "1f5817f8943b77f4d8188e2f534b4f648f4c2fdcc7feb7d42c5f976c7ada8fc9"
+    },
+    "ip-as-logo": {
+      "source": "s1dashu/ip-as-logo-skill",
+      "sourceType": "github",
+      "skillPath": "SKILL.md",
+      "computedHash": "a5c61fb7c674373537cdfcb132640439b5f26008cd26b10b550c2cc9cd3acd59"
+    }
+  }
+}
