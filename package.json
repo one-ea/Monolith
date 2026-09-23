@@ -7,7 +7,9 @@
     "server"
   ],
   "scripts": {
-    "dev": "npx concurrently -n server,client -c blue,green \"npm run dev:server\" \"npm run dev:client\"",
+    "setup:local": "npm ci",
+    "doctor:local": "node scripts/check-local-env.mjs",
+    "dev": "concurrently -n server,client -c blue,green \"npm run dev:server\" \"npm run dev:client\"",
     "dev:client": "npm -w monolith-client run dev",
     "dev:server": "npm -w monolith-server run dev",
     "build": "npm -w monolith-client run build",
@@ -22,27 +24,34 @@
     "db:migrate:remote": "npm -w monolith-server run db:migrate:remote",
     "db:seed:local": "npm -w monolith-server run db:seed:local",
     "db:seed:test-posts:local": "npm -w monolith-server run db:seed:test-posts:local",
-    "check": "npm -ws run check",
-    "lint": "npm -ws run lint"
+    "check": "npm --workspaces run check",
+    "lint": "npm --workspaces run lint"
   },
   "engines": {
     "node": ">=22"
   },
   "devDependencies": {
-    "concurrently": "^9.2.4"
+    "brace-expansion": "5.0.9",
+    "concurrently": "^9.2.4",
+    "undici": "7.29.0"
   },
   "overrides": {
     "@babel/core": "^7.29.6",
     "@babel/plugin-transform-modules-systemjs": "7.29.4",
-    "brace-expansion": "5.0.6",
-    "dompurify": "3.4.11",
+    "body-parser": "2.3.0",
+    "brace-expansion": "5.0.9",
+    "dompurify": "3.4.14",
     "esbuild": "0.28.1",
     "express-rate-limit": "8.5.2",
     "fast-uri": "3.1.7",
     "fast-xml-builder": "1.1.7",
     "ip-address": "10.4.0",
+    "monaco-editor": {
+      "dompurify": "3.4.14"
+    },
     "serialize-javascript": "7.0.5",
-    "shell-quote": "1.8.4",
+    "qs": "6.16.0",
+    "shell-quote": "1.9.0",
     "undici": "7.29.0",
     "ws": "8.21.0"
   }

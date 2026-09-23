@@ -3,6 +3,7 @@ import process from "node:process";
 
 const projectRoot = process.cwd();
 const clientRoot = `${projectRoot}/client`;
+const DEFAULT_CLOUDFLARE_ACCOUNT_ID = "9d9474f286c406f50848ac46c7a15877";
 // Windows 下 npm/npx 实际是 .cmd 脚本，必须 shell:true 才能找到
 const IS_WIN = process.platform === "win32";
 const SHELL = IS_WIN;
@@ -59,11 +60,19 @@ function parseArgs(argv) {
 function runResult(command, args, extra = {}) {
   return spawnSync(command, args, {
     cwd: extra.cwd || projectRoot,
+    env: {
+      ...process.env,
+      CLOUDFLARE_ACCOUNT_ID: getCloudflareAccountId(),
+    },
     stdio: extra.stdio || (extra.input ? ["pipe", "inherit", "inherit"] : "inherit"),
     input: extra.input,
     encoding: "utf8",
     shell: SHELL,
   });
+}
+
+function getCloudflareAccountId() {
+  return process.env.CLOUDFLARE_ACCOUNT_ID || DEFAULT_CLOUDFLARE_ACCOUNT_ID;
 }
 
 function failStep(title, command, result) {
@@ -126,7 +135,7 @@ function checkPrerequisites(options) {
     console.log("[ok] 检测到 CLOUDFLARE_API_TOKEN。");
   }
 
-  if (!process.env.CLOUDFLARE_ACCOUNT_ID && tokenPresent) {
+  if (!getCloudflareAccountId() && tokenPresent) {
     errors.push(
       "已设置 CLOUDFLARE_API_TOKEN 但未设置 CLOUDFLARE_ACCOUNT_ID。Token 模式下必须显式提供账户 ID。",
     );
@@ -218,7 +227,7 @@ function printPrerequisiteHints() {
     console.warn("[warn] 未检测到 CLOUDFLARE_API_TOKEN，当前依赖本机 wrangler 已登录状态。");
   }
   if (!process.env.CLOUDFLARE_ACCOUNT_ID) {
-    console.warn("[warn] 未检测到 CLOUDFLARE_ACCOUNT_ID，如在 GitHub Actions 中运行请务必配置该变量。");
+    console.warn("[warn] 未检测到 CLOUDFLARE_ACCOUNT_ID，将使用项目默认 Cloudflare Account ID。");
   }
 }
 
