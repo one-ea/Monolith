@@ -1,4 +1,4 @@
-CREATE TABLE `post_versions` (
+CREATE TABLE IF NOT EXISTS `post_versions` (
 	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
 	`post_id` integer NOT NULL,
 	`title` text NOT NULL,

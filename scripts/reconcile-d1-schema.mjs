@@ -100,6 +100,10 @@ function addColumn(options, column) {
 }
 
 const POST_COLUMNS = [
+  { name: "view_count", sql: "view_count INTEGER NOT NULL DEFAULT 0" },
+  { name: "pinned", sql: "pinned INTEGER NOT NULL DEFAULT 0" },
+  { name: "publish_at", sql: "publish_at TEXT" },
+  { name: "cover_image", sql: "cover_image TEXT DEFAULT ''" },
   { name: "series_slug", sql: "series_slug TEXT" },
   { name: "series_order", sql: "series_order INTEGER NOT NULL DEFAULT 0" },
   { name: "category", sql: "category TEXT DEFAULT ''" },

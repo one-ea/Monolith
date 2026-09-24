@@ -551,12 +551,16 @@ app.get("/api/search", async (c) => {
   return c.json(results);
 });
 
+function isPublicPost(post: { published: boolean; listed: boolean; publishAt: string | null }): boolean {
+  return post.published && post.listed && (!post.publishAt || Date.parse(post.publishAt) <= Date.now());
+}
+
 // 获取单篇文章（同时异步递增浏览量）
 app.get("/api/posts/:slug", async (c) => {
   const slug = c.req.param("slug");
   const db = c.get("db");
   const post = await db.getPostBySlug(slug);
-  if (!post) return c.json({ error: "文章未找到" }, 404);
+  if (!post || !isPublicPost(post)) return c.json({ error: "文章未找到" }, 404);
   c.header("Cache-Control", "public, max-age=60, s-maxage=300, stale-while-revalidate=600");
 
   // 异步递增浏览量 + 记录日访问量——不阻塞响应
@@ -624,6 +628,8 @@ app.get("/api/categories", async (c) => {
 app.get("/api/posts/:slug/comments", async (c) => {
   const slug = c.req.param("slug");
   const db = c.get("db");
+  const post = await db.getPostBySlug(slug);
+  if (!post || !isPublicPost(post)) return c.json({ error: "文章未找到" }, 404);
   const comments = await db.getApprovedComments(slug);
   const safe = comments.map(({ author_email, authorEmail, ...rest }: any) => rest);
   return c.json(safe);
@@ -652,6 +658,8 @@ app.post("/api/posts/:slug/comments", async (c) => {
   }
 
   const db = c.get("db");
+  const post = await db.getPostBySlug(slug);
+  if (!post || !isPublicPost(post)) return c.json({ error: "文章未找到" }, 404);
   try {
     await db.addComment({
       postSlug: slug,
@@ -751,6 +759,8 @@ app.post("/api/guestbook", async (c) => {
 app.get("/api/posts/:slug/reactions", async (c) => {
   const slug = c.req.param("slug");
   const db = c.get("db");
+  const post = await db.getPostBySlug(slug);
+  if (!post || !isPublicPost(post)) return c.json({ error: "文章未找到" }, 404);
   const reactions = await db.getReactions(slug);
   return c.json(reactions);
 });
@@ -1449,6 +1459,29 @@ function isSafeImageUrl(url: string): boolean {
   }
 }
 
+async function fetchImageWithLimit(url: string): Promise<{ body: ArrayBuffer; contentType: string }> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 10_000);
+  try {
+    const response = await fetch(url, {
+      headers: { "User-Agent": "Monolith-Bot/1.0" },
+      signal: controller.signal,
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const contentType = response.headers.get("content-type") || "";
+    if (!contentType.startsWith("image/")) throw new Error("响应不是图片");
+    const contentLength = Number(response.headers.get("content-length"));
+    if (Number.isFinite(contentLength) && contentLength > 10 * 1024 * 1024) {
+      throw new Error("图片超过 10MB 限制");
+    }
+    const content = await response.arrayBuffer();
+    if (content.byteLength > 10 * 1024 * 1024) throw new Error("图片超过 10MB 限制");
+    return { body: content, contentType };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 // 单篇文章：外链图片转本地
 app.post("/api/admin/posts/:slug/localize-images", async (c) => {
   const slug = c.req.param("slug");
@@ -1475,16 +1508,7 @@ app.post("/api/admin/posts/:slug/localize-images", async (c) => {
       continue;
     }
     try {
-      const abortCtrl = new AbortController();
-      const timeoutId = setTimeout(() => abortCtrl.abort(), 10000); // 10秒超时
-      const resp = await fetch(url, { headers: { "User-Agent": "Monolith-Bot/1.0" }, signal: abortCtrl.signal });
-      clearTimeout(timeoutId);
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-
-      const contentLength = resp.headers.get("content-length");
-      if (contentLength && parseInt(contentLength) > 10 * 1024 * 1024) throw new Error("图片超过 10MB 限制");
-
-      const contentType = resp.headers.get("content-type") || "image/png";
+      const { body: arrayBuf, contentType } = await fetchImageWithLimit(url);
       const ext = contentType.includes("jpeg") || contentType.includes("jpg") ? "jpg"
         : contentType.includes("png") ? "png"
         : contentType.includes("gif") ? "gif"
@@ -1493,7 +1517,6 @@ app.post("/api/admin/posts/:slug/localize-images", async (c) => {
         : "png";
 
       const key = `uploads/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
-      const arrayBuf = await resp.arrayBuffer();
       const stream = new ReadableStream({
         start(controller) {
           controller.enqueue(new Uint8Array(arrayBuf));
@@ -1541,10 +1564,7 @@ app.post("/api/admin/localize-all-images", async (c) => {
     for (const url of externalUrls) {
       if (!isSafeImageUrl(url)) { failed++; continue; }
       try {
-        const resp = await fetch(url, { headers: { "User-Agent": "Monolith-Bot/1.0" } });
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-
-        const contentType = resp.headers.get("content-type") || "image/png";
+        const { body: arrayBuf, contentType } = await fetchImageWithLimit(url);
         const ext = contentType.includes("jpeg") || contentType.includes("jpg") ? "jpg"
           : contentType.includes("png") ? "png"
           : contentType.includes("gif") ? "gif"
@@ -1553,7 +1573,6 @@ app.post("/api/admin/localize-all-images", async (c) => {
           : "png";
 
         const key = `uploads/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
-        const arrayBuf = await resp.arrayBuffer();
         const stream = new ReadableStream({
           start(controller) {
             controller.enqueue(new Uint8Array(arrayBuf));

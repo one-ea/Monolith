@@ -76,6 +76,7 @@ export class D1Adapter implements IDatabase {
       comments: ["id", "post_id", "author_name", "author_email", "content", "approved", "created_at"],
       guestbook_messages: ["id", "author_name", "author_email", "content", "approved", "created_at"],
       friend_links: ["id", "name", "url", "description", "avatar_url", "owner_name", "owner_email", "status", "source", "sort_order", "created_at", "updated_at", "reviewed_at"],
+      post_versions: ["id", "post_id", "title", "content", "excerpt", "created_at"],
       reactions: ["id", "post_slug", "type", "ip_hash", "created_at"],
       visits: ["id", "path", "country", "referer_domain", "device_type", "created_at"],
     };
