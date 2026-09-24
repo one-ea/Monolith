@@ -25,17 +25,31 @@
     <link rel="alternate" type="application/rss+xml" title="Monolith RSS" href="/rss.xml" />
   </head>
   <body class="min-h-full flex flex-col font-sans bg-background text-foreground">
-    <!-- 主题初始化：在 React 加载前设置 data-theme，防止闪烁 -->
+    <!-- 主题初始化：在 React 加载前设置 data-theme / data-style，防止闪烁 -->
     <script>
       (function(){
-        var t = localStorage.getItem('theme') || 'dark';
-        var d = t === 'system'
+        // 明暗模式（白名单校验，异常回退默认，防止非法值/存储阻断中断初始化）
+        var t = null;
+        try { t = localStorage.getItem('theme'); } catch (e) {}
+        var validModes = ['dark', 'light', 'system'];
+        var mode = validModes.indexOf(t) >= 0 ? t : 'dark';
+        var d = mode === 'system'
           ? (window.matchMedia('(prefers-color-scheme:dark)').matches ? 'dark' : 'light')
-          : t;
+          : mode;
         document.documentElement.setAttribute('data-theme', d);
+        // 视觉风格（多主题，白名单校验）
+        var st = null;
+        try { st = localStorage.getItem('monolith-theme-style'); } catch (e) {}
+        var validStyles = ['default', 'fluid'];
+        var style = validStyles.indexOf(st) >= 0 ? st : 'default';
+        document.documentElement.setAttribute('data-style', style);
         // 同步 theme-color
         var m = document.querySelector('meta[name="theme-color"]');
-        if (m) m.setAttribute('content', d === 'light' ? '#ffffff' : '#0a0a0f');
+        if (m) {
+          m.setAttribute('content', style === 'fluid'
+            ? (d === 'light' ? '#f6f4fb' : '#0d0b1a')
+            : (d === 'light' ? '#ffffff' : '#0a0a0f'));
+        }
       })();
     </script>
     <div id="root" class="min-h-screen flex flex-col"></div>

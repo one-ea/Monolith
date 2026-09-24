@@ -12,7 +12,18 @@ interface Env {
   ASSETS: { fetch: (request: Request) => Promise<Response> };
 }
 
-export const onRequest: PagesFunction<Env> = async (context) => {
+const withHsts: PagesFunction<Env> = async (context) => {
+  const response = await context.next();
+  if (new URL(context.request.url).protocol !== "https:") return response;
+  if (response.headers.has("Strict-Transport-Security")) return response;
+
+  // Match the backend policy without overriding headers from downstream handlers.
+  const secured = new Response(response.body, response);
+  secured.headers.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains; preload");
+  return secured;
+};
+
+const prerender: PagesFunction<Env> = async (context) => {
   const { request } = context;
   const url = new URL(request.url);
   const pathname = url.pathname;
@@ -143,3 +154,5 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     return context.next();
   }
 };
+
+export const onRequest = [withHsts, prerender];

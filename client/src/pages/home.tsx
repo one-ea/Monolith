@@ -351,7 +351,7 @@ export function HomePage() {
         <AnimateIn>
           <Link
             href={`/posts/${latestPost.slug}`}
-            className="group mt-[28px] grid rounded-md border border-border/20 bg-card/[0.12] p-[18px] transition-all duration-300 hover:-translate-y-[2px] hover:border-border/45 hover:bg-card/[0.18] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring md:grid-cols-[112px_minmax(0,1fr)_auto] md:items-center md:gap-[22px]"
+            className="group glass-surface mt-[28px] grid rounded-md border border-border/20 bg-card/[0.12] p-[18px] transition-all duration-300 hover:-translate-y-[2px] hover:border-border/45 hover:bg-card/[0.18] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring md:grid-cols-[112px_minmax(0,1fr)_auto] md:items-center md:gap-[22px]"
           >
             <div className="flex items-center gap-[8px] font-mono text-[11px] text-muted-foreground/46">
               <span className="h-[6px] w-[6px] rounded-full bg-foreground/42" />
