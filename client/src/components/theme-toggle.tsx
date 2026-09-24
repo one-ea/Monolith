@@ -33,6 +33,24 @@ const MODE_OPTIONS: {
   { id: "system", name: "跟随系统", icon: Monitor },
 ];
 
+function getStoredMode(): PaletteMode {
+  try {
+    const value = localStorage.getItem("theme");
+    return value === "dark" || value === "light" || value === "system" ? value : "dark";
+  } catch {
+    return "dark";
+  }
+}
+
+function getStoredStyle(): ThemeStyle {
+  try {
+    const value = localStorage.getItem(STYLE_KEY);
+    return value === "default" || value === "fluid" ? value : "default";
+  } catch {
+    return "default";
+  }
+}
+
 /** 根据 mode 获取实际生效的明暗模式 */
 function getEffectiveMode(mode: PaletteMode): "dark" | "light" {
   if (mode === "system") {
@@ -59,14 +77,11 @@ function applyTheme(mode: PaletteMode, style: ThemeStyle) {
 }
 
 export function ThemeToggle() {
-  const [mode, setMode] = useState<PaletteMode>(() => {
-    return (localStorage.getItem("theme") as PaletteMode) || "dark";
-  });
-  const [style, setStyle] = useState<ThemeStyle>(() => {
-    return (localStorage.getItem(STYLE_KEY) as ThemeStyle) || "default";
-  });
+  const [mode, setMode] = useState<PaletteMode>(getStoredMode);
+  const [style, setStyle] = useState<ThemeStyle>(getStoredStyle);
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
 
   // 应用主题（模式或风格变化时）
   useEffect(() => {
@@ -85,7 +100,7 @@ export function ThemeToggle() {
     return () => mql.removeEventListener("change", handler);
   }, [mode, style]);
 
-  // 点击外部关闭面板
+  // 点击外部或 Escape 关闭面板
   useEffect(() => {
     if (!open) return;
     const onDown = (e: MouseEvent | TouchEvent) => {
@@ -93,11 +108,19 @@ export function ThemeToggle() {
         setOpen(false);
       }
     };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setOpen(false);
+        triggerRef.current?.focus();
+      }
+    };
     document.addEventListener("mousedown", onDown);
     document.addEventListener("touchstart", onDown);
+    document.addEventListener("keydown", onKeyDown);
     return () => {
       document.removeEventListener("mousedown", onDown);
       document.removeEventListener("touchstart", onDown);
+      document.removeEventListener("keydown", onKeyDown);
     };
   }, [open]);
 
@@ -106,9 +129,11 @@ export function ThemeToggle() {
   return (
     <div className="relative" ref={rootRef}>
       <button
+        ref={triggerRef}
         onClick={() => setOpen((o) => !o)}
         title="主题设置"
         aria-label="主题设置"
+        aria-haspopup="menu"
         aria-expanded={open}
         className="inline-flex h-[44px] w-[44px] items-center justify-center rounded-md text-muted-foreground/55 transition-all duration-200 hover:bg-accent/30 hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring sm:h-[32px] sm:w-[32px]"
       >

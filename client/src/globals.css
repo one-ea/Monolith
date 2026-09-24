@@ -1091,7 +1091,7 @@
   position: sticky;
   left: 0;
   z-index: 10;
-  background: var(--code-bg);
+  background: var(--code-line-num-bg);
 }
 
 /* 有行号时调整 pre 左边距 */
@@ -2505,7 +2505,9 @@
   --code-line-num-text: inherit;
   --code-line-num-border: transparent;
   --code-line-bg: oklch(0.13 0.02 275);
+  --code-line-num-bg: oklch(0.13 0.02 275);
   --glass-border: oklch(0.72 0.14 300 / 55%);
+  --border-strong: oklch(1 0.03 280 / 24%);
   --code-mobile-radius: 8px;
 
   /* 代码高亮（青紫系） */
@@ -2704,6 +2706,7 @@
   --code-line-num-border: oklch(0.40 0.04 290 / 10%);
   --code-line-bg: oklch(0.965 0.01 290);
   --glass-border: oklch(0.60 0.12 295 / 55%);
+  --border-strong: oklch(0.40 0.03 285 / 24%);
   --code-mobile-radius: 0;
 
   /* 代码高亮（青紫系） */
@@ -2867,9 +2870,9 @@
 }
 
 /* ── 玻璃卡片：半透明表面 + 渐变高光边框 ── */
-[data-style="fluid"] .bg-card[class*="border"],
+[data-style="fluid"] .bg-card.glass-surface,
 [data-style="fluid"] .bg-popover,
-[data-style="fluid"] article[class*="border"] {
+[data-style="fluid"] article.glass-surface {
   background:
     linear-gradient(color-mix(in oklch, var(--card) 96%, transparent), color-mix(in oklch, var(--card) 96%, transparent)) padding-box,
     linear-gradient(135deg, var(--glass-border), color-mix(in oklch, var(--card) 35%, transparent), var(--glass-border)) border-box;
@@ -2886,7 +2889,7 @@
   background: color-mix(in oklch, var(--background) 55%, transparent);
   backdrop-filter: blur(24px) saturate(1.5);
   -webkit-backdrop-filter: blur(24px) saturate(1.5);
-  border-bottom-color: color-mix(in oklch, var(--border) 130%, transparent);
+  border-bottom-color: var(--border-strong);
 }
 
 /* 阅读进度条：青紫渐变 */
@@ -2933,8 +2936,15 @@
 /* prefers-reduced-motion：装饰层动画关闭 */
 @media (prefers-reduced-motion: reduce) {
   [data-style="fluid"] body::before,
-  [data-style="fluid"] body::after {
+  [data-style="fluid"] body::after,
+  [data-style="fluid"] .delay-1,
+  [data-style="fluid"] .delay-2,
+  [data-style="fluid"] .delay-3,
+  [data-style="fluid"] .delay-4,
+  [data-style="fluid"] .delay-5,
+  [data-style="fluid"] .delay-6 {
     animation: none !important;
+    animation-delay: 0ms !important;
   }
 }
 

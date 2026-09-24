@@ -67,7 +67,7 @@ export function ArticleCard({ post }: { post: PostMeta }) {
       style={style}
     >
       <article
-        className={`relative flex h-[var(--article-card-height)] overflow-hidden rounded-md border border-border/20 bg-background/30 transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-[2px] hover:border-border/55 hover:bg-card/28 ${isBackground ? "bg-card/18" : ""}`}
+        className={`relative glass-surface flex h-[var(--article-card-height)] overflow-hidden rounded-md border border-border/20 bg-background/30 transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-[2px] hover:border-border/55 hover:bg-card/28 ${isBackground ? "bg-card/18" : ""}`}
       >
         {imageMode === "background" && (
           <>
