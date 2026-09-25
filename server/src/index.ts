@@ -777,6 +777,10 @@ app.post("/api/posts/:slug/reactions", async (c) => {
     return c.json({ error: "无效的反应类型" }, 400);
   }
 
+  const db = c.get("db");
+  const post = await db.getPostBySlug(slug);
+  if (!post || !isPublicPost(post)) return c.json({ error: "文章未找到" }, 404);
+
   // IP hash 去重（使用环境变量盐值，避免源码泄露后可反推）
   const ip = c.req.header("CF-Connecting-IP") || c.req.header("X-Forwarded-For") || "unknown";
   const reactionSalt = c.env.REACTION_SALT || "monolith-reaction-default";
@@ -786,7 +790,6 @@ app.post("/api/posts/:slug/reactions", async (c) => {
   const hashArray = Array.from(new Uint8Array(hashBuffer));
   const ipHash = hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
 
-  const db = c.get("db");
   const result = await db.toggleReaction(slug, body.type, ipHash);
   const reactions = await db.getReactions(slug);
   return c.json({ ...result, reactions });
