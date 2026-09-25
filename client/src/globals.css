@@ -126,6 +126,7 @@
   --code-title-border: oklch(1 0 0 / 6%);
   --code-title-text: oklch(0.55 0 0);
   --code-line-text: oklch(0.35 0 0);
+  --code-line-num-bg: var(--code-bg);
   --code-copy-bg: oklch(1 0 0 / 4%);
   --code-copy-border: oklch(1 0 0 / 8%);
   --code-copy-text: oklch(0.45 0 0);
@@ -323,6 +324,7 @@
   --code-title-border: oklch(0 0 0 / 8%);
   --code-title-text: oklch(0.45 0 0);
   --code-line-text: oklch(0.65 0 0);
+  --code-line-num-bg: var(--code-bg);
   --code-copy-bg: oklch(0.93 0 0);
   --code-copy-border: oklch(0 0 0 / 10%);
   --code-copy-text: oklch(0.45 0 0);
@@ -2871,6 +2873,7 @@
 
 /* ── 玻璃卡片：半透明表面 + 渐变高光边框 ── */
 [data-style="fluid"] .bg-card.glass-surface,
+[data-style="fluid"] .bg-card\/\[0\.12\].glass-surface,
 [data-style="fluid"] .bg-popover,
 [data-style="fluid"] article.glass-surface {
   background:

@@ -86,8 +86,12 @@ export function ThemeToggle() {
   // 应用主题（模式或风格变化时）
   useEffect(() => {
     applyTheme(mode, style);
-    localStorage.setItem("theme", mode);
-    localStorage.setItem(STYLE_KEY, style);
+    try {
+      localStorage.setItem("theme", mode);
+      localStorage.setItem(STYLE_KEY, style);
+    } catch {
+      // 主题仍在内存中生效，持久化失败不应中断页面运行。
+    }
   }, [mode, style]);
 
   // system 模式下监听系统明暗变化
@@ -133,7 +137,6 @@ export function ThemeToggle() {
         onClick={() => setOpen((o) => !o)}
         title="主题设置"
         aria-label="主题设置"
-        aria-haspopup="menu"
         aria-expanded={open}
         className="inline-flex h-[44px] w-[44px] items-center justify-center rounded-md text-muted-foreground/55 transition-all duration-200 hover:bg-accent/30 hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring sm:h-[32px] sm:w-[32px]"
       >

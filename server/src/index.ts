@@ -552,7 +552,7 @@ app.get("/api/search", async (c) => {
 });
 
 function isPublicPost(post: { published: boolean; listed: boolean; publishAt: string | null }): boolean {
-  return post.published && post.listed && (!post.publishAt || Date.parse(post.publishAt) <= Date.now());
+  return post.published && (!post.publishAt || Date.parse(post.publishAt) <= Date.now());
 }
 
 // 获取单篇文章（同时异步递增浏览量）
@@ -1474,9 +1474,31 @@ async function fetchImageWithLimit(url: string): Promise<{ body: ArrayBuffer; co
     if (Number.isFinite(contentLength) && contentLength > 10 * 1024 * 1024) {
       throw new Error("图片超过 10MB 限制");
     }
-    const content = await response.arrayBuffer();
-    if (content.byteLength > 10 * 1024 * 1024) throw new Error("图片超过 10MB 限制");
-    return { body: content, contentType };
+    if (!response.body) throw new Error("图片响应没有内容");
+    const reader = response.body.getReader();
+    const chunks: Uint8Array[] = [];
+    let total = 0;
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        total += value.byteLength;
+        if (total > 10 * 1024 * 1024) {
+          await reader.cancel();
+          throw new Error("图片超过 10MB 限制");
+        }
+        chunks.push(value);
+      }
+    } finally {
+      reader.releaseLock();
+    }
+    const body = new Uint8Array(total);
+    let offset = 0;
+    for (const chunk of chunks) {
+      body.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+    return { body: body.buffer, contentType };
   } finally {
     clearTimeout(timeout);
   }

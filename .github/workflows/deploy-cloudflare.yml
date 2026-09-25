@@ -86,7 +86,7 @@ jobs:
           if [ -n "${MONOLITH_API_BASE}" ]; then args+=(--api-base "${MONOLITH_API_BASE}"); fi
           npm run deploy:cloudflare -- "${args[@]}"
         env:
-          TARGET_BRANCH: ${{ github.event.inputs.branch || 'main' }}
+          TARGET_BRANCH: ${{ github.event.inputs.branch || github.ref_name }}
           SKIP_MIGRATE: ${{ github.event.inputs.skip_migrate || 'false' }}
           SKIP_SERVER: ${{ github.event.inputs.skip_server || 'false' }}
           SKIP_CLIENT: ${{ github.event.inputs.skip_client || 'false' }}
