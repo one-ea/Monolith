@@ -6,12 +6,11 @@ compatibility_flags = ["nodejs_compat"]
 
 [vars]
 # 非敏感配置变量（敏感的用 wrangler secret put）
-BLOG_NAME = "Monolith"
-# 对外公开域名（用于 sitemap.xml / robots.txt 的绝对 URL）
+# 对外公开域名（用于 sitemap.xml / robots.txt 的绝对 URL）；控制台 site_origin 优先，留空时回退此值
 SITE_ORIGIN = "https://monolith-client.pages.dev"
 # 运行时默认不做建表/补列；部署流程负责迁移与 schema reconcile。
 AUTO_SCHEMA_MIGRATION = "false"
-# AE GraphQL 查询所需的账户 ID（非敏感；查询令牌走 CLOUDFLARE_API_TOKEN secret）
+# AE GraphQL 查询所需的账户 ID；控制台 cloudflare_account_id 优先，留空时回退此值
 CLOUDFLARE_ACCOUNT_ID = "9d9474f286c406f50848ac46c7a15877"
 
 # D1 数据库绑定

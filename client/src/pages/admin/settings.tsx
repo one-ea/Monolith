@@ -44,6 +44,7 @@ type Settings = {
   webhook_urls: string;
   resend_from: string;
   admin_email: string;
+  cloudflare_account_id: string;
   jwt_session_days: string;
   login_rate_limit: string;
   login_rate_window_minutes: string;
@@ -95,6 +96,7 @@ const defaultSettings: Settings = {
   webhook_urls: "",
   resend_from: "",
   admin_email: "",
+  cloudflare_account_id: "",
   jwt_session_days: "7",
   login_rate_limit: "5",
   login_rate_window_minutes: "15",
@@ -975,6 +977,7 @@ export function AdminSettings() {
                   />
                   <SettingField label="发件人地址" value={settings.resend_from} onChange={(v) => updateSetting("resend_from", v)} placeholder="Monolith Bot <blog@example.com>" mono hint="回退部署变量 RESEND_FROM；须为 Resend 已验证域名的地址。" />
                   <SettingField label="管理员收件邮箱" value={settings.admin_email} onChange={(v) => updateSetting("admin_email", v)} placeholder="admin@example.com" mono hint="接收新评论与友链申请提醒；回退部署变量 ADMIN_EMAIL。" />
+                  <SettingField label="Cloudflare Account ID（AE 查询）" value={settings.cloudflare_account_id} onChange={(v) => updateSetting("cloudflare_account_id", v)} placeholder="32 位账户 ID" mono hint="非敏感配置，可从 Cloudflare Dashboard 账户概览复制；留空回退 Workers 变量 CLOUDFLARE_ACCOUNT_ID。" />
                 </div>
               </div>
             </div>

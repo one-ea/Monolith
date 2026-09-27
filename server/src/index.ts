@@ -1357,9 +1357,11 @@ app.get("/api/admin/analytics/ae", async (c) => {
       provider,
     }, 501);
   }
-  if (!c.env.CLOUDFLARE_ACCOUNT_ID || !c.env.CLOUDFLARE_API_TOKEN) {
+  const settings = await c.get("db").getSettings();
+  const accountId = settings.cloudflare_account_id?.trim() || c.env.CLOUDFLARE_ACCOUNT_ID || "";
+  if (!accountId || !c.env.CLOUDFLARE_API_TOKEN) {
     return c.json({
-      error: "Missing CLOUDFLARE_ACCOUNT_ID / CLOUDFLARE_API_TOKEN secrets",
+      error: "Missing CLOUDFLARE_API_TOKEN or Cloudflare account ID; configure the token as a Worker secret and the account ID in the admin console or wrangler vars.",
     }, 503);
   }
 
@@ -1370,7 +1372,7 @@ app.get("/api/admin/analytics/ae", async (c) => {
     const db = c.get("db");
     const posts = await db.getPublishedPosts();
     const data = await queryAEAnalytics(
-      { CLOUDFLARE_ACCOUNT_ID: c.env.CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_API_TOKEN: c.env.CLOUDFLARE_API_TOKEN },
+      { CLOUDFLARE_ACCOUNT_ID: accountId, CLOUDFLARE_API_TOKEN: c.env.CLOUDFLARE_API_TOKEN },
       Math.min(days, 31),
       posts,
     );
@@ -1828,9 +1830,11 @@ app.get("/api/admin/turnstile-status", async (c) => {
 
 // AE 配置状态（仅返回布尔值；凭据必须留在 Workers secret/var，不进 D1 设置）
 app.get("/api/admin/ae-status", async (c) => {
+  const settings = await c.get("db").getSettings();
   return c.json({
     tokenConfigured: typeof c.env.CLOUDFLARE_API_TOKEN === "string" && c.env.CLOUDFLARE_API_TOKEN.length > 0,
-    accountConfigured: typeof c.env.CLOUDFLARE_ACCOUNT_ID === "string" && c.env.CLOUDFLARE_ACCOUNT_ID.length > 0,
+    accountConfigured: Boolean(settings.cloudflare_account_id?.trim() || c.env.CLOUDFLARE_ACCOUNT_ID),
+    effectiveAccountId: settings.cloudflare_account_id?.trim() || c.env.CLOUDFLARE_ACCOUNT_ID || "",
     aeBindingAvailable: Boolean(c.env.AE),
   });
 });
