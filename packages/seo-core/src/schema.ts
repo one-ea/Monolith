@@ -20,7 +20,8 @@ export function buildJsonLdGraph(doc: PageDocument): { "@context": string; "@gra
       url: `${origin}/`,
       name: doc.site.title,
       description: doc.site.description,
-      inLanguage: doc.site.locale,
+      // inLanguage 用 BCP 47（zh-CN）；SiteContext.locale 可能是 og 的 ll_CC 格式，归一
+      inLanguage: doc.site.locale.replace("_", "-"),
     },
     {
       "@type": "Person",
@@ -59,7 +60,7 @@ export function buildJsonLdGraph(doc: PageDocument): { "@context": string; "@gra
       author: { "@id": authorId },
       publisher: { "@id": orgId },
       isPartOf: { "@id": webpageId },
-      inLanguage: doc.site.locale,
+      inLanguage: doc.site.locale.replace("_", "-"),
       ...(doc.tags?.length ? { keywords: doc.tags.join(", ") } : {}),
     });
   }

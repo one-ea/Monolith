@@ -43,7 +43,7 @@ describe("renderSeoHead", () => {
     expect(head).toContain(`<link rel="canonical" href="https://example.com/posts/a" />`);
     expect(head).toContain(`og:image" content="https://example.com/cover.png"`);
     expect(head).toContain(`twitter:image"`);
-    expect(head).toContain(`og:locale" content="zh-CN"`);
+    expect(head).toContain(`og:locale" content="zh_CN"`);
   });
 
   it("文章页带 article 时间与标签 meta，非文章页不带", () => {

@@ -42,7 +42,8 @@ export function renderSeoHead(doc: PageDocument): string {
     `<meta property="og:site_name" content="${esc(site.title)}" />`,
     `<meta property="og:image" content="${esc(ogImage)}" />`,
     `<meta property="og:image:alt" content="${esc(imageAlt)}" />`,
-    `<meta property="og:locale" content="${esc(site.locale)}" />`,
+    // og:locale 规范为 ll_CC（zh_CN）；SiteContext.locale 存 BCP 47（zh-CN），此处转换
+    `<meta property="og:locale" content="${esc(site.locale.replace("-", "_"))}" />`,
     `<meta name="twitter:card" content="summary_large_image" />`,
     `<meta name="twitter:title" content="${esc(title)}" />`,
     `<meta name="twitter:description" content="${esc(description)}" />`,
