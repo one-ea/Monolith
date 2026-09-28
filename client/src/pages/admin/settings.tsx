@@ -31,6 +31,7 @@ type Settings = {
   social_links: string;
   footer_text: string;
   rss_enabled: string;
+  llms_enabled: string;
   custom_header: string;
   custom_footer: string;
   site_timezone: string;
@@ -85,6 +86,7 @@ const defaultSettings: Settings = {
   social_links: "",
   footer_text: "© 2026 Monolith. 使用 Hono + Vite 构建，部署于 Cloudflare 边缘。",
   rss_enabled: "true",
+  llms_enabled: "true",
   custom_header: "",
   custom_footer: "",
   site_timezone: "Asia/Shanghai",
@@ -422,6 +424,7 @@ export function AdminSettings() {
   }, [settings.author_avatar]);
 
   const rssEnabled = settings.rss_enabled !== "false";
+  const llmsEnabled = settings.llms_enabled !== "false";
   const indexNowEnabled = settings.indexnow_enabled !== "false";
   const turnstileEnabled = settings.turnstile_enabled === "true";
   const themeMode = normalizeSiteThemeMode(settings.site_theme_mode);
@@ -943,6 +946,43 @@ export function AdminSettings() {
                       </span>
                     </div>
                   )}
+                </div>
+              </div>
+
+              <div>
+                <h2 className="text-[16px] font-semibold mb-[4px]">AI 内容接口</h2>
+                <div className="rounded-md border border-border/20 bg-card/5 p-[16px] sm:p-[20px]">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-[14px] font-medium text-foreground flex items-center gap-[6px]">
+                        <Code className="h-[14px] w-[14px] text-foreground/60" /> llms.txt / Markdown 输出
+                      </p>
+                      <p className="text-[12px] text-muted-foreground/40 mt-[4px]">
+                        {llmsEnabled ? "开启状态，向 AI 搜索引擎与 Agent 提供结构化站点索引与全文" : "已关闭，/llms.txt 与 /llms-full.txt 返回 404"}
+                      </p>
+                    </div>
+                    <button onClick={() => updateSetting("llms_enabled", llmsEnabled ? "false" : "true")}
+                      className="inline-flex items-center transition-opacity hover:opacity-80"
+                      aria-label={llmsEnabled ? "关闭 AI 内容接口" : "开启 AI 内容接口"}
+                    >
+                      {llmsEnabled ? (
+                        <ToggleRight className="h-[32px] w-[32px] text-foreground/75" />
+                      ) : (
+                        <ToggleLeft className="h-[32px] w-[32px] text-muted-foreground/20" />
+                      )}
+                    </button>
+                  </div>
+                  {llmsEnabled && (
+                    <div className="mt-[16px] space-y-[8px] rounded-lg border border-border/10 bg-background/20 px-[14px] py-[10px]">
+                      <span className="block text-[12px] text-muted-foreground/50 font-mono tracking-tight truncate">
+                        {typeof window !== "undefined" ? window.location.origin : ""}/llms.txt
+                      </span>
+                      <span className="block text-[12px] text-muted-foreground/50 font-mono tracking-tight truncate">
+                        {typeof window !== "undefined" ? window.location.origin : ""}/llms-full.txt
+                      </span>
+                    </div>
+                  )}
+                  <p className="mt-[10px] text-[11px] leading-[1.55] text-muted-foreground/35">单篇 Markdown 始终可通过 /posts/文章slug.md 获取（可见性与文章本身一致，不受此开关影响）。</p>
                 </div>
               </div>
             </div>

@@ -14,6 +14,7 @@ import type { IObjectStorage } from "./storage/interfaces";
 import { writeAnalyticsPoint, isWebsiteAllowed } from "./analytics/ae-tracker";
 import { queryAEAnalytics } from "./analytics/ae-query";
 import { attachAnalyticsInsights } from "./analytics/insights";
+import { renderLlmsTxt, renderLlmsFullTxt } from "@monolith/seo-core";
 
 /* ── 类型定义 ──────────────────────────────── */
 type Bindings = {
@@ -1167,6 +1168,83 @@ app.get("/indexnow-key.txt", async (c) => {
   if (!key) return c.text("IndexNow key not configured", 404);
   return new Response(key, {
     headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "public, max-age=300" },
+  });
+});
+
+/* ── AI 内容接口：llms.txt / llms-full.txt / /posts/:slug.md ────────── */
+
+// llms.txt — AI/Agent 友好站点索引（llmstxt.org），由发布数据直接构建，不爬自己
+app.get("/llms.txt", async (c) => {
+  const db = c.get("db");
+  if (await db.getSetting("llms_enabled") === "false") return c.text("llms.txt 未开启", 404);
+  const settings = await db.getSettings();
+  const siteUrl = pickSiteOrigin(settings, c.env, c.req.url);
+  const [posts, pages] = await Promise.all([db.getPublishedPosts(), db.getPublishedPages()]);
+  const body = renderLlmsTxt(
+    { title: settings.site_title || "Monolith", description: settings.site_description || "" },
+    posts.map((p) => ({ title: p.title, url: `${siteUrl}/posts/${p.slug}`, description: p.excerpt || "", category: p.category })),
+    pages.map((p) => ({ title: p.title, url: `${siteUrl}/page/${p.slug}` })),
+  );
+  return new Response(body, {
+    headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "public, max-age=3600" },
+  });
+});
+
+// llms-full.txt — 全文输出（最近 500 篇）；弱 ETag 由数量与最新更新时间构成，支持 304
+app.get("/llms-full.txt", async (c) => {
+  const db = c.get("db");
+  if (await db.getSetting("llms_enabled") === "false") return c.text("llms.txt 未开启", 404);
+  const settings = await db.getSettings();
+  const siteUrl = pickSiteOrigin(settings, c.env, c.req.url);
+  const posts = await db.getRecentPublishedPosts(500);
+  const maxUpdated = posts.reduce((acc, p) => {
+    const t = new Date(p.updatedAt || p.createdAt).getTime();
+    return Number.isFinite(t) && t > acc ? t : acc;
+  }, 0);
+  const etag = `W/"llms-full-${posts.length}-${maxUpdated}"`;
+  if (c.req.header("If-None-Match") === etag) {
+    return new Response(null, { status: 304, headers: { ETag: etag } });
+  }
+  const body = renderLlmsFullTxt(
+    { title: settings.site_title || "Monolith", description: settings.site_description || "" },
+    posts.map((p) => ({ title: p.title, url: `${siteUrl}/posts/${p.slug}`, description: p.excerpt || "", markdown: p.content })),
+  );
+  return new Response(body, {
+    headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "public, max-age=3600", ETag: etag },
+  });
+});
+
+// /posts/:slug.md — 文章 Markdown 输出（frontmatter + 原文），供 Agent / 工具链消费；
+// 可见性与 HTML 版一致（仅已发布且到发布时间的文章），不受 llms_enabled 开关影响
+app.get("/posts/:filename{.+\\.md}", async (c) => {
+  const slug = c.req.param("filename").replace(/\.md$/i, "");
+  const db = c.get("db");
+  const post = await db.getPostBySlug(slug);
+  if (!post || !post.published) return c.text("文章不存在或未发布", 404);
+  if (post.publishAt && new Date(post.publishAt).getTime() > Date.now()) {
+    return c.text("文章尚未到发布时间", 404);
+  }
+
+  const settings = await db.getSettings();
+  const siteUrl = pickSiteOrigin(settings, c.env, c.req.url);
+  const etag = `W/"md-${slug}-${post.updatedAt || post.createdAt}"`;
+  if (c.req.header("If-None-Match") === etag) {
+    return new Response(null, { status: 304, headers: { ETag: etag } });
+  }
+
+  const frontmatter = [
+    "---",
+    `title: ${JSON.stringify(post.title)}`,
+    `date: ${post.createdAt}`,
+    `updated: ${post.updatedAt}`,
+    ...(post.category ? [`category: ${JSON.stringify(post.category)}`] : []),
+    ...(post.tags?.length ? [`tags: ${JSON.stringify(post.tags)}`] : []),
+    `canonical: ${siteUrl}/posts/${post.slug}`,
+    "---",
+    "",
+  ].join("\n");
+  return new Response(`${frontmatter}${post.content}\n`, {
+    headers: { "Content-Type": "text/markdown; charset=utf-8", "Cache-Control": "public, max-age=600", ETag: etag },
   });
 });
 

@@ -43,6 +43,35 @@ function stripDefaultSeoTags(html: string): string {
     .replace(/<link\s+rel=["']canonical["']\s+href=[^>]*>\s*/gi, "");
 }
 
+/** /posts/:slug.md → 后端 Markdown 输出（AI/Agent 友好内容接口）。
+    Pages Functions 的 [param] 动态路由对带扩展名的路径支持不确定，统一在中间件分流最稳 */
+const markdownProxy: PagesFunction<Env> = async (context) => {
+  const { request } = context;
+  const mdMatch = new URL(request.url).pathname.match(/^\/posts\/([^/]+)\.md$/);
+  if (!mdMatch) return context.next();
+
+  const method = request.method.toUpperCase();
+  if (method !== "GET" && method !== "HEAD") {
+    return new Response("Method Not Allowed", {
+      status: 405,
+      headers: { Allow: "GET, HEAD", "Content-Type": "text/plain; charset=utf-8" },
+    });
+  }
+
+  const backend = getBackendUrl(context.env);
+  if (!backend) return context.next();
+
+  // 不透传客户端 headers，避免泄漏 Cookie / Authorization 给后端代理链路
+  const res = await fetch(`${backend}/posts/${mdMatch[1]}.md`, {
+    method,
+    headers: { Accept: "text/markdown" },
+  });
+  return new Response(res.body, {
+    status: res.status,
+    headers: res.headers,
+  });
+};
+
 const prerender: PagesFunction<Env> = async (context) => {
   const { request } = context;
   const url = new URL(request.url);
@@ -153,4 +182,4 @@ const prerender: PagesFunction<Env> = async (context) => {
   }
 };
 
-export const onRequest = [withHsts, prerender];
+export const onRequest = [withHsts, markdownProxy, prerender];
