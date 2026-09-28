@@ -30,6 +30,7 @@ export function NotFoundPage() {
 
       {/* 提示文字 */}
       <div className="text-center space-y-[8px]">
+        <img src="/monolith-logo.svg" alt="" aria-hidden="true" className="mx-auto mb-[16px] h-[32px] w-[32px] opacity-50" />
         <h1 className="text-[20px] sm:text-[24px] font-semibold tracking-[-0.02em]">
           页面未找到
         </h1>

@@ -10,23 +10,51 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: "autoUpdate",
-      includeAssets: ["favicon.png", "icon-192.png", "icon-512.png"],
+      includeAssets: [
+        "favicon.png",
+        "favicon-16.png",
+        "favicon-32.png",
+        "favicon-48.png",
+        "icon-192.png",
+        "icon-512.png",
+        "icon-192-maskable.png",
+        "icon-512-maskable.png",
+        "monolith-logo.svg",
+        "monolith-logo-mono.svg"
+      ],
       manifest: {
         name: "Monolith",
         short_name: "Monolith",
+        id: "/",
+        start_url: "/",
+        display: "standalone",
         description: "一个基于边缘计算的极简博客系统",
-        theme_color: "#0a0a0a",
-        background_color: "#0a0a0a",
+        theme_color: "#0d1117",
+        background_color: "#0d1117",
         icons: [
           {
             src: "icon-192.png", // 这里假定我们会有这样的图标或者暂时只依赖浏览器回退
             sizes: "192x192",
-            type: "image/png"
+            type: "image/png",
+            purpose: "any"
           },
           {
             src: "icon-512.png",
             sizes: "512x512",
-            type: "image/png"
+            type: "image/png",
+            purpose: "any"
+          },
+          {
+            src: "icon-192-maskable.png",
+            sizes: "192x192",
+            type: "image/png",
+            purpose: "maskable"
+          },
+          {
+            src: "icon-512-maskable.png",
+            sizes: "512x512",
+            type: "image/png",
+            purpose: "maskable"
           }
         ]
       },

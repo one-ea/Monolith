@@ -105,10 +105,8 @@ export function AdminLayout({ children }: AdminLayoutProps) {
   const SidebarContent = () => (
     <div className="flex flex-col h-full">
       <div className="border-b border-border/25 p-[16px]">
-        <Link href="/admin" className="flex items-center gap-[10px] rounded-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring" onClick={() => setMobileMenuOpen(false)}>
-          <div className="flex h-[34px] w-[24px] items-center justify-center rounded-[4px] bg-gradient-to-b from-foreground/90 to-foreground/35 text-[0] shadow-[0_12px_28px_oklch(0_0_0_/_20%)]">
-            M
-          </div>
+        <Link href="/admin" aria-label="Monolith 管理后台" className="flex items-center gap-[10px] rounded-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring" onClick={() => setMobileMenuOpen(false)}>
+          <img src="/monolith-logo.svg" alt="" aria-hidden="true" className="h-[34px] w-[34px] object-contain" />
           <div>
             <span className="block font-heading text-[17px] font-semibold tracking-[-0.02em]">Monolith</span>
             <span className="block text-[10px] text-muted-foreground/45">Operations Desk</span>

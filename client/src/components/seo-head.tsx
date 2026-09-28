@@ -173,14 +173,18 @@ export function SeoHead({
         ...(tags?.length ? { keywords: tags.join(", ") } : {}),
       });
     } else if (url === "/") {
-      // 首页：WebSite（不声明 SearchAction：站内搜索是 ⌘K 浮层，没有 ?q= 深链入口，
-      // 指向无效搜索目标的 potentialAction 会被结构化数据校验判错）
+      // 首页：WebSite + SearchAction
       jsonLdArray.push({
         "@context": "https://schema.org",
         "@type": "WebSite",
         name: siteName,
         url: window.location.origin,
         description: metaDescription,
+        potentialAction: {
+          "@type": "SearchAction",
+          target: `${window.location.origin}/?q={search_term_string}`,
+          "query-input": "required name=search_term_string",
+        },
       });
     }
 

@@ -50,15 +50,12 @@ function syncDocumentBrand(settings: { site_title?: string; site_description?: s
     document.title = description ? `${siteTitle} — ${description}` : siteTitle;
   }
 
-  if (icon) {
-    let link = document.querySelector('link[rel="icon"]') as HTMLLinkElement | null;
-    if (!link) {
-      link = document.createElement("link");
-      link.rel = "icon";
-      document.head.appendChild(link);
-    }
-    link.href = icon;
-  }
+  const iconHref = icon || "/monolith-logo.svg";
+  const iconLink = document.querySelector('link[rel="icon"]') as HTMLLinkElement | null;
+  if (iconLink) iconLink.href = iconHref;
+
+  const appleLink = document.querySelector('link[rel="apple-touch-icon"]') as HTMLLinkElement | null;
+  if (appleLink) appleLink.href = icon || "/icon-192.png";
 }
 
 function matchesPathPrefix(pathname: string, prefix: string) {
