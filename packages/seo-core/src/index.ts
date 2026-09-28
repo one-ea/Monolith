@@ -5,3 +5,6 @@ export * from "./document";
 export * from "./metadata";
 export * from "./schema";
 export * from "./llms";
+export * from "./citability";
+export * from "./rules";
+export * from "./scoring";
