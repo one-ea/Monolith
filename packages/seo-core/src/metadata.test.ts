@@ -53,6 +53,12 @@ describe("renderSeoHead", () => {
     expect(homeHead).not.toContain(`article:`);
   });
 
+  it("og:image 尺寸：提供 ogImageSize 时输出 width/height，未提供时省略", () => {
+    expect(renderSeoHead({ ...articleDoc, ogImageSize: { width: 1200, height: 630 } }))
+      .toContain(`<meta property="og:image:width" content="1200" />`);
+    expect(head).not.toContain(`og:image:width`);
+  });
+
   it("属性值做 HTML 转义（引号/尖括号）", () => {
     expect(head).toContain(`content="文章 &quot;标题&quot;`);
   });

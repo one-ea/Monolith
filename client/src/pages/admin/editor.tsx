@@ -1,14 +1,23 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useParams, useLocation } from "wouter";
 import { fetchPost, createPost, updatePost, uploadImage, localizePostImages, fetchPostVersions, restorePostVersion, type PostVersion } from "@/lib/api";
 import { CARD_GRID_SIZE_LABEL, CARD_IMAGE_MODE_LABEL, clampCardHeight, clampCardWidth, getArticleCardImageMode, getCardGridSize } from "@/lib/card-layout";
 import { renderMarkdown } from "@/lib/markdown";
-import { Save, Eye, EyeOff, Upload, Image, ChevronDown, ChevronUp, Bold, Italic, Heading2, Heading3, Link2, Code, Quote, List, ListOrdered, Minus, Maximize2, Minimize2, Table, CheckSquare, FileCode, ImageDown, History, Check, X, ArrowDownUp, PanelRightClose, PanelRight, ArrowLeft, RotateCcw, SlidersHorizontal } from "lucide-react";
+import { analyzePost } from "@/lib/seo-analyzer";
+import { buildPageDocument, runAudit, summarizeAudit, type SiteContext } from "@monolith/seo-core";
+import { Save, Eye, EyeOff, Upload, Image, ChevronDown, ChevronUp, Bold, Italic, Heading2, Heading3, Link2, Code, Quote, List, ListOrdered, Minus, Maximize2, Minimize2, Table, CheckSquare, FileCode, ImageDown, History, Check, X, ArrowDownUp, PanelRightClose, PanelRight, ArrowLeft, RotateCcw, SlidersHorizontal, CheckCircle2, AlertTriangle, XCircle } from "lucide-react";
 import { Link } from "wouter";
 import Editor, { type Monaco } from "@monaco-editor/react";
 import type * as MonacoTypes from "monaco-editor";
 import { useSiteSettings } from "@/lib/site-settings";
 import { formatSiteDate } from "@/lib/date-format";
+
+/** 检查面板状态图标（SEO / GEO 共用） */
+function AuditStatusIcon({ status }: { status: "pass" | "warn" | "fail" }) {
+  if (status === "pass") return <CheckCircle2 className="h-[11px] w-[11px] shrink-0 text-foreground/70" />;
+  if (status === "warn") return <AlertTriangle className="h-[11px] w-[11px] shrink-0 text-amber-400" />;
+  return <XCircle className="h-[11px] w-[11px] shrink-0 text-red-400" />;
+}
 
 /** 注册 Monolith 暗色主题 — 暗夜琥珀：黑 + 金点缀 */
 function handleEditorWillMount(monaco: Monaco) {
@@ -112,7 +121,7 @@ const CARD_LAYOUT_PRESETS = [
 ];
 
 export function AdminEditor() {
-  const { dateSettings } = useSiteSettings();
+  const { dateSettings, settings: siteSettings } = useSiteSettings();
   const params = useParams<{ slug?: string }>();
   const [, setLocation] = useLocation();
   const isEdit = !!params.slug;
@@ -159,6 +168,57 @@ export function AdminEditor() {
   const cardDensity = CARD_GRID_SIZE_LABEL[getCardGridSize(form.cardWidth)];
   const previewCardWidth = Math.min(228, Math.max(112, Math.round(form.cardWidth * 2.2)));
   const previewCardHeight = Math.min(154, Math.max(72, Math.round(form.cardHeight / 2.35)));
+
+  // ─── SEO / GEO 检查（500ms 防抖跟随表单，避免 Monaco 每击键重算） ───
+  const [auditForm, setAuditForm] = useState(form);
+  useEffect(() => {
+    const timer = setTimeout(() => setAuditForm(form), 500);
+    return () => clearTimeout(timer);
+  }, [form]);
+
+  const auditChecks = useMemo(() => {
+    const tags = auditForm.tags.split(",").map((t) => t.trim()).filter(Boolean);
+    const now = new Date().toISOString();
+    const seoReport = analyzePost({
+      slug: auditForm.slug,
+      title: auditForm.title,
+      excerpt: auditForm.excerpt || null,
+      content: auditForm.content,
+      tags,
+      coverImage: auditForm.coverImage || null,
+      published: auditForm.published,
+      createdAt: now,
+      updatedAt: now,
+    });
+    const siteTitle = siteSettings.site_title.trim() || "Monolith";
+    const siteContext: SiteContext = {
+      origin: window.location.origin,
+      title: siteTitle,
+      description: siteSettings.site_description,
+      author: {
+        name: siteSettings.author_name.trim() || siteTitle,
+        ...(siteSettings.author_avatar.trim() ? { avatar: siteSettings.author_avatar.trim() } : {}),
+      },
+      locale: "zh-CN",
+    };
+    const findings = runAudit(buildPageDocument({
+      path: `/posts/${auditForm.slug || "draft"}`,
+      title: auditForm.title,
+      type: "article",
+      description: auditForm.excerpt || null,
+      contentMarkdown: auditForm.content,
+      coverImage: auditForm.coverImage || null,
+      publishedAt: now,
+      tags,
+      site: siteContext,
+    }));
+    return {
+      seoReport,
+      seoFailed: seoReport.checks.filter((check) => check.status !== "pass"),
+      geoFailed: findings.filter((finding) => finding.status !== "pass"),
+      geoScore: summarizeAudit(findings).score,
+    };
+  }, [auditForm, siteSettings]);
 
   // 保持 ref 与 state 同步（避免 onMount 闭包陷阱）
   useEffect(() => { syncScrollRef.current = syncScroll; }, [syncScroll]);
@@ -687,6 +747,49 @@ export function AdminEditor() {
                     className="h-[34px] w-full rounded-md border border-border/25 bg-background/28 px-[10px] text-[12px] text-foreground outline-none transition-colors placeholder:text-muted-foreground/50 focus:border-foreground/25"
                   />
                 </div>
+                {/* ─── SEO / GEO 检查面板（实时，防抖 500ms） ─── */}
+                <div className="sm:col-span-3 lg:col-span-5">
+                  <div className="rounded-md border border-border/18 bg-card/8 p-[12px]">
+                    <div className="mb-[8px] flex flex-wrap items-center justify-between gap-[8px]">
+                      <span className="flex items-center gap-[6px] text-[12px] font-medium text-foreground/82">
+                        <SlidersHorizontal className="h-[13px] w-[13px] text-muted-foreground/70" />
+                        SEO / GEO 检查
+                      </span>
+                      <span className="font-mono text-[10px] text-muted-foreground/55">
+                        SEO {auditChecks.seoReport.totalScore} · GEO {auditChecks.geoScore}（Monolith 自定义健康度）
+                      </span>
+                    </div>
+                    {auditChecks.seoFailed.length === 0 && auditChecks.geoFailed.length === 0 ? (
+                      <p className="rounded-md border border-border/14 bg-background/25 px-[10px] py-[10px] text-[11px] text-muted-foreground/55">
+                        当前草稿的 SEO 与 GEO 检查全部通过；Markdown 输出（/posts/slug.md）与 JSON-LD @graph 将随发布自动生效。
+                      </p>
+                    ) : (
+                      <div className="flex flex-wrap gap-[5px]">
+                        {auditChecks.seoFailed.map((check) => (
+                          <span
+                            key={`seo-${check.id}`}
+                            className="inline-flex items-center gap-[4px] rounded-md bg-card/35 px-[6px] py-[3px] text-[10px] text-muted-foreground/75"
+                            title={check.detail}
+                          >
+                            <AuditStatusIcon status={check.status} />
+                            SEO · {check.label}
+                          </span>
+                        ))}
+                        {auditChecks.geoFailed.map((finding) => (
+                          <span
+                            key={`geo-${finding.id}`}
+                            className="inline-flex items-center gap-[4px] rounded-md bg-card/35 px-[6px] py-[3px] text-[10px] text-muted-foreground/75"
+                            title={finding.recommendation ? `${finding.detail} → ${finding.recommendation}` : finding.detail}
+                          >
+                            <AuditStatusIcon status={finding.status} />
+                            GEO · {finding.title}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
                 <div className="sm:col-span-3 lg:col-span-5">
                   <div className="grid gap-[12px] rounded-md border border-border/18 bg-card/8 p-[12px] lg:grid-cols-[minmax(0,1fr)_280px]">
                     <div className="min-w-0 space-y-[12px]">

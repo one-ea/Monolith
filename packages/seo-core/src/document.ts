@@ -6,6 +6,7 @@ import {
   extractLinks,
   stripMarkdown,
 } from "./markdown";
+import type { ImageSize } from "./image-size";
 import type { PageDocument, PageType, SiteContext, BreadcrumbRef } from "./types";
 
 /** 归一为绝对 http(s) 地址；非法输入返回 "" */
@@ -27,6 +28,7 @@ export interface PageDocumentInput {
   type?: PageType;
   contentMarkdown?: string;
   coverImage?: string | null;
+  ogImageSize?: ImageSize;
   publishedAt?: string | null;
   modifiedAt?: string | null;
   tags?: string[];
@@ -54,6 +56,7 @@ export function buildPageDocument(input: PageDocumentInput): PageDocument {
     contentText: stripMarkdown(md),
     contentMarkdown: md || undefined,
     coverImage: input.coverImage || null,
+    ogImageSize: input.ogImageSize,
     publishedAt: input.publishedAt ?? null,
     modifiedAt: input.modifiedAt ?? null,
     tags: input.tags,

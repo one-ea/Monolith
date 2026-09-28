@@ -59,11 +59,17 @@ describe("buildJsonLdGraph", () => {
     });
   });
 
-  it("非文章页不输出 BlogPosting，也不声明 SearchAction", () => {
+  it("非文章页不输出 BlogPosting；WebSite 声明指向 /?q= 深链的 SearchAction", () => {
     const home = buildJsonLdGraph(buildPageDocument({ path: "/", title: "", site }));
     const types = home["@graph"].map((n) => n["@type"]);
     expect(types).not.toContain("BlogPosting");
-    expect(JSON.stringify(home)).not.toContain("SearchAction");
+    const website = home["@graph"].find((n) => n["@type"] === "WebSite") as {
+      potentialAction: { "@type": string; target: { "@type": string; urlTemplate: string } };
+    };
+    expect(website.potentialAction).toMatchObject({
+      "@type": "SearchAction",
+      target: { "@type": "EntryPoint", urlTemplate: "https://example.com/?q={search_term_string}" },
+    });
   });
 
   it("面包屑 item 归一为绝对地址", () => {

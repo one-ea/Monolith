@@ -1,6 +1,6 @@
 /* 统一 JSON-LD @graph 生成：WebSite / Person / Organization / WebPage / BlogPosting / BreadcrumbList
    全部实体用 @id 互相引用，单一数据源，杜绝 client 与 prerender 各拼一套。
-   注：不声明 SearchAction —— 站内搜索是 ⌘K 浮层，无 ?q= 深链入口。 */
+   WebSite 声明 SearchAction —— 站内搜索浮层已支持 /?q= 深链（client/src/components/search.tsx）。 */
 
 import type { PageDocument } from "./types";
 
@@ -22,6 +22,14 @@ export function buildJsonLdGraph(doc: PageDocument): { "@context": string; "@gra
       description: doc.site.description,
       // inLanguage 用 BCP 47（zh-CN）；SiteContext.locale 可能是 og 的 ll_CC 格式，归一
       inLanguage: doc.site.locale.replace("_", "-"),
+      potentialAction: {
+        "@type": "SearchAction",
+        target: {
+          "@type": "EntryPoint",
+          urlTemplate: `${origin}/?q={search_term_string}`,
+        },
+        "query-input": "required name=search_term_string",
+      },
     },
     {
       "@type": "Person",

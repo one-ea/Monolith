@@ -1,4 +1,4 @@
-import { buildPageDocument, renderJsonLdScript, renderSeoHead, stripMarkdown, type SiteContext } from "@monolith/seo-core";
+import { buildPageDocument, parseImageSize, renderJsonLdScript, renderSeoHead, resolveOgImage, stripMarkdown, type ImageSize, type SiteContext } from "@monolith/seo-core";
 import { getBackendUrl } from "./_shared";
 
 // Cloudflare Pages Function — 爬虫预渲染中间件
@@ -41,6 +41,44 @@ function stripDefaultSeoTags(html: string): string {
     .replace(/<title>[^<]*<\/title>\s*/i, "")
     .replace(/<meta\s+(?:property|name)=["'](?:og:[^"']+|twitter:[^"']+|description)["']\s+content=[^>]*>\s*/gi, "")
     .replace(/<link\s+rel=["']canonical["']\s+href=[^>]*>\s*/gi, "");
+}
+
+// —— og:image 尺寸探测：只读文件头前 256KB（JPEG SOF 几乎总在头部），1 小时缓存，2 秒超时 ——
+const ogImageSizeCache = new Map<string, { size: ImageSize; expires: number }>();
+
+async function probeImageSize(url: string): Promise<ImageSize | null> {
+  if (!/^https?:\/\//i.test(url)) return null;
+  const cached = ogImageSizeCache.get(url);
+  if (cached && cached.expires > Date.now()) return cached.size;
+  try {
+    const res = await fetch(url, { headers: { Accept: "image/*" }, signal: AbortSignal.timeout(2000) });
+    if (!res.ok || !res.body) return null;
+
+    const reader = res.body.getReader();
+    const chunks: Uint8Array[] = [];
+    let received = 0;
+    while (received < 262144) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+      received += value.length;
+    }
+    try { await reader.cancel(); } catch { /* 连接已结束 */ }
+
+    const head = new Uint8Array(received);
+    let pos = 0;
+    for (const chunk of chunks) {
+      if (pos >= head.length) break;
+      head.set(chunk.subarray(0, head.length - pos), pos);
+      pos += chunk.length;
+    }
+
+    const size = parseImageSize(head);
+    if (size) ogImageSizeCache.set(url, { size, expires: Date.now() + 3_600_000 });
+    return size;
+  } catch {
+    return null;
+  }
 }
 
 /** /posts/:slug.md → 后端 Markdown 输出（AI/Agent 友好内容接口）。
@@ -158,13 +196,17 @@ const prerender: PagesFunction<Env> = async (context) => {
       site,
     });
 
+    // 探测最终 og:image 的真实尺寸（缓存 + 超时兜底，失败则省略尺寸 meta）
+    const imageSize = await probeImageSize(resolveOgImage(doc));
+    const renderDoc = imageSize ? { ...doc, ogImageSize: imageSize } : doc;
+
     // 获取原始 index.html（用根路径请求静态资源），替换默认 SEO 标签后注入统一渲染结果
     const indexUrl = new URL("/", request.url);
     const assetRes = await context.env.ASSETS.fetch(new Request(indexUrl.toString()));
     let html = await assetRes.text();
 
     html = stripDefaultSeoTags(html);
-    const head = `${renderSeoHead(doc)}\n    ${renderJsonLdScript(doc)}`;
+    const head = `${renderSeoHead(renderDoc)}\n    ${renderJsonLdScript(renderDoc)}`;
     html = html.replace("</head>", `    ${head}\n  </head>`);
 
     return new Response(html, {

@@ -2,6 +2,7 @@
    见 tmp/Monolith-SEO-GEO-Evaluation-Report.md §8。 */
 
 import type { HeadingRef, ImageRef, LinkRef } from "./markdown";
+import type { ImageSize } from "./image-size";
 
 export type PageType = "website" | "article" | "page" | "collection";
 
@@ -49,6 +50,8 @@ export interface PageDocument {
   contentMarkdown?: string;
 
   coverImage?: string | null;
+  /** og:image 真实尺寸（可选；由消费方探测文件头得到，渲染 og:image:width/height） */
+  ogImageSize?: ImageSize;
 
   publishedAt: string | null;
   modifiedAt: string | null;

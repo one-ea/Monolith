@@ -41,6 +41,10 @@ export function renderSeoHead(doc: PageDocument): string {
     `<meta property="og:url" content="${esc(doc.canonical)}" />`,
     `<meta property="og:site_name" content="${esc(site.title)}" />`,
     `<meta property="og:image" content="${esc(ogImage)}" />`,
+    ...(doc.ogImageSize ? [
+      `<meta property="og:image:width" content="${doc.ogImageSize.width}" />`,
+      `<meta property="og:image:height" content="${doc.ogImageSize.height}" />`,
+    ] : []),
     `<meta property="og:image:alt" content="${esc(imageAlt)}" />`,
     // og:locale 规范为 ll_CC（zh_CN）；SiteContext.locale 存 BCP 47（zh-CN），此处转换
     `<meta property="og:locale" content="${esc(site.locale.replace("-", "_"))}" />`,
