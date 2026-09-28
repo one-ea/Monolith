@@ -16,6 +16,7 @@ function parseArgs(argv) {
     skipMigrate: false,
     skipServer: false,
     skipClient: false,
+    skipPurge: false,
   };
 
   for (let i = 0; i < argv.length; i += 1) {
@@ -51,6 +52,10 @@ function parseArgs(argv) {
 
     if (arg === "--skip-client") {
       options.skipClient = true;
+    }
+
+    if (arg === "--skip-purge") {
+      options.skipPurge = true;
     }
   }
 
@@ -319,6 +324,46 @@ if (!options.skipClient) {
     "monolith deploy",
   ], { cwd: clientRoot });
 }
+
+// 部署后清除 Cloudflare 区域缓存（best-effort：失败只警告，不影响部署结果）
+// 自定义域名（zone）场景下 sitemap/robots/API 带 max-age 缓存，不清除会有最长 1 小时的旧内容窗口；
+// 仅使用 *.pages.dev / *.workers.dev 时没有独立 zone，直接跳过即可
+async function purgeZoneCache(options) {
+  if (options.skipPurge) {
+    console.log("\n[skip] 已按 --skip-purge 跳过缓存清除。");
+    return;
+  }
+  const zoneId = process.env.CLOUDFLARE_ZONE_ID;
+  const token = process.env.CLOUDFLARE_API_TOKEN;
+  if (!zoneId) {
+    console.log("\n[skip] 未设置 CLOUDFLARE_ZONE_ID，跳过缓存清除（*.pages.dev 无独立 zone，无需清除）。");
+    return;
+  }
+  if (!token) {
+    console.warn("\n[warn] 已设置 CLOUDFLARE_ZONE_ID，但缺少 CLOUDFLARE_API_TOKEN（本机 wrangler 登录态不能用于 API 直调），跳过缓存清除。");
+    return;
+  }
+
+  console.log("\n==> 清除 Cloudflare 区域缓存");
+  try {
+    const res = await fetch(`https://api.cloudflare.com/client/v4/zones/${zoneId}/purge_cache`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ purge_everything: true }),
+    });
+    const data = await res.json().catch(() => null);
+    if (!res.ok || !data?.success) {
+      const errors = (data?.errors || []).map((e) => e.message).join("; ");
+      console.warn(`[warn] 缓存清除失败（HTTP ${res.status}${errors ? `：${errors}` : ""}）。请确认 token 具备 Zone.Cache Purge 权限且 zone ID 正确；部署本身已成功。`);
+      return;
+    }
+    console.log("[ok] Cloudflare 区域缓存已清除（purge_everything）。");
+  } catch (err) {
+    console.warn(`[warn] 缓存清除请求异常：${err instanceof Error ? err.message : err}。部署本身已成功。`);
+  }
+}
+
+await purgeZoneCache(options);
 
 console.log("\n部署流程完成。");
 if (options.apiBase) {

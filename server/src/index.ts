@@ -114,6 +114,55 @@ async function triggerWebhook(c: any, eventName: string, payload: any) {
   }
 }
 
+/* ── IndexNow 搜索引擎推送辅助函数 ─────────────────── */
+const INDEXNOW_ENDPOINT = "https://api.indexnow.org/indexnow";
+
+// IndexNow 密钥规范：8-128 位 a-z A-Z 0-9 -
+function sanitizeIndexNowKey(value: unknown): string {
+  if (typeof value !== "string") return "";
+  const key = value.trim();
+  return /^[a-zA-Z0-9-]{8,128}$/.test(key) ? key : "";
+}
+
+// 文章是否已对外可见：已发布且定时发布时间（如有）已到达
+function isPostPubliclyVisible(post: { published: boolean; publishAt: string | null }): boolean {
+  if (!post.published) return false;
+  if (!post.publishAt) return true;
+  const publishAt = new Date(post.publishAt).getTime();
+  return Number.isNaN(publishAt) || publishAt <= Date.now();
+}
+
+/** 文章发布 / 更新后向 IndexNow 提交 URL（Bing、Yandex 等共享端点）；未配置密钥时静默跳过 */
+async function notifyIndexNow(c: AppContext, urls: string[]) {
+  if (urls.length === 0) return;
+  let settings: Record<string, string> = {};
+  try { settings = await c.get("db").getSettings(); } catch { /* 推送路径容错，失败不阻断业务 */ }
+  if (settings.indexnow_enabled === "false") return;
+  const key = sanitizeIndexNowKey(settings.indexnow_key);
+  if (!key) return;
+
+  const siteUrl = pickSiteOrigin(settings, c.env, c.req.url);
+  let host: string;
+  try { host = new URL(siteUrl).host; } catch { return; }
+
+  const urlList = urls
+    .map((u) => `${siteUrl}/${u.replace(/^\/+/, "")}`)
+    .slice(0, 10000); // IndexNow 单次请求上限
+  const body = JSON.stringify({ host, key, keyLocation: `${siteUrl}/indexnow-key.txt`, urlList });
+
+  const request = fetch(INDEXNOW_ENDPOINT, {
+    method: "POST",
+    headers: { "Content-Type": "application/json; charset=utf-8" },
+    body,
+  })
+    .then((res) => {
+      if (!res.ok) console.error("IndexNow submission failed", res.status, res.statusText);
+    })
+    .catch((err) => console.error("IndexNow submission failed", err));
+
+  if (c.executionCtx?.waitUntil) c.executionCtx.waitUntil(request);
+}
+
 function escapeEmailHtml(value: string): string {
   return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
 }
@@ -247,6 +296,9 @@ function normalizeSettings(settings: unknown): Record<string, string> | undefine
   const normalized = { ...(settings as Record<string, string>) };
   if (Object.prototype.hasOwnProperty.call(normalized, "site_timezone")) {
     normalized.site_timezone = normalizeSiteTimezone(normalized.site_timezone);
+  }
+  if (Object.prototype.hasOwnProperty.call(normalized, "indexnow_key")) {
+    normalized.indexnow_key = typeof normalized.indexnow_key === "string" ? normalized.indexnow_key.trim().slice(0, 128) : "";
   }
   return normalized;
 }
@@ -1109,6 +1161,15 @@ app.get("/robots.txt", async (c) => {
   });
 });
 
+// IndexNow 密钥文件 — 搜索引擎收到提交后抓取此文件校验站点所有权（内容即密钥）
+app.get("/indexnow-key.txt", async (c) => {
+  const key = sanitizeIndexNowKey(await c.get("db").getSetting("indexnow_key"));
+  if (!key) return c.text("IndexNow key not configured", 404);
+  return new Response(key, {
+    headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "public, max-age=300" },
+  });
+});
+
 /* ── 速率限制（控制台可配，短 TTL 缓存避免每次命中读 D1）─────────────────── */
 type AttemptRecord = { count: number; firstAttempt: number };
 const loginAttempts = new Map<string, AttemptRecord>();
@@ -1470,6 +1531,9 @@ app.post("/api/admin/posts", async (c) => {
   }
   const newPost = await db.createPost(body);
   await triggerWebhook(c, "post_created", newPost);
+  if (isPostPubliclyVisible(newPost)) {
+    await notifyIndexNow(c, [`posts/${newPost.slug}`]);
+  }
   return c.json(newPost, 201);
 });
 
@@ -1491,6 +1555,9 @@ app.put("/api/admin/posts/:slug", async (c) => {
     await db.createPostVersion(slug);
   }
   await triggerWebhook(c, "post_updated", updated);
+  if (isPostPubliclyVisible(updated)) {
+    await notifyIndexNow(c, [`posts/${updated.slug}`]);
+  }
   return c.json(updated);
 });
 
@@ -1533,6 +1600,9 @@ app.post("/api/admin/posts/batch", async (c) => {
   const db = c.get("db");
   const count = await db.batchOperatePosts(slugs, action);
   await triggerWebhook(c, "post_batch_operated", { action, slugs, count });
+  if (action === "publish") {
+    await notifyIndexNow(c, slugs.map((s) => `posts/${s}`));
+  }
   return c.json({ success: true, count, message: `成功处理 ${count} 篇文章` });
 });
 

@@ -8,7 +8,7 @@ import {
   SNIPPET_PRESETS,
   type CustomSnippet,
 } from "@/lib/custom-injection";
-import { Save, Globe, User, Link2, ToggleLeft, ToggleRight, Code, Rss, Plus, Trash2, GripVertical, Home, Eye, Search, CheckCircle2, AlertTriangle, Clock3, Shield, Moon, Sun, Monitor, Palette, Droplets, ChevronDown, ChevronRight, Bell, Send } from "lucide-react";
+import { Save, Globe, User, Link2, ToggleLeft, ToggleRight, Code, Rss, Plus, Trash2, GripVertical, Home, Eye, Search, CheckCircle2, AlertTriangle, Clock3, Shield, Moon, Sun, Monitor, Palette, Droplets, ChevronDown, ChevronRight, Bell, Send, Wand2 } from "lucide-react";
 
 type Settings = {
   site_title: string;
@@ -42,6 +42,8 @@ type Settings = {
   custom_snippets: string;
   site_origin: string;
   webhook_urls: string;
+  indexnow_enabled: string;
+  indexnow_key: string;
   resend_from: string;
   admin_email: string;
   cloudflare_account_id: string;
@@ -94,6 +96,8 @@ const defaultSettings: Settings = {
   custom_snippets: "",
   site_origin: "",
   webhook_urls: "",
+  indexnow_enabled: "true",
+  indexnow_key: "",
   resend_from: "",
   admin_email: "",
   cloudflare_account_id: "",
@@ -173,6 +177,13 @@ function createSocialLink(link: Partial<SocialLinkConfig> = {}): SocialLinkConfi
 
 function createStableId(prefix: string) {
   return typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${prefix}-${Date.now()}`;
+}
+
+// IndexNow 密钥规范：8-128 位 a-z A-Z 0-9 -，这里生成 32 位十六进制
+function generateIndexNowKey() {
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
 function isSocialIcon(value: unknown): value is SocialIcon {
@@ -410,6 +421,7 @@ export function AdminSettings() {
   }, [settings.author_avatar]);
 
   const rssEnabled = settings.rss_enabled !== "false";
+  const indexNowEnabled = settings.indexnow_enabled !== "false";
   const turnstileEnabled = settings.turnstile_enabled === "true";
   const themeMode = normalizeSiteThemeMode(settings.site_theme_mode);
   const themeStyle = normalizeSiteThemeStyle(settings.site_theme_style);
@@ -961,6 +973,54 @@ export function AdminSettings() {
                         </div>
                       ))}
                     </div>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <h2 className="text-[16px] font-semibold mb-[4px]">搜索引擎即时收录</h2>
+                <p className="text-[12px] text-muted-foreground/50 mb-[16px]">文章发布、更新或批量发布时，通过 IndexNow 协议主动通知 Bing、Yandex 等搜索引擎抓取最新 URL。</p>
+                <div className="rounded-md border border-border/20 bg-card/5 p-[16px] sm:p-[20px] space-y-[14px]">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-[14px] font-medium text-foreground flex items-center gap-[6px]">
+                        <Search className="h-[14px] w-[14px] text-foreground/60" /> IndexNow 推送
+                      </p>
+                      <p className="text-[12px] text-muted-foreground/40 mt-[4px]">
+                        {indexNowEnabled ? "开启状态，已发布文章的变更会即时提交给搜索引擎" : "已关闭，搜索引擎仅靠自然抓取发现更新"}
+                      </p>
+                    </div>
+                    <button onClick={() => updateSetting("indexnow_enabled", indexNowEnabled ? "false" : "true")}
+                      className="inline-flex items-center transition-opacity hover:opacity-80"
+                      aria-label={indexNowEnabled ? "关闭 IndexNow 推送" : "开启 IndexNow 推送"}
+                    >
+                      {indexNowEnabled ? (
+                        <ToggleRight className="h-[32px] w-[32px] text-foreground/75" />
+                      ) : (
+                        <ToggleLeft className="h-[32px] w-[32px] text-muted-foreground/20" />
+                      )}
+                    </button>
+                  </div>
+
+                  {indexNowEnabled && (
+                    <>
+                      <SettingField label="IndexNow Key" value={settings.indexnow_key} onChange={(v) => updateSetting("indexnow_key", v)} placeholder="8-128 位字母 / 数字 / 连字符" mono hint="非机密信息，留空则不推送；密钥文件会自动托管在站点根目录供搜索引擎校验。" />
+                      <div className="flex flex-wrap items-center gap-[10px]">
+                        <button type="button" onClick={() => updateSetting("indexnow_key", generateIndexNowKey())} className="inline-flex min-h-[36px] items-center gap-[6px] rounded-md border border-border/25 bg-background/40 px-[12px] text-[12px] font-medium text-foreground transition-colors hover:bg-accent/45 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
+                          <Wand2 className="h-[13px] w-[13px]" />
+                          生成随机密钥
+                        </button>
+                        <span className="text-[11px] text-muted-foreground/35">生成后需点击保存才会生效，保存前旧密钥继续使用。</span>
+                      </div>
+                      {settings.indexnow_key.trim() && (
+                        <div className="rounded-lg border border-border/10 bg-background/20 px-[14px] py-[10px] flex justify-between items-center">
+                          <span className="text-[12px] text-muted-foreground/50 font-mono tracking-tight truncate">
+                            {integrationStatus?.effectiveSiteOrigin || (typeof window !== "undefined" ? window.location.origin : "")}/indexnow-key.txt
+                          </span>
+                        </div>
+                      )}
+                      <p className="text-[11px] leading-[1.55] text-muted-foreground/35">定时发布到期上线时暂不自动推送，可在编辑器重新保存以补推；站点域名（site_origin）留空时回退部署变量或当前请求域名。</p>
+                    </>
                   )}
                 </div>
               </div>
