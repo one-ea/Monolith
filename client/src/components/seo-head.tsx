@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { useSiteSettings } from "@/lib/site-settings";
 
 type BreadcrumbItem = {
   name: string;
@@ -22,6 +23,15 @@ type SeoProps = {
 const DEFAULT_SITE_NAME = "Monolith";
 const DEFAULT_DESCRIPTION = "书写代码、设计与边缘计算的个人博客。";
 
+function toAbsoluteUrl(value: string, origin: string) {
+  try {
+    const resolved = new URL(value, origin);
+    return resolved.toString();
+  } catch {
+    return `${origin}/og-default.png`;
+  }
+}
+
 /**
  * SEO 头部组件
  * 动态注入 <title>、<meta>、Open Graph、Twitter Card、Canonical URL
@@ -39,14 +49,19 @@ export function SeoHead({
   publishedTime,
   modifiedTime,
   tags,
-  siteName = DEFAULT_SITE_NAME,
+  siteName: siteNameOverride,
   breadcrumbs,
   noindex = false,
 }: SeoProps) {
-  const metaDescription = description || DEFAULT_DESCRIPTION;
+  const { settings } = useSiteSettings();
+  // 站点名 / 描述 / 作者取自控制台设置，缺失时回退内置默认值
+  const siteName = siteNameOverride || settings.site_title.trim() || DEFAULT_SITE_NAME;
+  const metaDescription = description || settings.site_description.trim() || DEFAULT_DESCRIPTION;
+  const authorName = settings.author_name.trim() || siteName;
   const fullTitle = title ? `${title} | ${siteName}` : `${siteName} — ${metaDescription}`;
-  const canonicalUrl = url ? `${window.location.origin}${url}` : window.location.href;
-  const ogImage = image || `${window.location.origin}/og-default.png`;
+  const canonicalUrl = url ? toAbsoluteUrl(url, window.location.origin) : window.location.href;
+  const ogImage = toAbsoluteUrl(image || settings.site_og_image || "/og-default.png", window.location.origin);
+  const imageAlt = title ? `${title} | ${siteName}` : `${siteName} — ${metaDescription}`;
 
   useEffect(() => {
     // 设置标题
@@ -98,6 +113,10 @@ export function SeoHead({
     setMeta("property", "og:url", canonicalUrl);
     setMeta("property", "og:site_name", siteName);
     setMeta("property", "og:image", ogImage);
+    setMeta("property", "og:image:width", "1200");
+    setMeta("property", "og:image:height", "630");
+    setMeta("property", "og:image:type", "image/png");
+    setMeta("property", "og:image:alt", imageAlt);
     setMeta("property", "og:locale", "zh_CN");
 
     // Twitter Card
@@ -105,6 +124,7 @@ export function SeoHead({
     setMeta("name", "twitter:title", title || siteName);
     setMeta("name", "twitter:description", metaDescription);
     setMeta("name", "twitter:image", ogImage);
+    setMeta("name", "twitter:image:alt", imageAlt);
 
     // Article 专属
     // 先清理旧的 article 相关 meta（防止页面切换残留）
@@ -143,7 +163,8 @@ export function SeoHead({
         ...(modifiedTime ? { dateModified: modifiedTime } : {}),
         author: {
           "@type": "Person",
-          name: siteName,
+          name: authorName,
+          ...(settings.author_avatar.trim() ? { image: settings.author_avatar.trim() } : {}),
         },
         publisher: {
           "@type": "Organization",
@@ -152,18 +173,14 @@ export function SeoHead({
         ...(tags?.length ? { keywords: tags.join(", ") } : {}),
       });
     } else if (url === "/") {
-      // 首页：WebSite + SearchAction
+      // 首页：WebSite（不声明 SearchAction：站内搜索是 ⌘K 浮层，没有 ?q= 深链入口，
+      // 指向无效搜索目标的 potentialAction 会被结构化数据校验判错）
       jsonLdArray.push({
         "@context": "https://schema.org",
         "@type": "WebSite",
         name: siteName,
         url: window.location.origin,
         description: metaDescription,
-        potentialAction: {
-          "@type": "SearchAction",
-          target: `${window.location.origin}/?q={search_term_string}`,
-          "query-input": "required name=search_term_string",
-        },
       });
     }
 
@@ -202,7 +219,7 @@ export function SeoHead({
       // 清理 article 相关 meta（防止页面切换残留）
       document.querySelectorAll('meta[property^="article:"]').forEach((el) => el.remove());
     };
-  }, [fullTitle, metaDescription, canonicalUrl, ogImage, type, publishedTime, modifiedTime, title, siteName, tags, breadcrumbs, noindex]);
+  }, [fullTitle, metaDescription, canonicalUrl, ogImage, imageAlt, type, publishedTime, modifiedTime, title, siteName, authorName, tags, breadcrumbs, noindex]);
 
   return null; // 纯副作用组件，不渲染 DOM
 }

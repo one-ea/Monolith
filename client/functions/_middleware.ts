@@ -49,9 +49,13 @@ const prerender: PagesFunction<Env> = async (context) => {
   }
 
   try {
-    const apiRes = await fetch(`${backend}/api/posts/${slug}`, {
-      headers: { "User-Agent": "Monolith-Prerender/1.0" },
-    });
+    const headers = { "User-Agent": "Monolith-Prerender/1.0" };
+    const [apiResult, settingsResult] = await Promise.allSettled([
+      fetch(`${backend}/api/posts/${slug}`, { headers }),
+      fetch(`${backend}/api/settings/public`, { headers }),
+    ]);
+    if (apiResult.status === "rejected") return context.next();
+    const apiRes = apiResult.value;
 
     if (!apiRes.ok) {
       // 文章不存在，返回正常 SPA 处理 404
@@ -66,7 +70,11 @@ const prerender: PagesFunction<Env> = async (context) => {
       tags: string[];
       createdAt: string;
       updatedAt: string;
+      coverImage?: string | null;
     };
+    const publicSettings = settingsResult.status === "fulfilled" && settingsResult.value.ok
+      ? await settingsResult.value.json() as { site_og_image?: string }
+      : {};
 
     // 获取原始 index.html（用根路径请求静态资源）
     const indexUrl = new URL("/", request.url);
@@ -86,7 +94,19 @@ const prerender: PagesFunction<Env> = async (context) => {
     const description = post.excerpt || (post.content ? stripHtml(post.content).slice(0, 160) : "");
     const siteOrigin = url.origin;
     const articleUrl = `${siteOrigin}/posts/${post.slug}`;
-    const ogImage = `${siteOrigin}/og-default.png`;
+    const resolveImage = (value: string | null | undefined) => {
+      if (!value) return "";
+      try {
+        const resolved = new URL(value, siteOrigin);
+        return ["http:", "https:"].includes(resolved.protocol) ? resolved.toString() : "";
+      } catch {
+        return "";
+      }
+    };
+    const ogImage = resolveImage(post.coverImage)
+      || resolveImage(publicSettings.site_og_image)
+      || `${siteOrigin}/og-default.png`;
+    const imageAlt = `${post.title} | Monolith`;
 
     // 转义 HTML 特殊字符
     const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -109,7 +129,11 @@ const prerender: PagesFunction<Env> = async (context) => {
     );
     html = html.replace(
       /(<meta\s+property="og:image"\s+content=")[^"]*(")/i,
-      `$1${ogImage}$2`
+      `$1${esc(ogImage)}$2`
+    );
+    html = html.replace(
+      /(<meta\s+property="og:image:alt"\s+content=")[^"]*(")/i,
+      `$1${esc(imageAlt)}$2`
     );
 
     // 替换 Twitter Card 标签
@@ -120,6 +144,14 @@ const prerender: PagesFunction<Env> = async (context) => {
     html = html.replace(
       /(<meta\s+name="twitter:description"\s+content=")[^"]*(")/,
       `$1${esc(description)}$2`
+    );
+    html = html.replace(
+      /(<meta\s+name="twitter:image"\s+content=")[^"]*(")/,
+      `$1${esc(ogImage)}$2`
+    );
+    html = html.replace(
+      /(<meta\s+name="twitter:image:alt"\s+content=")[^"]*(")/,
+      `$1${esc(imageAlt)}$2`
     );
 
     // 替换 meta description
@@ -132,6 +164,9 @@ const prerender: PagesFunction<Env> = async (context) => {
     const extraMeta = [
       `<link rel="canonical" href="${esc(articleUrl)}" />`,
       `<meta property="og:url" content="${esc(articleUrl)}" />`,
+      `<meta property="og:image:width" content="1200" />`,
+      `<meta property="og:image:height" content="630" />`,
+      `<meta property="og:image:type" content="image/png" />`,
       `<meta property="article:published_time" content="${esc(post.createdAt)}" />`,
       post.updatedAt ? `<meta property="article:modified_time" content="${esc(post.updatedAt)}" />` : "",
       ...(post.tags || []).map((tag) => `<meta property="article:tag" content="${esc(tag)}" />`),
@@ -145,7 +180,8 @@ const prerender: PagesFunction<Env> = async (context) => {
       status: 200,
       headers: {
         "Content-Type": "text/html; charset=utf-8",
-        "Cache-Control": "public, max-age=3600, s-maxage=86400",
+        // 10 分钟窗口：文章编辑后爬虫侧最长延迟一档刷新，避免 24h 陈旧 head
+        "Cache-Control": "public, max-age=600, s-maxage=600",
         "X-Robots-Tag": "index, follow",
       },
     });

@@ -173,6 +173,7 @@ export function PostPage() {
         description={post.excerpt || undefined}
         url={`/posts/${post.slug}`}
         type="article"
+        image={post.coverImage || undefined}
         publishedTime={post.createdAt}
         modifiedTime={post.updatedAt}
         tags={post.tags}
