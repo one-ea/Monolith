@@ -65,7 +65,7 @@ export function AdminLogin() {
     let cancelled = false;
 
     const siteTheme = (): "light" | "dark" =>
-      document.documentElement.getAttribute("data-theme") === "light" ? "light" : "dark";
+      document.documentElement.getAttribute("data-mode") === "light" ? "light" : "dark";
 
     const renderWidget = () => {
       if (cancelled || !widgetRef.current || !window.turnstile) return;
@@ -87,7 +87,7 @@ export function AdminLogin() {
       if (cancelled) return;
       renderWidget();
       observer = new MutationObserver(renderWidget);
-      observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+      observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-mode"] });
     };
 
     if (window.turnstile) {

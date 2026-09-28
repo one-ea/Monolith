@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, type ComponentType, type ReactNode } from "react";
 import { getToken } from "@/lib/api";
-import { applySiteTheme, normalizeSiteThemeMode, normalizeSiteThemeStyle, type SiteThemeMode, type SiteThemeStyle } from "@/lib/site-theme";
+import { applySiteTheme, normalizeTheme, normalizeSiteThemeMode, type SiteThemeMode, type Theme } from "@/lib/site-theme";
 import {
   parseCustomSnippets,
   serializeCustomSnippets,
@@ -8,7 +8,7 @@ import {
   SNIPPET_PRESETS,
   type CustomSnippet,
 } from "@/lib/custom-injection";
-import { Save, Globe, User, Link2, ToggleLeft, ToggleRight, Code, Rss, Plus, Trash2, GripVertical, Home, Eye, Search, CheckCircle2, AlertTriangle, Clock3, Shield, Moon, Sun, Monitor, Palette, Droplets, ChevronDown, ChevronRight, Bell, Send, Wand2 } from "lucide-react";
+import { Save, Globe, User, Link2, ToggleLeft, ToggleRight, Code, Rss, Plus, Trash2, GripVertical, Home, Eye, Search, CheckCircle2, AlertTriangle, Clock3, Shield, Moon, Sun, Monitor, Palette, ChevronDown, ChevronRight, Bell, Send, Wand2, Apple, Smartphone, Shapes } from "lucide-react";
 
 type Settings = {
   site_title: string;
@@ -38,7 +38,7 @@ type Settings = {
   turnstile_enabled: string;
   turnstile_sitekey: string;
   site_theme_mode: string;
-  site_theme_style: string;
+  site_theme_design: string;
   custom_snippets: string;
   site_origin: string;
   webhook_urls: string;
@@ -92,7 +92,7 @@ const defaultSettings: Settings = {
   turnstile_enabled: "false",
   turnstile_sitekey: "",
   site_theme_mode: "dark",
-  site_theme_style: "default",
+  site_theme_design: "classic",
   custom_snippets: "",
   site_origin: "",
   webhook_urls: "",
@@ -155,14 +155,15 @@ const THEME_MODE_OPTIONS: {
   { id: "system", name: "跟随系统", icon: Monitor },
 ];
 
-const THEME_STYLE_OPTIONS: {
-  id: SiteThemeStyle;
+const THEME_DESIGN_OPTIONS: {
+  id: Theme;
   name: string;
   desc: string;
   icon: ComponentType<{ className?: string }>;
 }[] = [
-  { id: "default", name: "简洁", desc: "当前默认主题", icon: Palette },
-  { id: "fluid", name: "液态玻璃", desc: "流体光斑 · 玻璃质感", icon: Droplets },
+  { id: "classic", name: "Classic Primer", desc: "GitHub Primer 基线 · 站点默认观感", icon: Shapes },
+  { id: "apple", name: "Apple Theme", desc: "HIG · Liquid Glass 玻璃材质（接替原液态玻璃）", icon: Apple },
+  { id: "pixel", name: "Pixel Theme", desc: "Material 3 Expressive · Container 层级 · 弹簧动效", icon: Smartphone },
 ];
 
 function createSocialLink(link: Partial<SocialLinkConfig> = {}): SocialLinkConfig {
@@ -424,7 +425,7 @@ export function AdminSettings() {
   const indexNowEnabled = settings.indexnow_enabled !== "false";
   const turnstileEnabled = settings.turnstile_enabled === "true";
   const themeMode = normalizeSiteThemeMode(settings.site_theme_mode);
-  const themeStyle = normalizeSiteThemeStyle(settings.site_theme_style);
+  const themeDesign = normalizeTheme(settings.site_theme_design);
   const customSnippets = parseCustomSnippets(settings.custom_snippets);
   const socialLinks = getSocialLinks(settings);
   const heroActions = parseHeroActions(settings.hero_actions);
@@ -478,10 +479,10 @@ export function AdminSettings() {
     updateHeroTopics([...heroTopics, { id: createStableId("hero-topic"), title: "新主题", desc: "描述这个主题对读者的价值" }]);
   };
 
-  const previewSiteTheme = (mode: SiteThemeMode, style: SiteThemeStyle) => {
+  const previewSiteTheme = (mode: SiteThemeMode, design: Theme) => {
     updateSetting("site_theme_mode", mode);
-    updateSetting("site_theme_style", style);
-    applySiteTheme(mode, style);
+    updateSetting("site_theme_design", design);
+    applySiteTheme(mode, design);
   };
 
   const updateSnippet = (id: string, patch: Partial<CustomSnippet>) => {
@@ -669,8 +670,34 @@ export function AdminSettings() {
             <div className="space-y-[20px] animate-fade-in" role="tabpanel" id="settings-panel-theme" aria-labelledby="settings-tab-theme">
               <div>
                 <h2 className="text-[16px] font-semibold mb-[4px]">主题外观</h2>
-                <p className="text-[12px] text-muted-foreground/50 mb-[16px]">全站明暗模式与视觉风格，对前台所有访客统一生效；前台不再提供主题切换入口。</p>
+                <p className="text-[12px] text-muted-foreground/50 mb-[16px]">全站设计语言与明暗模式，对前台所有访客统一生效；前台不再提供主题切换入口。</p>
                 <div className="rounded-md border border-border/20 bg-card/5 p-[16px] sm:p-[20px] space-y-[20px]">
+                  <div>
+                    <label className="mb-[6px] block text-[11px] font-medium text-muted-foreground/45 uppercase tracking-normal">设计语言</label>
+                    <div className="grid grid-cols-1 gap-[8px] sm:grid-cols-3">
+                      {THEME_DESIGN_OPTIONS.map((option) => (
+                        <button
+                          key={option.id}
+                          type="button"
+                          onClick={() => previewSiteTheme(themeMode, option.id)}
+                          aria-pressed={themeDesign === option.id}
+                          className={`flex min-h-[44px] items-center gap-[10px] rounded-md border px-[12px] text-left transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${
+                            themeDesign === option.id
+                              ? "border-border bg-accent/40"
+                              : "border-border/50 hover:bg-accent/20"
+                          }`}
+                        >
+                          <option.icon className="h-[15px] w-[15px] shrink-0 text-muted-foreground" />
+                          <span className="min-w-0 flex-1">
+                            <span className="block text-[13px] font-medium leading-tight text-foreground">{option.name}</span>
+                            <span className="block truncate text-[11px] text-muted-foreground">{option.desc}</span>
+                          </span>
+                          {themeDesign === option.id && <CheckCircle2 className="h-[14px] w-[14px] shrink-0 text-foreground" />}
+                        </button>
+                      ))}
+                    </div>
+                    <p className="mt-[6px] text-[11px] leading-[1.55] text-muted-foreground/35">同一套组件与语义 Token，多套设计语言即时换肤；Liquid Glass 仅用于 Apple 主题的导航与浮层。</p>
+                  </div>
                   <div>
                     <label className="mb-[6px] block text-[11px] font-medium text-muted-foreground/45 uppercase tracking-normal">明暗模式</label>
                     <div className="grid grid-cols-3 gap-[8px]">
@@ -678,7 +705,7 @@ export function AdminSettings() {
                         <button
                           key={option.id}
                           type="button"
-                          onClick={() => previewSiteTheme(option.id, themeStyle)}
+                          onClick={() => previewSiteTheme(option.id, themeDesign)}
                           aria-pressed={themeMode === option.id}
                           className={`flex min-h-[44px] items-center justify-center gap-[6px] rounded-md border px-[8px] text-[13px] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${
                             themeMode === option.id
@@ -692,31 +719,6 @@ export function AdminSettings() {
                       ))}
                     </div>
                     <p className="mt-[6px] text-[11px] leading-[1.55] text-muted-foreground/35">选择「跟随系统」时，按每位访客设备的系统偏好自动切换明暗。</p>
-                  </div>
-                  <div>
-                    <label className="mb-[6px] block text-[11px] font-medium text-muted-foreground/45 uppercase tracking-normal">视觉风格</label>
-                    <div className="grid grid-cols-1 gap-[8px] sm:grid-cols-2">
-                      {THEME_STYLE_OPTIONS.map((option) => (
-                        <button
-                          key={option.id}
-                          type="button"
-                          onClick={() => previewSiteTheme(themeMode, option.id)}
-                          aria-pressed={themeStyle === option.id}
-                          className={`flex min-h-[44px] items-center gap-[10px] rounded-md border px-[12px] text-left transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${
-                            themeStyle === option.id
-                              ? "border-border bg-accent/40"
-                              : "border-border/50 hover:bg-accent/20"
-                          }`}
-                        >
-                          <option.icon className="h-[15px] w-[15px] shrink-0 text-muted-foreground" />
-                          <span className="min-w-0 flex-1">
-                            <span className="block text-[13px] font-medium leading-tight text-foreground">{option.name}</span>
-                            <span className="block truncate text-[11px] text-muted-foreground">{option.desc}</span>
-                          </span>
-                          {themeStyle === option.id && <CheckCircle2 className="h-[14px] w-[14px] shrink-0 text-foreground" />}
-                        </button>
-                      ))}
-                    </div>
                   </div>
                   <p className="text-[11px] leading-[1.55] text-muted-foreground/35">点击即在本页即时预览；保存后对全站生效，未保存的改动刷新后会还原。</p>
                 </div>

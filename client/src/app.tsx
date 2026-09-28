@@ -106,7 +106,7 @@ export function App() {
         <>
           <Navbar />
           <main className="mx-auto w-full max-w-[1440px] px-[20px] lg:px-[40px] flex-1 flex flex-col">
-            <Suspense fallback={<div className="p-8 flex justify-center text-zinc-500">Loading...</div>}>
+            <Suspense fallback={<div className="p-8 flex justify-center text-muted-foreground">Loading...</div>}>
               <Switch>
                 <Route path="/" component={HomePage} />
                 <Route path="/docs/:seriesSlug/:slug?" component={DocsPage} />
@@ -138,7 +138,7 @@ export function App() {
       {isEditorPage && (
         <ProtectedRoute>
           <main className="mx-auto w-full px-[16px] flex-1 flex flex-col">
-            <Suspense fallback={<div className="p-8 flex justify-center text-zinc-500">Loading...</div>}>
+            <Suspense fallback={<div className="p-8 flex justify-center text-muted-foreground">Loading...</div>}>
               <Switch>
                 <Route path="/admin/editor/:slug?">
                   <AdminEditor />
@@ -152,7 +152,7 @@ export function App() {
       {/* ======== 3. 后台登录页 (无外壳独立渲染) ======== */}
       {isLoginPage && (
         <main className="mx-auto w-full max-w-[1440px] px-[20px] lg:px-[40px] flex-1 flex flex-col">
-           <Suspense fallback={<div className="p-8 flex justify-center text-zinc-500">Loading...</div>}>
+           <Suspense fallback={<div className="p-8 flex justify-center text-muted-foreground">Loading...</div>}>
             <Switch>
               <Route path="/admin/login" component={AdminLogin} />
             </Switch>
@@ -164,7 +164,7 @@ export function App() {
       {isAdminArea && (
         <ProtectedRoute>
           <AdminLayout>
-            <Suspense fallback={<div className="p-8 flex justify-center text-zinc-500">Loading...</div>}>
+            <Suspense fallback={<div className="p-8 flex justify-center text-muted-foreground">Loading...</div>}>
               <Switch>
                 <Route path="/admin/settings"><AdminSettings /></Route>
                 <Route path="/admin/backup"><AdminBackup /></Route>

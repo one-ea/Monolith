@@ -918,7 +918,7 @@ app.get("/api/settings/public", async (c) => {
     turnstile_enabled: all.turnstile_enabled === "true" ? "true" : "false",
     turnstile_sitekey: all.turnstile_sitekey || "",
     site_theme_mode: all.site_theme_mode === "light" || all.site_theme_mode === "system" ? all.site_theme_mode : "dark",
-    site_theme_style: all.site_theme_style === "fluid" ? "fluid" : "default",
+    site_theme_design: all.site_theme_design === "apple" || all.site_theme_design === "pixel" ? all.site_theme_design : "classic",
     custom_snippets: all.custom_snippets || "",
   });
 });

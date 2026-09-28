@@ -36,31 +36,39 @@
     <link rel="alternate" type="application/rss+xml" title="Monolith RSS" href="/rss.xml" />
   </head>
   <body class="min-h-full flex flex-col font-sans bg-background text-foreground">
-    <!-- 主题初始化：在 React 加载前设置 data-theme / data-style，防止闪烁 -->
+    <!-- 主题初始化：在 React 加载前设置 data-mode(明暗) / data-theme(设计语言)，防止闪烁 -->
     <script>
       (function(){
         // 全站主题由控制台「站点配置 → 主题外观」决定；cookie 为首屏同步缓存，
-        // 首次访问在公共设置加载前按默认暗色渲染，设置加载后立即校正并写入缓存。
-        var mode = 'dark', style = 'default';
+        // 首次访问在公共设置加载前按默认（classic · 暗色）渲染，设置加载后立即校正并写入缓存。
+        // cookie 现行格式 mode|design；兼容旧 mode|style|design 与 mode|style（style 段忽略）。
+        var mode = 'dark', design = 'classic';
         var m = document.cookie.match(/(?:^|;\s*)monolith_site_theme=([^;]+)/);
         if (m) {
           try {
             var parts = decodeURIComponent(m[1]).split('|');
             if (['dark','light','system'].indexOf(parts[0]) >= 0) mode = parts[0];
-            if (['default','fluid'].indexOf(parts[1]) >= 0) style = parts[1];
+            var dsn = parts.length >= 3 ? parts[2]
+              : (parts[1] && parts[1] !== 'default' && parts[1] !== 'fluid' ? parts[1] : '');
+            if (['apple','pixel','classic'].indexOf(dsn) >= 0) design = dsn;
           } catch (e) {}
         }
         var d = mode === 'system'
           ? (window.matchMedia('(prefers-color-scheme:dark)').matches ? 'dark' : 'light')
           : mode;
-        document.documentElement.setAttribute('data-theme', d);
-        document.documentElement.setAttribute('data-style', style);
-        // 同步 theme-color
+        document.documentElement.setAttribute('data-mode', d);
+        document.documentElement.setAttribute('data-theme', design);
+        // 移除历史风格轴（液态玻璃已下线，玻璃风格由 Apple Theme 承担）
+        document.documentElement.removeAttribute('data-style');
+        // 同步 theme-color（设计语言 × 明暗）
         var mc = document.querySelector('meta[name="theme-color"]');
         if (mc) {
-          mc.setAttribute('content', style === 'fluid'
-            ? (d === 'light' ? '#f6f4fb' : '#0d0b1a')
-            : (d === 'light' ? '#ffffff' : '#0d1117'));
+          var light = d === 'light';
+          mc.setAttribute('content', design === 'apple'
+            ? (light ? '#f5f5f7' : '#141418')
+            : design === 'pixel'
+              ? (light ? '#fbf7ff' : '#16121c')
+              : (light ? '#ffffff' : '#0d1117'));
         }
         // 清理旧版访客本地主题偏好（主题已改为控制台全站设置）
         try {
