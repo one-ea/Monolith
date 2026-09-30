@@ -25,7 +25,8 @@
     "db:seed:local": "npm -w monolith-server run db:seed:local",
     "db:seed:test-posts:local": "npm -w monolith-server run db:seed:test-posts:local",
     "check": "npm --workspaces run check",
-    "lint": "npm --workspaces run lint"
+    "lint": "npm --workspaces run lint",
+    "test": "vitest run"
   },
   "engines": {
     "node": ">=22"
@@ -33,7 +34,8 @@
   "devDependencies": {
     "brace-expansion": "5.0.9",
     "concurrently": "^9.2.4",
-    "undici": "7.29.0"
+    "undici": "7.29.0",
+    "vitest": "^5.0.2"
   },
   "overrides": {
     "@babel/core": "^7.29.6",
