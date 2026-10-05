@@ -2407,8 +2407,10 @@
 /* ── 图片懒加载渐进淡入 ──────────────────── */
 
 .lazy-img {
-  opacity: 0;
-  transform: translateY(8px);
+  /* Native loading="lazy" handles network deferral; keep the image visible even
+     when the page is rendered outside PostPage's IntersectionObserver lifecycle. */
+  opacity: 1;
+  transform: translateY(0);
   transition: opacity 0.5s ease, transform 0.5s ease;
   will-change: opacity, transform;
 }
