@@ -59,7 +59,7 @@ function d1Scope(mode) {
   return mode === "remote" ? "--remote" : "--local";
 }
 
-function queryPostsColumns(options) {
+function queryTableColumns(options, table) {
   const output = runWrangler(
     [
       "d1",
@@ -68,9 +68,9 @@ function queryPostsColumns(options) {
       d1Scope(options.mode),
       "--json",
       "--command",
-      "SELECT name FROM pragma_table_info('posts');",
+      `SELECT name FROM pragma_table_info('${table}');`,
     ],
-    "读取 posts 表结构",
+    `读取 ${table} 表结构`,
   );
 
   try {
@@ -85,7 +85,7 @@ function queryPostsColumns(options) {
   }
 }
 
-function addColumn(options, column) {
+function addColumn(options, table, column) {
   runWrangler(
     [
       "d1",
@@ -93,37 +93,57 @@ function addColumn(options, column) {
       options.database,
       d1Scope(options.mode),
       "--command",
-      `ALTER TABLE posts ADD COLUMN ${column.sql};`,
+      `ALTER TABLE ${table} ADD COLUMN ${column.sql};`,
     ],
-    `补全 posts.${column.name}`,
+    `补全 ${table}.${column.name}`,
   );
 }
 
-const POST_COLUMNS = [
-  { name: "view_count", sql: "view_count INTEGER NOT NULL DEFAULT 0" },
-  { name: "pinned", sql: "pinned INTEGER NOT NULL DEFAULT 0" },
-  { name: "publish_at", sql: "publish_at TEXT" },
-  { name: "cover_image", sql: "cover_image TEXT DEFAULT ''" },
-  { name: "series_slug", sql: "series_slug TEXT" },
-  { name: "series_order", sql: "series_order INTEGER NOT NULL DEFAULT 0" },
-  { name: "category", sql: "category TEXT DEFAULT ''" },
-  { name: "card_width", sql: "card_width INTEGER NOT NULL DEFAULT 100" },
-  { name: "card_height", sql: "card_height INTEGER NOT NULL DEFAULT 220" },
-];
+/* 各表的历史兼容列（与 server/src/migrations 及适配器 ensure*Table 保持一致） */
+const RECONCILE_COLUMNS = {
+  posts: [
+    { name: "view_count", sql: "view_count INTEGER NOT NULL DEFAULT 0" },
+    { name: "pinned", sql: "pinned INTEGER NOT NULL DEFAULT 0" },
+    { name: "publish_at", sql: "publish_at TEXT" },
+    { name: "cover_image", sql: "cover_image TEXT DEFAULT ''" },
+    { name: "series_slug", sql: "series_slug TEXT" },
+    { name: "series_order", sql: "series_order INTEGER NOT NULL DEFAULT 0" },
+    { name: "category", sql: "category TEXT DEFAULT ''" },
+    { name: "card_width", sql: "card_width INTEGER NOT NULL DEFAULT 100" },
+    { name: "card_height", sql: "card_height INTEGER NOT NULL DEFAULT 220" },
+  ],
+  comments: [
+    { name: "parent_id", sql: "parent_id INTEGER REFERENCES comments(id) ON DELETE CASCADE" },
+    { name: "is_admin", sql: "is_admin INTEGER NOT NULL DEFAULT 0" },
+  ],
+};
 
 const options = parseArgs(process.argv.slice(2));
 console.log(`[info] D1 schema reconcile: ${options.database} (${options.mode})`);
 
-const columns = queryPostsColumns(options);
-const missing = POST_COLUMNS.filter((column) => !columns.has(column.name));
+let repaired = [];
 
-if (missing.length === 0) {
-  console.log("[ok] posts 表列已完整，无需补全。");
-  process.exit(0);
+for (const [table, columns] of Object.entries(RECONCILE_COLUMNS)) {
+  const existing = queryTableColumns(options, table);
+
+  if (existing.size === 0 && table !== "posts") {
+    console.log(`[warn] ${table} 表不存在，跳过补列（请先运行 npm run db:migrate:local 或远程迁移）。`);
+    continue;
+  }
+
+  const missing = columns.filter((column) => !existing.has(column.name));
+  if (missing.length === 0) {
+    console.log(`[ok] ${table} 表列已完整，无需补全。`);
+    continue;
+  }
+
+  for (const column of missing) {
+    addColumn(options, table, column);
+  }
+  console.log(`[ok] 已补全 ${table} 表列：${missing.map((column) => column.name).join(", ")}`);
+  repaired.push(...missing.map((column) => `${table}.${column.name}`));
 }
 
-for (const column of missing) {
-  addColumn(options, column);
+if (repaired.length === 0) {
+  console.log("[ok] 所有表列已完整。");
 }
-
-console.log(`[ok] 已补全 posts 表列：${missing.map((column) => column.name).join(", ")}`);

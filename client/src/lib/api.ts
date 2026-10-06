@@ -558,6 +558,8 @@ export type CommentData = {
   authorName: string;
   content: string;
   approved: boolean;
+  parentId: number | null;
+  isAdmin?: boolean;
   createdAt: string;
 };
 
@@ -591,11 +593,17 @@ export async function submitComment(slug: string, data: {
   authorName: string;
   authorEmail?: string;
   content: string;
+  parentId?: number;
   _hp?: string;
-}): Promise<{ success: boolean; message?: string; error?: string }> {
+}): Promise<{ success: boolean; message?: string; error?: string; comment?: CommentData }> {
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  const token = getToken();
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
   const res = await fetch(`${API_BASE}/api/posts/${slug}/comments`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers,
     body: JSON.stringify(data),
   });
   return res.json();
@@ -704,6 +712,12 @@ export async function approveComment(id: number): Promise<void> {
     headers: authHeaders(),
   });
   if (!res.ok) throw new Error("审核失败");
+}
+
+export async function replyToComment(id: number, data: { authorName?: string; content: string }): Promise<CommentData> {
+  const res = await fetch(`${API_BASE}/api/admin/comments/${id}/replies`, { method: "POST", headers: { "Content-Type": "application/json", ...authHeaders() }, body: JSON.stringify(data) });
+  if (!res.ok) throw new Error(await readError(res, "回复失败"));
+  return res.json();
 }
 
 export async function deleteComment(id: number): Promise<void> {

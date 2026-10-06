@@ -4,7 +4,7 @@
    但使用 PostgreSQL 方言（serial, timestamp 等）
    ────────────────────────────────────────────── */
 
-import { pgTable, serial, text, boolean, integer, timestamp, primaryKey, uniqueIndex, index } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, boolean, integer, timestamp, primaryKey, uniqueIndex, index, type AnyPgColumn } from "drizzle-orm/pg-core";
 
 /* ── 文章表 ────────────────────────────────── */
 export const pgPosts = pgTable("posts", {
@@ -82,10 +82,13 @@ export const pgComments = pgTable(
     authorEmail: text("author_email").notNull().default(""),
     content: text("content").notNull(),
     approved: boolean("approved").notNull().default(false),
+    parentId: integer("parent_id").references((): AnyPgColumn => pgComments.id, { onDelete: "cascade" }),
+    isAdmin: boolean("is_admin").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({
     postIdIdx: index("pg_comments_post_id_idx").on(table.postId),
+    parentIdIdx: index("pg_comments_parent_id_idx").on(table.parentId),
   })
 );
 
