@@ -20,7 +20,7 @@
     "@aws-sdk/client-s3": "^3.1141.0",
     "@libsql/client": "^0.18.0",
     "drizzle-orm": "^0.45.3",
-    "hono": "^4.13.9",
+    "hono": "^4.13.13",
     "postgres": "^3.4.9"
   },
   "devDependencies": {
