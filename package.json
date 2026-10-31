@@ -50,7 +50,7 @@
       "dompurify": "3.4.14"
     },
     "serialize-javascript": "7.0.5",
-    "qs": "6.16.0",
+    "qs": "6.17.1",
     "shell-quote": "1.9.0",
     "undici": "7.30.0",
     "ws": "8.21.0"
