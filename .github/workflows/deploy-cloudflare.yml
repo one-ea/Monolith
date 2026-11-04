@@ -5,7 +5,7 @@ name: Cloudflare Deploy
 # ADMIN_PASSWORD / JWT_SECRET / REACTION_SALT 等业务 secret 全程不被触碰（无需配置为 Actions secret）。
 # 所需 Actions secret：
 #   CLOUDFLARE_API_TOKEN（必需）— Workers/Pages/D1 部署权限
-#   CLOUDFLARE_ACCOUNT_ID（必需）— 32 位十六进制账户 ID；API Token 模式下无法可靠自动探测
+#   CLOUDFLARE_ACCOUNT_ID（可选）— wrangler.toml 已含 account_id 时可省略
 # 触发：Actions 页面手动运行；日常推送不自动部署（生产部署须明确下令）。
 
 on:
@@ -21,11 +21,6 @@ on:
           - dev
       skip_migrate:
         description: 跳过远程数据库迁移
-        required: true
-        default: false
-        type: boolean
-      skip_reconcile:
-        description: 跳过 D1 schema reconcile（仅高级排错使用）
         required: true
         default: false
         type: boolean
@@ -78,44 +73,20 @@ jobs:
             echo "::error::缺少 Actions secret CLOUDFLARE_API_TOKEN（Settings → Secrets and variables → Actions）"
             exit 1
           fi
-          if [ -z "${CLOUDFLARE_ACCOUNT_ID}" ]; then
-            echo "::error::缺少 Actions secret CLOUDFLARE_ACCOUNT_ID（32 位十六进制账户 ID）"
-            exit 1
-          fi
-          if ! printf '%s' "${CLOUDFLARE_ACCOUNT_ID}" | grep -Eq '^[0-9a-fA-F]{32}$'; then
-            echo "::error::CLOUDFLARE_ACCOUNT_ID 格式无效：需要 32 位十六进制"
-            exit 1
-          fi
           echo "pages_branch=${{ inputs.pages_branch }}"
-          npx wrangler whoami --json || echo "::warning::wrangler whoami 无法读取用户信息（API Token 权限受限）；继续使用显式 CLOUDFLARE_ACCOUNT_ID"
+          npx wrangler whoami
 
-      - name: Reconcile D1 schema (pre-migration)
-        if: ${{ !inputs.skip_reconcile }}
-        working-directory: server
-        run: node ../scripts/reconcile-d1-schema.mjs --remote
-
-      - name: Repair D1 migration ledger
+      - name: Apply remote D1 migrations & reconcile
         if: ${{ !inputs.skip_migrate }}
+        run: |
+          printf 'y\n' | npx wrangler d1 migrations apply monolith-db --remote
+          node ../scripts/reconcile-d1-schema.mjs --remote
         working-directory: server
-        run: node ../scripts/repair-d1-migrations.mjs --remote
-
-      - name: Apply remote D1 migrations
-        if: ${{ !inputs.skip_migrate }}
-        working-directory: server
-        run: printf 'y\n' | npx wrangler d1 migrations apply monolith-db --remote
-
-      - name: Reconcile D1 schema (post-migration)
-        if: ${{ !inputs.skip_reconcile }}
-        working-directory: server
-        run: node ../scripts/reconcile-d1-schema.mjs --remote
 
       - name: Deploy Workers backend
         if: ${{ !inputs.skip_server }}
-        working-directory: server
-        shell: bash
         run: |
-          set -o pipefail
-          npx wrangler deploy --var CLOUDFLARE_ACCOUNT_ID:${CLOUDFLARE_ACCOUNT_ID} 2>&1 | tee /tmp/deploy-server.log
+          npm run deploy:server 2>&1 | tee /tmp/deploy-server.log
           WORKERS_URL="$(grep -oE 'https://[a-zA-Z0-9.-]+\.workers\.dev' /tmp/deploy-server.log | tail -1 || true)"
           if [ -n "${WORKERS_URL}" ]; then
             echo "WORKERS_URL=${WORKERS_URL}" >> "$GITHUB_ENV"
@@ -147,9 +118,7 @@ jobs:
 
       - name: Deploy Pages frontend
         if: ${{ !inputs.skip_client }}
-        shell: bash
         run: |
-          set -o pipefail
           npx wrangler pages deploy dist --project-name monolith-client \
             --branch "${{ inputs.pages_branch }}" \
             --commit-dirty=true \
