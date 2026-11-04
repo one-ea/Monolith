@@ -5,6 +5,9 @@
    ────────────────────────────────────────────── */
 
 import { Hono } from "hono";
+import { buildCommentReplyEmail, shouldNotifyCommentReply } from "./comment-notifications";
+import { toCommentReplyErrorResponse, toPublicCommentSubmissionErrorResponse } from "./comment-reply-errors";
+import { parsePublicCommentInput } from "./public-comment-input";
 import { cors } from "hono/cors";
 import { sign, verify } from "hono/jwt";
 import type { Context } from "hono";
@@ -63,6 +66,7 @@ type Variables = {
   jwtPayload: { sub: string; scope?: string; exp: number };
   db: IDatabase;
   storage: IObjectStorage;
+  requestSettings: Record<string, string>;
 };
 
 const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
@@ -195,9 +199,17 @@ function pickSiteOrigin(settings: Record<string, string>, env: Partial<Bindings>
 }
 
 /** 通知类配置（Resend 发件人、管理员邮箱、站点域名）：控制台设置优先，回退部署变量 */
-async function getNotificationSettings(c: AppContext): Promise<{ resendFrom: string; adminEmail: string; siteOrigin: string }> {
+async function getRequestSettings(c: AppContext): Promise<Record<string, string>> {
+  const cached = c.get("requestSettings");
+  if (cached) return cached;
   let settings: Record<string, string> = {};
   try { settings = await c.get("db").getSettings(); } catch { /* 通知路径容错 */ }
+  c.set("requestSettings", settings);
+  return settings;
+}
+
+async function getNotificationSettings(c: AppContext): Promise<{ resendFrom: string; adminEmail: string; siteOrigin: string }> {
+  const settings = await getRequestSettings(c);
   return {
     resendFrom: settings.resend_from?.trim() || c.env.RESEND_FROM || "",
     adminEmail: settings.admin_email?.trim() || c.env.ADMIN_EMAIL || "",
@@ -695,12 +707,6 @@ function setPrivateNoStore(c: AppContext): void {
   c.header("Vary", "Cookie, Authorization");
 }
 
-function clientIp(c: AppContext): string {
-  return c.req.header("CF-Connecting-IP")
-    || c.req.header("X-Forwarded-For")?.split(",")[0]?.trim()
-    || "unknown";
-}
-
 function burstLimited(key: string): boolean {
   const now = Date.now();
   const record = unlockBurst.get(key);
@@ -895,7 +901,7 @@ app.post("/api/posts/:slug/unlock", async (c) => {
     return c.json({ error: "该文章未设置密码", code: "not_locked" }, 400);
   }
 
-  const ip = clientIp(c);
+  const ip = getClientIp(c);
   const limits = await checkUnlockLimits(db, `post:${slug}`, ip);
   if (limits.limited) {
     c.header("Retry-After", "900");
@@ -984,7 +990,7 @@ app.post("/api/series/:slug/unlock", async (c) => {
   const lock = await db.getContentLock("series", seriesSlug);
   if (!lock) return c.json({ error: "该系列未设置密码", code: "not_locked" }, 400);
 
-  const ip = clientIp(c);
+  const ip = getClientIp(c);
   const limits = await checkUnlockLimits(db, `series:${seriesSlug}`, ip);
   if (limits.limited) {
     c.header("Retry-After", "900");
@@ -1038,56 +1044,155 @@ app.get("/api/posts/:slug/comments", async (c) => {
   return c.json(safe);
 });
 
-// 提交评论（公开接口，需审核后才显示）
+// 提交评论（支持访客审核流程与博主免审直发）
 app.post("/api/posts/:slug/comments", async (c) => {
+  const authHeader = c.req.header("Authorization");
+  let isAdmin = false;
+  if (authHeader?.startsWith("Bearer ")) {
+    try {
+      await verify(authHeader.slice(7), c.env.JWT_SECRET, "HS256");
+      isAdmin = true;
+    } catch {
+      isAdmin = false;
+    }
+  }
+
   const slug = c.req.param("slug");
-  const parsed = await readJson<{
-    authorName: string;
-    authorEmail?: string;
-    content: string;
-    _hp?: string; // honeypot 反垃圾字段
-  }>(c);
+  const parsed = await readJson<Record<string, unknown>>(c);
   if (!parsed.ok) return parsed.response;
   const body = parsed.body;
 
-  // Honeypot 反垃圾：如果隐藏字段被填写，静默拒绝
-  if (body._hp) return c.json({ success: true, message: "评论已提交，等待审核" });
+  // Honeypot 反垃圾：仅对普通访客生效（任意真值都视为机器人填写）
+  if (!isAdmin && body._hp) {
+    return c.json({ success: true, message: "评论已提交，等待审核" });
+  }
 
-  if (!body.authorName?.trim() || !body.content?.trim()) {
-    return c.json({ error: "昵称和评论内容不能为空" }, 400);
+  // 访客限流检查
+  if (!isAdmin) {
+    const ip = getClientIp(c);
+    const rateLimits = await getRateLimitSettings(c.get("db"));
+    if (isRateLimited(commentAttempts, ip, Date.now(), rateLimits.comment)) {
+      return c.json({ error: "提交过于频繁，请稍后再试" }, 429);
+    }
   }
-  if (body.content.length > 2000) {
-    return c.json({ error: "评论内容不能超过 2000 字" }, 400);
-  }
+
+  let authorName: string;
+  let authorEmail: string | undefined;
+  let content: string;
+  let parentId: number | null = null;
 
   const db = c.get("db");
+  const postPromise = db.getPostBySlug(slug);
+  // 校验失败的早退 400 不会 await 该查询；挂兜底避免 unhandled rejection
+  postPromise.catch(() => {});
+
+  if (isAdmin) {
+    if (typeof body.content !== "string" || !body.content.trim()) {
+      return c.json({ error: "评论内容不能为空" }, 400);
+    }
+    if (body.content.trim().length > 2000) {
+      return c.json({ error: "评论内容不能超过 2000 字" }, 400);
+    }
+    if (body.parentId !== undefined && body.parentId !== null) {
+      if (typeof body.parentId !== "number" || !Number.isSafeInteger(body.parentId) || body.parentId <= 0) {
+        return c.json({ error: "无效的父评论 ID" }, 400);
+      }
+      parentId = body.parentId;
+    }
+
+    // settings 与文章查询相互独立，并发获取
+    const [settings, resolvedPost] = await Promise.all([getRequestSettings(c), postPromise]);
+    if (!resolvedPost || !isPublicPost(resolvedPost)) return c.json({ error: "文章未找到" }, 404);
+
+    // 博主可自定义名字，或默认使用博客作者名/“博主”
+    const rawName = typeof body.authorName === "string" ? body.authorName.trim() : "";
+    authorName = rawName.slice(0, 50) || settings.author_name || "博主";
+    authorEmail = settings.email || "";
+    content = body.content.trim();
+  } else {
+    const validated = parsePublicCommentInput(body);
+    if (!validated.ok) {
+      return c.json({ error: validated.error }, 400);
+    }
+    authorName = validated.value.authorName;
+    authorEmail = validated.value.authorEmail;
+    content = validated.value.content;
+    parentId = validated.value.parentId;
+  }
+
+  // 访问密码门禁：普通访客必须已解锁；博主可直接评论锁定文章。
   const access = await resolvePostAccess(c, slug);
   if (access.status === "not_found") return c.json({ error: "文章未找到" }, 404);
-  if (access.status === "locked") return lockedPostResponse(c, access.access);
-  if (access.unlockRequired) setPrivateNoStore(c);
+  if (access.status === "locked" && !isAdmin) return lockedPostResponse(c, access.access);
+  if (access.status === "ok" && access.unlockRequired) setPrivateNoStore(c);
+  const post = access.access.post;
+
   try {
-    await db.addComment({
+    const created = await db.addComment({
       postSlug: slug,
-      authorName: body.authorName.trim(),
-      authorEmail: body.authorEmail?.trim() || "",
-      content: body.content.trim(),
+      authorName,
+      authorEmail,
+      content,
+      parentId,
+      isAdmin,
     });
-    
-    // 异步触发评论提醒邮件（Resend/Webhook）：收件人与发件人支持控制台配置
+
     const escHtml = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
     const { adminEmail, siteOrigin } = await getNotificationSettings(c);
+
+    if (isAdmin) {
+      // 博主回复他人时，若父评论有邮箱且已审核，立即发送邮件通知
+      if (parentId != null) {
+        try {
+          const parent = await db.getCommentById(parentId);
+          if (parent && shouldNotifyCommentReply(parent)) {
+            await sendEmail(c, {
+              to: parent.authorEmail,
+              ...buildCommentReplyEmail({
+                recipientName: parent.authorName,
+                replyAuthorName: authorName,
+                replyContent: content,
+                postTitle: post.title,
+                postSlug: slug,
+                parentCommentId: parent.id,
+                siteOrigin,
+              }),
+            });
+          }
+        } catch {
+          // 邮件发送失败不阻断评论创建
+        }
+      }
+      return c.json({
+        success: true,
+        message: parentId ? "回复已发布" : "评论已发布",
+        comment: {
+          id: created.id,
+          postId: created.postId,
+          authorName: created.authorName,
+          content: created.content,
+          approved: created.approved,
+          parentId: created.parentId,
+          isAdmin: created.isAdmin,
+          createdAt: created.createdAt,
+        },
+      });
+    }
+
+    // 访客提交需审核，通知管理员
     await sendEmail(c, {
       to: adminEmail,
       subject: `[Monolith] 新评论待审核: ${slug}`,
-      html: `<p><strong>${escHtml(body.authorName.trim())}</strong> 刚刚在文章 <code>${escHtml(slug)}</code> 提交了评论：</p>
-             <blockquote style="border-left: 4px solid #eee; padding-left: 10px; color: #555;">${escHtml(body.content.trim())}</blockquote>
-             <p>邮箱: ${escHtml(body.authorEmail?.trim() || "无")}</p>
+      html: `<p><strong>${escHtml(authorName)}</strong> 刚刚在文章 <code>${escHtml(slug)}</code> 提交了评论：</p>
+             <blockquote style="border-left: 4px solid #eee; padding-left: 10px; color: #555;">${escHtml(content)}</blockquote>
+             <p>邮箱: ${escHtml(authorEmail || "无")}</p>
              <p><a href="${siteOrigin}/admin/comments">前往后台审核</a></p>`,
     });
 
-    return c.json({ success: true, message: "评论已提交，等待审核" });
+    return c.json({ success: true, message: parentId ? "回复已提交，审核通过后公开" : "评论已提交，等待审核" });
   } catch (err) {
-    return c.json({ error: err instanceof Error ? err.message : "提交失败" }, 400);
+    const failure = toPublicCommentSubmissionErrorResponse(err, { isReply: parentId != null });
+    return c.json({ error: failure.error }, failure.status);
   }
 });
 
@@ -1576,6 +1681,7 @@ type AttemptRecord = { count: number; firstAttempt: number };
 const loginAttempts = new Map<string, AttemptRecord>();
 const friendLinkAttempts = new Map<string, AttemptRecord>();
 const guestbookAttempts = new Map<string, AttemptRecord>();
+const commentAttempts = new Map<string, AttemptRecord>();
 const RATE_LIMIT_MAX_KEYS = 1000;
 
 function clampIntSetting(value: string | undefined, min: number, max: number, fallback: number): number {
@@ -1589,6 +1695,7 @@ let rateLimitSettingsCache: {
   login: RateLimitRule;
   friendLink: RateLimitRule;
   guestbook: RateLimitRule;
+  comment: RateLimitRule;
   fetchedAt: number;
 } | null = null;
 const RATE_LIMIT_SETTINGS_TTL = 15_000;
@@ -1612,6 +1719,10 @@ async function getRateLimitSettings(db: IDatabase) {
     guestbook: {
       limit: clampIntSetting(settings.guestbook_rate_limit, 1, 100, 5),
       windowMs: clampIntSetting(settings.guestbook_rate_window_hours, 1, 720, 1) * 3_600_000,
+    },
+    comment: {
+      limit: clampIntSetting(settings.comment_rate_limit, 1, 100, 3),
+      windowMs: clampIntSetting(settings.comment_rate_window_minutes, 1, 1440, 5) * 60_000,
     },
     fetchedAt: now,
   };
@@ -1925,9 +2036,49 @@ app.post("/api/admin/comments/:id/approve", async (c) => {
   const id = parseInt(c.req.param("id"));
   if (isNaN(id)) return c.json({ error: "无效 ID" }, 400);
   const db = c.get("db");
-  const ok = await db.approveComment(id);
-  if (!ok) return c.json({ error: "评论不存在" }, 404);
+  const result = await db.approveComment(id);
+  if (!result.found) return c.json({ error: "评论不存在" }, 404);
+  if (result.becameApproved && result.comment && result.parent && shouldNotifyCommentReply(result.parent)) {
+    const { siteOrigin } = await getNotificationSettings(c);
+    await sendEmail(c, { to: result.parent.authorEmail, ...buildCommentReplyEmail({ recipientName: result.parent.authorName, replyAuthorName: result.comment.authorName, replyContent: result.comment.content, postTitle: result.comment.postTitle, postSlug: result.comment.postSlug, parentCommentId: result.parent.id, siteOrigin }) });
+  }
   return c.json({ success: true });
+});
+
+// 管理员回复任意已审核评论（直接公开）
+app.post("/api/admin/comments/:id/replies", async (c) => {
+  const parentId = Number.parseInt(c.req.param("id"), 10);
+  if (!Number.isInteger(parentId) || parentId <= 0) return c.json({ error: "无效 ID" }, 400);
+  const parsed = await readJson<{ authorName?: unknown; content?: unknown }>(c);
+  if (!parsed.ok) return parsed.response;
+  let authorName = "博主";
+  if (parsed.body.authorName !== undefined && parsed.body.authorName !== null) {
+    if (typeof parsed.body.authorName !== "string") {
+      return c.json({ error: "回复昵称必须为字符串" }, 400);
+    }
+    const trimmedName = parsed.body.authorName.trim();
+    if (trimmedName.length > 50) {
+      return c.json({ error: "回复昵称不能超过 50 字" }, 400);
+    }
+    if (trimmedName) authorName = trimmedName;
+  }
+  if (typeof parsed.body.content !== "string") {
+    return c.json({ error: "回复内容必须为字符串" }, 400);
+  }
+  const content = parsed.body.content.trim();
+  if (!content) return c.json({ error: "回复内容不能为空" }, 400);
+  if (content.length > 2000) return c.json({ error: "回复内容不能超过 2000 字" }, 400);
+  try {
+    const { reply, parent } = await c.get("db").addCommentReply(parentId, { authorName, content });
+    if (shouldNotifyCommentReply(parent)) {
+      const { siteOrigin } = await getNotificationSettings(c);
+      await sendEmail(c, { to: parent.authorEmail, ...buildCommentReplyEmail({ recipientName: parent.authorName, replyAuthorName: reply.authorName, replyContent: reply.content, postTitle: parent.postTitle, postSlug: parent.postSlug, parentCommentId: parent.id, siteOrigin }) });
+    }
+    return c.json(reply, 201);
+  } catch (err) {
+    const failure = toCommentReplyErrorResponse(err);
+    return c.json({ error: failure.error }, failure.status);
+  }
 });
 
 // 删除评论
@@ -2989,6 +3140,7 @@ app.post("/api/admin/pages/delete", async (c) => {
 });
 
 /* ── Durable Object / 导出 ──────────────────── */
+export { app };
 export default {
   fetch: app.fetch,
   async scheduled(event: any, env: Bindings, ctx: any) {

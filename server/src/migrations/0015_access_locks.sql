@@ -1,4 +1,4 @@
--- 0013: 访问控制表
+-- 0015: 访问控制表
 -- 统一存放文章 / 标签 / 分类 / 系列的访问密码哈希。
 -- 注意：不在 posts 上加 password_hash 列。SQLite 的 ALTER TABLE ADD COLUMN
 -- 不支持 IF NOT EXISTS，裸 ALTER 会在预建库或已 reconcile 的库上重复执行失败；

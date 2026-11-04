@@ -68,22 +68,22 @@ function quoteSqlString(value) {
   return `'${String(value).replace(/'/g, "''")}'`;
 }
 
-function parseAlterColumns(sql) {
+function parseAlterStatements(sql) {
   const cleaned = sql
     .replace(/\/\*[\s\S]*?\*\//g, "")
     .replace(/--[^\n]*/g, "");
   const statements = cleaned.split(";").map((statement) => statement.trim()).filter(Boolean);
   if (statements.length === 0) return null;
 
-  const columns = [];
+  const alters = [];
   for (const statement of statements) {
     const match = statement.match(
-      /^ALTER\s+TABLE\s+posts\s+ADD\s+COLUMN\s+([A-Za-z_][A-Za-z0-9_]*)\b/i
+      /^ALTER\s+TABLE\s+([A-Za-z_][A-Za-z0-9_]*)\s+ADD\s+COLUMN\s+([A-Za-z_][A-Za-z0-9_]*)\b/i
     );
     if (!match) return null;
-    columns.push(match[1]);
+    alters.push({ table: match[1], column: match[2] });
   }
-  return columns;
+  return alters;
 }
 
 const tables = new Set(
@@ -94,10 +94,6 @@ if (!tables.has("posts")) {
   console.log("[skip] posts 表不存在，交给 wrangler 从 0001 开始正常迁移。");
   process.exit(0);
 }
-
-const postColumns = new Set(
-  execute("SELECT name FROM pragma_table_info('posts');").map((row) => row.name)
-);
 
 let applied = new Set();
 if (tables.has("d1_migrations")) {
@@ -116,6 +112,19 @@ if (files.length === 0) {
 }
 
 const toStamp = [];
+const columnCache = new Map();
+
+function tableColumns(table) {
+  if (!columnCache.has(table)) {
+    columnCache.set(
+      table,
+      new Set(
+        execute(`SELECT name FROM pragma_table_info('${table}');`).map((row) => row.name)
+      )
+    );
+  }
+  return columnCache.get(table);
+}
 
 for (const file of files) {
   if (applied.has(file)) continue;
@@ -131,18 +140,18 @@ for (const file of files) {
     continue;
   }
 
-  const alterColumns = parseAlterColumns(sql);
-  if (!alterColumns) continue;
+  const alters = parseAlterStatements(sql);
+  if (!alters) continue;
 
-  const missing = alterColumns.filter((column) => !postColumns.has(column));
+  const missing = alters.filter(({ table, column }) => !tableColumns(table).has(column));
   if (missing.length === 0) {
     toStamp.push({
       file,
-      reason: `目标列已存在：${alterColumns.join(", ")}`,
+      reason: `目标列已存在：${alters.map(({ table, column }) => `${table}.${column}`).join(", ")}`,
     });
   } else {
     console.log(
-      `[skip] ${file}: 目标列尚未齐全（缺 ${missing.join(", ")}），保留给 migrations apply / reconcile 处理。`
+      `[skip] ${file}: 目标列尚未齐全（缺 ${missing.map(({ table, column }) => `${table}.${column}`).join(", ")}），保留给 migrations apply / reconcile 处理。`
     );
   }
 }
