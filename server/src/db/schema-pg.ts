@@ -51,6 +51,37 @@ export const pgPostTags = pgTable(
   })
 );
 
+/* ── 访问控制 ─────────────────────────────── */
+export const pgContentLocks = pgTable(
+  "content_locks",
+  {
+    kind: text("kind").notNull(),
+    name: text("name").notNull(),
+    passwordHash: text("password_hash").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.kind, table.name] }),
+    kindIdx: index("content_locks_kind_idx").on(table.kind),
+  })
+);
+
+/* ── 解锁失败计数 ─────────────────────────── */
+export const pgUnlockAttempts = pgTable(
+  "unlock_attempts",
+  {
+    key: text("key").notNull(),
+    windowStart: integer("window_start").notNull(),
+    count: integer("count").notNull().default(0),
+    updatedAt: integer("updated_at").notNull(),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.key, table.windowStart] }),
+    windowIdx: index("unlock_attempts_window_idx").on(table.windowStart),
+  })
+);
+
 /* ── 独立页表 ──────────────────────────────── */
 export const pgPages = pgTable("pages", {
   id: serial("id").primaryKey(),

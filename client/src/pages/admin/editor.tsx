@@ -1,11 +1,11 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useParams, useLocation } from "wouter";
-import { fetchPost, createPost, updatePost, uploadImage, localizePostImages, fetchPostVersions, restorePostVersion, type PostVersion } from "@/lib/api";
+import { fetchAdminPost, createPost, updatePost, uploadImage, localizePostImages, fetchPostVersions, restorePostVersion, type PostVersion } from "@/lib/api";
 import { CARD_GRID_SIZE_LABEL, CARD_IMAGE_MODE_LABEL, clampCardHeight, clampCardWidth, getArticleCardImageMode, getCardGridSize } from "@/lib/card-layout";
 import { renderMarkdown } from "@/lib/markdown";
 import { analyzePost } from "@/lib/seo-analyzer";
 import { buildPageDocument, runAudit, summarizeAudit, type SiteContext } from "@monolith/seo-core";
-import { Save, Eye, EyeOff, Upload, Image, ChevronDown, ChevronUp, Bold, Italic, Heading2, Heading3, Link2, Code, Quote, List, ListOrdered, Minus, Maximize2, Minimize2, Table, CheckSquare, FileCode, ImageDown, History, Check, X, ArrowDownUp, PanelRightClose, PanelRight, ArrowLeft, RotateCcw, SlidersHorizontal, CheckCircle2, AlertTriangle, XCircle } from "lucide-react";
+import { Save, Eye, EyeOff, Upload, Image, ChevronDown, ChevronUp, Bold, Italic, Heading2, Heading3, Link2, Code, Quote, List, ListOrdered, Minus, Maximize2, Minimize2, Table, CheckSquare, FileCode, ImageDown, History, Check, X, ArrowDownUp, PanelRightClose, PanelRight, ArrowLeft, RotateCcw, SlidersHorizontal, CheckCircle2, AlertTriangle, XCircle, LockKeyhole } from "lucide-react";
 import { Link } from "wouter";
 import Editor, { type Monaco } from "@monaco-editor/react";
 import type * as MonacoTypes from "monaco-editor";
@@ -147,6 +147,10 @@ export function AdminEditor() {
   });
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState({ text: "", type: "" as "" | "success" | "error" });
+  const [hasPassword, setHasPassword] = useState(false);
+  const [passwordValue, setPasswordValue] = useState("");
+  const [passwordChange, setPasswordChange] = useState(false);
+  const [removePassword, setRemovePassword] = useState(false);
   const [showPreview, setShowPreview] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [wordCount, setWordCount] = useState(0);
@@ -233,7 +237,7 @@ export function AdminEditor() {
     document.title = isEdit ? "编辑文章 | Monolith" : "新建文章 | Monolith";
 
     if (isEdit && params.slug) {
-      fetchPost(params.slug).then((post) => {
+      fetchAdminPost(params.slug).then((post) => {
         setForm({
           slug: post.slug,
           title: post.title,
@@ -251,6 +255,10 @@ export function AdminEditor() {
           seriesOrder: post.seriesOrder ?? 0,
           category: post.category || "",
         });
+        setHasPassword(Boolean(post.hasPassword));
+        setPasswordValue("");
+        setPasswordChange(false);
+        setRemovePassword(false);
         setAutoSlug(false);
       });
     } else {
@@ -323,13 +331,27 @@ export function AdminEditor() {
       };
 
       if (isEdit && params.slug) {
-        await updatePost(params.slug, { ...payload, saveVersion });
+        const passwordPayload = removePassword ? null : passwordValue ? passwordValue : undefined;
+        await updatePost(params.slug, {
+          ...payload,
+          saveVersion,
+          ...(passwordPayload !== undefined ? { password: passwordPayload } : {}),
+        });
+        if (passwordPayload !== undefined) {
+          setHasPassword(Boolean(passwordPayload));
+          setPasswordValue("");
+          setPasswordChange(false);
+          setRemovePassword(false);
+        }
         setLastSaved(new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }));
         showMsg("已保存" + (saveVersion ? "并创建了版本快照" : ""), "success");
         clearDraft(params.slug);
         if (saveVersion) setSaveVersion(false);
       } else {
-        await createPost(payload);
+        await createPost({
+          ...payload,
+          ...(passwordValue ? { password: passwordValue } : {}),
+        });
         showMsg("已创建，即将跳转...", "success");
         clearDraft("new");
         setTimeout(() => setLocation("/admin"), 1200);
@@ -619,7 +641,7 @@ export function AdminEditor() {
                   if (result.replaced > 0) {
                     showMsg(`已转换 ${result.replaced} 张图片${result.failed ? `，${result.failed} 张失败` : ""}`, "success");
                     // 重新加载文章内容到编辑器
-                    const fresh = await fetchPost(params.slug);
+                    const fresh = await fetchAdminPost(params.slug);
                     if (fresh) updateField("content", fresh.content);
                   } else {
                     showMsg(result.message || "未发现外链图片", "success");
@@ -746,6 +768,35 @@ export function AdminEditor() {
                     placeholder="如 前端、后端、DevOps"
                     className="h-[34px] w-full rounded-md border border-border/25 bg-background/28 px-[10px] text-[12px] text-foreground outline-none transition-colors placeholder:text-muted-foreground/50 focus:border-foreground/25"
                   />
+                </div>
+                <div className="sm:col-span-2 lg:col-span-2">
+                  <label className="mb-[4px] block text-[10px] uppercase tracking-normal text-muted-foreground/68">访问密码</label>
+                  {hasPassword && !passwordChange && !removePassword ? (
+                    <div className="flex h-[34px] items-center gap-[8px]">
+                      <span className="inline-flex items-center gap-[4px] rounded-[4px] border border-border/20 bg-card/30 px-[6px] py-[3px] text-[11px] text-foreground/70">
+                        <LockKeyhole className="h-[11px] w-[11px]" />已设置
+                      </span>
+                      <button type="button" onClick={() => setPasswordChange(true)} className="text-[11px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline">更换</button>
+                      <button type="button" onClick={() => setRemovePassword(true)} className="text-[11px] text-destructive/80 underline-offset-2 hover:text-destructive hover:underline">移除</button>
+                    </div>
+                  ) : (
+                    <div className="flex h-[34px] items-center gap-[6px]">
+                      <input
+                        type="password"
+                        value={passwordValue}
+                        onChange={(e) => setPasswordValue(e.target.value)}
+                        disabled={removePassword}
+                        placeholder={removePassword ? "保存后移除密码" : hasPassword ? "输入新密码（留空保持不变）" : "留空则不设密码"}
+                        autoComplete="new-password"
+                        className="h-[34px] min-w-0 flex-1 rounded-md border border-border/25 bg-background/28 px-[10px] text-[12px] text-foreground outline-none transition-colors placeholder:text-muted-foreground/50 focus:border-foreground/25 disabled:opacity-50"
+                      />
+                      {(passwordChange || removePassword) && (
+                        <button type="button" onClick={() => { setPasswordChange(false); setPasswordValue(""); setRemovePassword(false); }} className="shrink-0 text-[11px] text-muted-foreground hover:text-foreground">取消</button>
+                      )}
+                    </div>
+                  )}
+                  {removePassword && <p className="mt-[4px] text-[10px] text-destructive/80">保存后将移除访问密码</p>}
+                  {hasPassword && !passwordChange && !removePassword && <p className="mt-[4px] text-[10px] text-muted-foreground/45">读者需要密码才能打开这篇文章</p>}
                 </div>
                 {/* ─── SEO / GEO 检查面板（实时，防抖 500ms） ─── */}
                 <div className="sm:col-span-3 lg:col-span-5">

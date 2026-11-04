@@ -1,12 +1,16 @@
 import { spawnSync } from "node:child_process";
 import process from "node:process";
+import { parseWranglerJson, resolveWranglerCli } from "./lib/wrangler-cli.mjs";
 
 const projectRoot = process.cwd();
 const clientRoot = `${projectRoot}/client`;
-const DEFAULT_CLOUDFLARE_ACCOUNT_ID = "9d9474f286c406f50848ac46c7a15877";
+const ACCOUNT_ID_RE = /^[0-9a-f]{32}$/i;
 // Windows 下 npm/npx 实际是 .cmd 脚本，必须 shell:true 才能找到
 const IS_WIN = process.platform === "win32";
 const SHELL = IS_WIN;
+
+let resolvedAccountId = "";
+let cachedIdentity = null;
 
 function parseArgs(argv) {
   const options = {
@@ -14,6 +18,7 @@ function parseArgs(argv) {
     branch: "main",
     apiBase: process.env.MONOLITH_API_BASE || "",
     skipMigrate: false,
+    skipReconcile: false,
     skipServer: false,
     skipClient: false,
     skipPurge: false,
@@ -45,6 +50,11 @@ function parseArgs(argv) {
       continue;
     }
 
+    if (arg === "--skip-reconcile") {
+      options.skipReconcile = true;
+      continue;
+    }
+
     if (arg === "--skip-server") {
       options.skipServer = true;
       continue;
@@ -67,7 +77,7 @@ function runResult(command, args, extra = {}) {
     cwd: extra.cwd || projectRoot,
     env: {
       ...process.env,
-      CLOUDFLARE_ACCOUNT_ID: getCloudflareAccountId(),
+      ...(resolvedAccountId ? { CLOUDFLARE_ACCOUNT_ID: resolvedAccountId } : {}),
     },
     stdio: extra.stdio || (extra.input ? ["pipe", "inherit", "inherit"] : "inherit"),
     input: extra.input,
@@ -76,8 +86,113 @@ function runResult(command, args, extra = {}) {
   });
 }
 
-function getCloudflareAccountId() {
-  return process.env.CLOUDFLARE_ACCOUNT_ID || DEFAULT_CLOUDFLARE_ACCOUNT_ID;
+function failHard(message) {
+  console.error(`\n[error] ${message}`);
+  process.exit(1);
+}
+
+function probeWranglerIdentity() {
+  if (cachedIdentity) return cachedIdentity;
+
+  const cli = resolveWranglerCli();
+  if (!cli) {
+    cachedIdentity = { ok: false, message: "找不到本地 wrangler，请先执行 npm ci" };
+    return cachedIdentity;
+  }
+
+  const env = { ...process.env };
+  delete env.CLOUDFLARE_ACCOUNT_ID;
+
+  const result = spawnSync(process.execPath, [cli, "whoami", "--json"], {
+    cwd: projectRoot,
+    encoding: "utf8",
+    shell: false,
+    env,
+  });
+  const output = `${result.stdout || ""}\n${result.stderr || ""}`.trim();
+
+  if (result.error) {
+    cachedIdentity = { ok: false, message: result.error.message };
+    return cachedIdentity;
+  }
+  if (result.status !== 0) {
+    cachedIdentity = { ok: false, message: output || `wrangler whoami 退出码 ${result.status}` };
+    return cachedIdentity;
+  }
+
+  const payload = parseWranglerJson(output);
+  if (!payload?.loggedIn) {
+    cachedIdentity = { ok: false, message: "wrangler 未登录" };
+    return cachedIdentity;
+  }
+
+  cachedIdentity = {
+    ok: true,
+    accounts: Array.isArray(payload.accounts) ? payload.accounts : [],
+  };
+  return cachedIdentity;
+}
+
+function resolveCloudflareAccountId() {
+  if (resolvedAccountId) return resolvedAccountId;
+
+  const fromEnv = (process.env.CLOUDFLARE_ACCOUNT_ID || "").trim();
+  if (fromEnv) {
+    if (!ACCOUNT_ID_RE.test(fromEnv)) {
+      failHard(
+        `CLOUDFLARE_ACCOUNT_ID 格式无效：需要 32 位十六进制 Account ID，当前长度为 ${fromEnv.length}。`
+      );
+    }
+    resolvedAccountId = fromEnv.toLowerCase();
+    return resolvedAccountId;
+  }
+
+  const identity = probeWranglerIdentity();
+  if (!identity.ok) {
+    failHard(
+      `无法自动确定 Cloudflare Account ID：${identity.message}。\n` +
+        "  请设置 CLOUDFLARE_ACCOUNT_ID，或先运行 npx wrangler login 后重试。"
+    );
+  }
+
+  if (identity.accounts.length === 0) {
+    failHard(
+      "wrangler 已登录，但无法列出账户（API Token 可能缺少 Account Settings:Read 权限）。\n" +
+        "  请显式设置 CLOUDFLARE_ACCOUNT_ID 后重试。"
+    );
+  }
+
+  if (identity.accounts.length > 1) {
+    const names = identity.accounts
+      .map((account) => `  - ${String(account?.name || "(未命名账户)")}`)
+      .join("\n");
+    failHard(
+      "wrangler 登录态下有多个 Cloudflare 账户，无法自动选择。\n" +
+        `  请设置 CLOUDFLARE_ACCOUNT_ID 后重试。可用账户：\n${names}`
+    );
+  }
+
+  const account = identity.accounts[0];
+  const id = String(account?.id || "").trim();
+  if (!ACCOUNT_ID_RE.test(id)) {
+    failHard("wrangler 返回的 Account ID 格式无效，请显式设置 CLOUDFLARE_ACCOUNT_ID。");
+  }
+
+  resolvedAccountId = id.toLowerCase();
+  console.log(`[ok] 已从 wrangler 登录态识别账户：${account?.name || "(未命名)"}`);
+  return resolvedAccountId;
+}
+
+function printWranglerHints(result) {
+  const output = `${result.stdout || ""}\n${result.stderr || ""}`;
+  if (/10089|no_access_to_analytics_engine/i.test(output)) {
+    console.error(
+      "\n[hint] Cloudflare 报 code 10089（Analytics Engine 未开通/无权限）。\n" +
+        "  处理方式二选一：\n" +
+        "  1. 在 Cloudflare Dashboard 启用 Analytics Engine（Workers & Pages → Analytics Engine）；\n" +
+        "  2. 不使用 AE 时，注释 server/wrangler.toml 的 [[analytics_engine_datasets]] 段后重试。"
+    );
+  }
 }
 
 function failStep(title, command, result) {
@@ -93,6 +208,7 @@ function failStep(title, command, result) {
   const code = result.status === null ? "signal/null" : result.status;
   console.error(`\n[error] 步骤 "${title}" 失败 (exit code ${code})。`);
   if (result.signal) console.error(`[hint] 子进程被信号中断：${result.signal}`);
+  printWranglerHints(result);
   process.exit(typeof result.status === "number" ? result.status : 1);
 }
 
@@ -105,9 +221,9 @@ function runStep(title, command, args, extra = {}) {
   }
 }
 
-function runCapture(title, command, args) {
+function runCapture(title, command, args, extra = {}) {
   console.log(`\n==> ${title}`);
-  const result = runResult(command, args, { stdio: "pipe" });
+  const result = runResult(command, args, { ...extra, stdio: "pipe" });
 
   if (result.stdout) process.stdout.write(result.stdout);
   if (result.stderr) process.stderr.write(result.stderr);
@@ -124,14 +240,10 @@ function checkPrerequisites(options) {
   // wrangler 登录态检测：API_TOKEN 或本机 oauth 二选一
   const tokenPresent = !!process.env.CLOUDFLARE_API_TOKEN;
   if (!tokenPresent) {
-    const probe = spawnSync("npx", ["wrangler", "whoami"], {
-      cwd: projectRoot,
-      encoding: "utf8",
-      shell: SHELL,
-    });
-    if (probe.status !== 0) {
+    const identity = probeWranglerIdentity();
+    if (!identity.ok) {
       errors.push(
-        "未检测到 CLOUDFLARE_API_TOKEN，且本机 wrangler 未登录。请先 `npx wrangler login`，或导出 CLOUDFLARE_API_TOKEN 后重试。",
+        "未检测到 CLOUDFLARE_API_TOKEN，且本机 wrangler 未登录。请先 `npx wrangler login`，或导出 CLOUDFLARE_API_TOKEN 后重试。"
       );
     } else {
       console.log("[ok] 已通过本机 wrangler 登录态。");
@@ -140,10 +252,13 @@ function checkPrerequisites(options) {
     console.log("[ok] 检测到 CLOUDFLARE_API_TOKEN。");
   }
 
-  if (!getCloudflareAccountId() && tokenPresent) {
-    errors.push(
-      "已设置 CLOUDFLARE_API_TOKEN 但未设置 CLOUDFLARE_ACCOUNT_ID。Token 模式下必须显式提供账户 ID。",
-    );
+  if (!errors.length && !process.env.CLOUDFLARE_ACCOUNT_ID) {
+    const identity = probeWranglerIdentity();
+    if (identity.ok && identity.accounts.length === 0) {
+      errors.push(
+        "已登录但无法列出 Cloudflare 账户。请在 CLOUDFLARE_API_TOKEN 模式下显式设置 CLOUDFLARE_ACCOUNT_ID。"
+      );
+    }
   }
 
   if (!options.skipServer && !process.env.ADMIN_PASSWORD) {
@@ -232,15 +347,35 @@ function printPrerequisiteHints() {
     console.warn("[warn] 未检测到 CLOUDFLARE_API_TOKEN，当前依赖本机 wrangler 已登录状态。");
   }
   if (!process.env.CLOUDFLARE_ACCOUNT_ID) {
-    console.warn("[warn] 未检测到 CLOUDFLARE_ACCOUNT_ID，将使用项目默认 Cloudflare Account ID。");
+    console.log("[info] 未设置 CLOUDFLARE_ACCOUNT_ID，将从 wrangler 登录态自动识别；多账户时需显式指定。");
   }
 }
 
 const options = parseArgs(process.argv.slice(2));
 printPrerequisiteHints();
 checkPrerequisites(options);
+resolveCloudflareAccountId();
+
+if (options.skipReconcile && !options.skipMigrate) {
+  console.warn(
+    "[warn] 已启用 --skip-reconcile：若目标库存在“列已存在但迁移未记录”的情况，migrations apply 仍可能报 duplicate column。"
+  );
+}
+
+if (!options.skipReconcile) {
+  runStep("补齐远程 D1 schema 兼容列", "node", [
+    "scripts/reconcile-d1-schema.mjs",
+    "--remote",
+  ]);
+}
 
 if (!options.skipMigrate) {
+  // 预建库可能执行过 SQL 但没有写入 d1_migrations；先按结构补记，
+  // 避免 0003 之类的 ALTER 因重复列中止整条迁移链。
+  runStep("检查并修复 D1 迁移记录", "node", [
+    "scripts/repair-d1-migrations.mjs",
+    "--remote",
+  ]);
   // 绕过 npm workspace shim 直接调 wrangler，避免 Windows 双层 shell 转发吞 stdin
   // 显式 pipe "y\n" 兜底 wrangler "Ok to proceed?" 交互（非 TTY 环境下也能放行）
   runStep(
@@ -249,11 +384,12 @@ if (!options.skipMigrate) {
     ["wrangler", "d1", "migrations", "apply", "monolith-db", "--remote"],
     { cwd: `${projectRoot}/server`, input: "y\n" },
   );
-  runStep(
-    "补齐远程 D1 schema 兼容列",
-    "node",
-    ["scripts/reconcile-d1-schema.mjs", "--remote"],
-  );
+  if (!options.skipReconcile) {
+    runStep("复核远程 D1 schema 兼容列", "node", [
+      "scripts/reconcile-d1-schema.mjs",
+      "--remote",
+    ]);
+  }
 }
 
 if (!options.skipServer) {
@@ -265,7 +401,12 @@ if (!options.skipServer) {
     "wrangler", "secret", "put", "JWT_SECRET", "--name", "monolith-server"
   ], { input: `${process.env.JWT_SECRET}\n`, cwd: `${projectRoot}/server` });
 
-  const deployOutput = runCapture("部署 Cloudflare Workers 后端", "npm", ["run", "deploy:server"]);
+  const deployOutput = runCapture(
+    "部署 Cloudflare Workers 后端",
+    "npx",
+    ["wrangler", "deploy", "--var", `CLOUDFLARE_ACCOUNT_ID:${resolvedAccountId}`],
+    { cwd: `${projectRoot}/server` },
+  );
   if (!options.apiBase) {
     options.apiBase = detectWorkersUrl(deployOutput);
   }

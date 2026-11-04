@@ -1,6 +1,6 @@
 name = "monolith-server"
 main = "src/index.ts"
-account_id = "9d9474f286c406f50848ac46c7a15877"
+# account_id 不再写死在仓库里：部署脚本会从 wrangler 登录态或 CLOUDFLARE_ACCOUNT_ID 解析。
 compatibility_date = "2024-12-30"
 compatibility_flags = ["nodejs_compat"]
 
@@ -10,8 +10,11 @@ compatibility_flags = ["nodejs_compat"]
 SITE_ORIGIN = "https://monolith-client.pages.dev"
 # 运行时默认不做建表/补列；部署流程负责迁移与 schema reconcile。
 AUTO_SCHEMA_MIGRATION = "false"
-# AE GraphQL 查询所需的账户 ID；控制台 cloudflare_account_id 优先，留空时回退此值
-CLOUDFLARE_ACCOUNT_ID = "9d9474f286c406f50848ac46c7a15877"
+# AE GraphQL 查询所需的账户 ID；控制台 cloudflare_account_id 优先。
+# 部署脚本会通过 --var 注入本次账户 ID，不再在仓库里写死。
+CLOUDFLARE_ACCOUNT_ID = ""
+# 可选：锁变更后 best-effort 清理区域缓存（需同时配置 CLOUDFLARE_API_TOKEN secret）
+CLOUDFLARE_ZONE_ID = ""
 
 # D1 数据库绑定
 [[d1_databases]]
@@ -26,6 +29,8 @@ binding = "BUCKET"
 bucket_name = "monolith-assets"
 
 # Analytics Engine 数据集绑定（CF 专属增强分析模块）
+# 首次部署前需在 Cloudflare Dashboard 启用 Analytics Engine；错误码 10089 表示账户未开通。
+# 不需要 AE 增强分析时可整段注释；运行时 /api/track 会静默返回 204，不影响其他功能。
 # 灵感来源: HanAnalytics (MIT) — https://github.com/uxiaohan/HanAnalytics
 # 仅在 Cloudflare 部署时生效，Turso/PG 后端会自动跳过 AE 写入与查询
 [[analytics_engine_datasets]]

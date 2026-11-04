@@ -7,11 +7,12 @@
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import { and, eq, desc, inArray, lt, sql } from "drizzle-orm";
-import { pgPosts, pgTags, pgPostTags, pgPages, pgSettings, pgComments, pgGuestbookMessages, pgFriendLinks, pgReactions, pgVisits, pgPostVersions } from "../../db/schema-pg";
+import { pgPosts, pgTags, pgPostTags, pgPages, pgSettings, pgComments, pgGuestbookMessages, pgFriendLinks, pgReactions, pgVisits, pgPostVersions, pgContentLocks, pgUnlockAttempts } from "../../db/schema-pg";
 import type {
   IDatabase, Post, PostSummary, Tag, Page, PageSummary,
   CreatePostInput, UpdatePostInput, UpsertPageInput,
-  BackupData, ImportResult, ViewStats, Comment, CreateCommentInput, GuestbookMessage, CreateGuestbookMessageInput, FriendLink, CreateFriendLinkInput, UpdateFriendLinkInput, PostVersion
+  BackupData, ImportResult, ViewStats, Comment, CreateCommentInput, GuestbookMessage, CreateGuestbookMessageInput, FriendLink, CreateFriendLinkInput, UpdateFriendLinkInput, PostVersion,
+  ContentLock, ContentLockKind, PostAccess, PostLock,
 } from "../interfaces";
 import { normalizeCardHeight, normalizeCardWidth } from "./card-layout";
 
@@ -93,6 +94,31 @@ export class PostgresAdapter implements IDatabase {
         PRIMARY KEY (post_id, tag_id)
       )
     `;
+    await this.client`
+      CREATE TABLE IF NOT EXISTS content_locks (
+        kind TEXT NOT NULL,
+        name TEXT NOT NULL,
+        password_hash TEXT NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        PRIMARY KEY (kind, name)
+      )
+    `;
+    await this.client`
+      CREATE INDEX IF NOT EXISTS content_locks_kind_idx ON content_locks(kind)
+    `.catch(() => {});
+    await this.client`
+      CREATE TABLE IF NOT EXISTS unlock_attempts (
+        key TEXT NOT NULL,
+        window_start INTEGER NOT NULL,
+        count INTEGER NOT NULL DEFAULT 0,
+        updated_at INTEGER NOT NULL,
+        PRIMARY KEY (key, window_start)
+      )
+    `;
+    await this.client`
+      CREATE INDEX IF NOT EXISTS unlock_attempts_window_idx ON unlock_attempts(window_start)
+    `.catch(() => {});
     await this.client`
       CREATE TABLE IF NOT EXISTS pages (
         id SERIAL PRIMARY KEY,
@@ -234,6 +260,27 @@ export class PostgresAdapter implements IDatabase {
     return tagMap;
   }
 
+  private publicPostFilter(ignoreSeriesLock = false) {
+    const seriesCondition = ignoreSeriesLock
+      ? sql`false`
+      : sql`(cl.kind = 'series' AND cl.name = ${pgPosts.seriesSlug} AND ${pgPosts.seriesSlug} IS NOT NULL)`;
+    return sql`(
+      ${pgPosts.published} = true
+      AND (${pgPosts.publishAt} IS NULL OR ${pgPosts.publishAt} <= NOW())
+      AND NOT EXISTS (
+        SELECT 1 FROM content_locks cl
+        WHERE (cl.kind = 'post' AND cl.name = ${pgPosts.slug})
+          OR (cl.kind = 'category' AND cl.name = ${pgPosts.category} AND ${pgPosts.category} != '')
+          OR ${seriesCondition}
+          OR (cl.kind = 'tag' AND cl.name IN (
+            SELECT t.name FROM post_tags pt
+            INNER JOIN tags t ON t.id = pt.tag_id
+            WHERE pt.post_id = ${pgPosts.id}
+          ))
+      )
+    )`;
+  }
+
   /** 将 PG timestamp 转为 ISO 字符串 */
   private ts(d: Date | string | null): string {
     if (!d) return new Date().toISOString();
@@ -264,9 +311,7 @@ export class PostgresAdapter implements IDatabase {
         category: pgPosts.category,
       })
       .from(pgPosts)
-      .where(
-        sql`${pgPosts.published} = true AND (${pgPosts.publishAt} IS NULL OR ${pgPosts.publishAt} <= NOW())`
-      )
+      .where(this.publicPostFilter())
       .orderBy(desc(pgPosts.pinned), desc(pgPosts.createdAt));
 
     const tagMap = await this.getPostTagsMap(allPosts.map((post) => post.id));
@@ -296,6 +341,12 @@ export class PostgresAdapter implements IDatabase {
       .orderBy(desc(pgPosts.createdAt));
 
     const tagMap = await this.getPostTagsMap(allPosts.map((post) => post.id));
+    const lockedSlugs = new Set(
+      (await this.db
+        .select({ name: pgContentLocks.name })
+        .from(pgContentLocks)
+        .where(eq(pgContentLocks.kind, "post"))).map((row) => row.name)
+    );
 
     return allPosts.map((post) => ({
       id: post.id,
@@ -318,6 +369,7 @@ export class PostgresAdapter implements IDatabase {
       category: post.category || "",
       seriesOrder: post.seriesOrder ?? 0,
       tags: tagMap.get(post.id) || [],
+      hasPassword: lockedSlugs.has(post.slug),
     }));
   }
 
@@ -351,6 +403,7 @@ export class PostgresAdapter implements IDatabase {
       category: post.category || "",
       seriesOrder: post.seriesOrder ?? 0,
       tags: await this.getPostTags(post.id),
+      hasPassword: (await this.getContentLock("post", slug)) !== null,
     };
   }
 
@@ -379,6 +432,9 @@ export class PostgresAdapter implements IDatabase {
     if (data.tags?.length) {
       await this.syncPostTags(newPost.id, data.tags);
     }
+    if (data.passwordHash) {
+      await this.setContentLock("post", newPost.slug, data.passwordHash);
+    }
 
     return {
       id: newPost.id,
@@ -400,6 +456,7 @@ export class PostgresAdapter implements IDatabase {
       seriesSlug: newPost.seriesSlug || null,
       category: newPost.category || "",
       seriesOrder: newPost.seriesOrder ?? 0,
+      hasPassword: Boolean(data.passwordHash),
     };
   }
 
@@ -439,6 +496,21 @@ export class PostgresAdapter implements IDatabase {
       await this.syncPostTags(existing.id, data.tags);
     }
 
+    if (data.slug !== undefined && data.slug !== slug) {
+      const existingLock = await this.getContentLock("post", slug);
+      if (existingLock) {
+        await this.setContentLock("post", slug, null);
+        await this.setContentLock("post", updated.slug, existingLock.passwordHash);
+      }
+    }
+    if (data.passwordHash !== undefined) {
+      await this.setContentLock("post", updated.slug, data.passwordHash);
+    }
+
+    const hasPassword = data.passwordHash !== undefined
+      ? Boolean(data.passwordHash)
+      : (await this.getContentLock("post", updated.slug)) !== null;
+
     return {
       id: updated.id,
       slug: updated.slug,
@@ -459,10 +531,12 @@ export class PostgresAdapter implements IDatabase {
       seriesSlug: updated.seriesSlug || null,
       category: updated.category || "",
       seriesOrder: updated.seriesOrder ?? 0,
+      hasPassword,
     };
   }
 
   async deletePost(slug: string): Promise<boolean> {
+    await this.setContentLock("post", slug, null);
     const result = await this.db.delete(pgPosts).where(eq(pgPosts.slug, slug)).returning();
     return result.length > 0;
   }
@@ -470,6 +544,9 @@ export class PostgresAdapter implements IDatabase {
   async batchOperatePosts(slugs: string[], action: "publish" | "unpublish" | "delete"): Promise<number> {
     if (!slugs || slugs.length === 0) return 0;
     if (action === "delete") {
+      await this.db
+        .delete(pgContentLocks)
+        .where(and(eq(pgContentLocks.kind, "post"), inArray(pgContentLocks.name, slugs)));
       const result = await this.db.delete(pgPosts).where(inArray(pgPosts.slug, slugs)).returning();
       return result.length;
     } else {
@@ -540,7 +617,14 @@ export class PostgresAdapter implements IDatabase {
   /* ── 标签 ─────────────────────── */
 
   async getAllTags(): Promise<Tag[]> {
-    return this.db.select().from(pgTags).orderBy(pgTags.name);
+    const rows = await this.client`
+      SELECT t.id, t.name FROM tags t
+      WHERE NOT EXISTS (
+        SELECT 1 FROM content_locks cl WHERE cl.kind = 'tag' AND cl.name = t.name
+      )
+      ORDER BY t.name
+    `;
+    return rows.map((row) => ({ id: row.id as number, name: row.name as string }));
   }
 
   /* ── 独立页 ───────────────────── */
@@ -852,7 +936,7 @@ export class PostgresAdapter implements IDatabase {
       })
       .from(pgPosts)
       .where(
-        sql`${pgPosts.published} = true AND (${pgPosts.publishAt} IS NULL OR ${pgPosts.publishAt} <= NOW()) AND (${pgPosts.title} ILIKE ${pattern} OR ${pgPosts.content} ILIKE ${pattern} OR ${pgPosts.excerpt} ILIKE ${pattern})`
+        sql`(${pgPosts.title} ILIKE ${pattern} OR ${pgPosts.content} ILIKE ${pattern} OR ${pgPosts.excerpt} ILIKE ${pattern}) AND ${this.publicPostFilter()}`
       )
       .orderBy(desc(pgPosts.createdAt))
       .limit(limit);
@@ -925,7 +1009,7 @@ export class PostgresAdapter implements IDatabase {
         updatedAt: pgPosts.updatedAt,
       })
       .from(pgPosts)
-      .where(eq(pgPosts.published, true))
+      .where(this.publicPostFilter())
       .orderBy(desc(pgPosts.createdAt))
       .limit(limit);
 
@@ -1225,20 +1309,164 @@ export class PostgresAdapter implements IDatabase {
 
   async getSeriesPosts(seriesSlug: string): Promise<{ slug: string; title: string; seriesOrder: number }[]> {
     const rows = await this.client`
-      SELECT slug, title, series_order FROM posts
-      WHERE series_slug = ${seriesSlug} AND published = true AND (publish_at IS NULL OR publish_at <= NOW())
-      ORDER BY series_order ASC
+      SELECT p.slug, p.title, p.series_order FROM posts p
+      WHERE p.series_slug = ${seriesSlug}
+        AND p.published = true AND (p.publish_at IS NULL OR p.publish_at <= NOW())
+        AND NOT EXISTS (
+          SELECT 1 FROM content_locks cl
+          WHERE (cl.kind = 'post' AND cl.name = p.slug)
+            OR (cl.kind = 'category' AND cl.name = p.category AND p.category != '')
+            OR (cl.kind = 'tag' AND cl.name IN (
+              SELECT t.name FROM post_tags pt INNER JOIN tags t ON t.id = pt.tag_id WHERE pt.post_id = p.id
+            ))
+        )
+      ORDER BY p.series_order ASC
     `;
     return rows.map(r => ({ slug: r.slug as string, title: r.title as string, seriesOrder: (r.series_order as number) ?? 0 }));
   }
 
   async getCategories(): Promise<{ name: string; count: number }[]> {
     const rows = await this.client`
-      SELECT category as name, COUNT(*)::int as count FROM posts
-      WHERE published = true AND (publish_at IS NULL OR publish_at <= NOW()) AND category != '' AND category IS NOT NULL
-      GROUP BY category ORDER BY count DESC
+      SELECT p.category as name, COUNT(*)::int as count FROM posts p
+      WHERE p.published = true AND (p.publish_at IS NULL OR p.publish_at <= NOW())
+        AND p.category != '' AND p.category IS NOT NULL
+        AND NOT EXISTS (
+          SELECT 1 FROM content_locks cl
+          WHERE (cl.kind = 'post' AND cl.name = p.slug)
+            OR (cl.kind = 'category' AND cl.name = p.category)
+            OR (cl.kind = 'series' AND cl.name = p.series_slug AND p.series_slug IS NOT NULL)
+            OR (cl.kind = 'tag' AND cl.name IN (
+              SELECT t.name FROM post_tags pt INNER JOIN tags t ON t.id = pt.tag_id WHERE pt.post_id = p.id
+            ))
+        )
+      GROUP BY p.category ORDER BY count DESC
     `;
     return rows.map(r => ({ name: r.name as string, count: r.count as number }));
+  }
+
+  /* ── 访问控制 ─────────────────── */
+
+  async getPostAccess(slug: string): Promise<PostAccess | null> {
+    const post = await this.getPostBySlug(slug);
+    if (!post) return null;
+
+    const rows = await this.db
+      .select({
+        kind: pgContentLocks.kind,
+        name: pgContentLocks.name,
+        passwordHash: pgContentLocks.passwordHash,
+      })
+      .from(pgContentLocks);
+
+    const tagSet = new Set(post.tags);
+    const locks: PostLock[] = [];
+    for (const row of rows) {
+      const kind = row.kind as ContentLockKind;
+      const matches =
+        (kind === "post" && row.name === slug)
+        || (kind === "tag" && tagSet.has(row.name))
+        || (kind === "category" && Boolean(post.category) && row.name === post.category)
+        || (kind === "series" && Boolean(post.seriesSlug) && row.name === post.seriesSlug);
+      if (matches) locks.push({ kind, key: row.name, passwordHash: row.passwordHash });
+    }
+
+    return { post, locks };
+  }
+
+  async listContentLocks(): Promise<ContentLock[]> {
+    const rows = await this.db
+      .select({
+        kind: pgContentLocks.kind,
+        name: pgContentLocks.name,
+        createdAt: pgContentLocks.createdAt,
+        updatedAt: pgContentLocks.updatedAt,
+      })
+      .from(pgContentLocks)
+      .orderBy(pgContentLocks.kind, pgContentLocks.name);
+    return rows.map((row) => ({
+      kind: row.kind as ContentLockKind,
+      name: row.name,
+      createdAt: this.ts(row.createdAt),
+      updatedAt: this.ts(row.updatedAt),
+      hasPassword: true,
+    }));
+  }
+
+  async getContentLock(kind: ContentLockKind, name: string): Promise<{ passwordHash: string } | null> {
+    const [row] = await this.db
+      .select({ passwordHash: pgContentLocks.passwordHash })
+      .from(pgContentLocks)
+      .where(and(eq(pgContentLocks.kind, kind), eq(pgContentLocks.name, name)))
+      .limit(1);
+    return row || null;
+  }
+
+  async setContentLock(kind: ContentLockKind, name: string, passwordHash: string | null): Promise<void> {
+    if (!passwordHash) {
+      await this.db
+        .delete(pgContentLocks)
+        .where(and(eq(pgContentLocks.kind, kind), eq(pgContentLocks.name, name)));
+      return;
+    }
+
+    await this.db
+      .insert(pgContentLocks)
+      .values({ kind, name, passwordHash })
+      .onConflictDoUpdate({
+        target: [pgContentLocks.kind, pgContentLocks.name],
+        set: { passwordHash, updatedAt: sql`NOW()` },
+      });
+  }
+
+  async contentGroupExists(kind: ContentLockKind, name: string): Promise<boolean> {
+    if (kind === "post") {
+      const [row] = await this.db.select({ id: pgPosts.id }).from(pgPosts).where(eq(pgPosts.slug, name)).limit(1);
+      return Boolean(row);
+    }
+    if (kind === "tag") {
+      const [row] = await this.db.select({ id: pgTags.id }).from(pgTags).where(eq(pgTags.name, name)).limit(1);
+      return Boolean(row);
+    }
+    if (kind === "category") {
+      const [row] = await this.db.select({ id: pgPosts.id }).from(pgPosts).where(eq(pgPosts.category, name)).limit(1);
+      return Boolean(row);
+    }
+    const [row] = await this.db.select({ id: pgPosts.id }).from(pgPosts).where(eq(pgPosts.seriesSlug, name)).limit(1);
+    return Boolean(row);
+  }
+
+  async getUnlockAttemptCount(key: string, windowStart: number): Promise<number> {
+    const [row] = await this.db
+      .select({ count: pgUnlockAttempts.count })
+      .from(pgUnlockAttempts)
+      .where(and(eq(pgUnlockAttempts.key, key), eq(pgUnlockAttempts.windowStart, windowStart)))
+      .limit(1);
+    return row?.count ?? 0;
+  }
+
+  async recordUnlockFailure(key: string, windowStart: number, now: number): Promise<number> {
+    const [row] = await this.db
+      .insert(pgUnlockAttempts)
+      .values({ key, windowStart, count: 1, updatedAt: now })
+      .onConflictDoUpdate({
+        target: [pgUnlockAttempts.key, pgUnlockAttempts.windowStart],
+        set: {
+          count: sql`${pgUnlockAttempts.count} + 1`,
+          updatedAt: now,
+        },
+      })
+      .returning({ count: pgUnlockAttempts.count });
+    return row?.count ?? 1;
+  }
+
+  async clearUnlockFailures(key: string, windowStart: number): Promise<void> {
+    await this.db
+      .delete(pgUnlockAttempts)
+      .where(and(eq(pgUnlockAttempts.key, key), eq(pgUnlockAttempts.windowStart, windowStart)));
+  }
+
+  async pruneUnlockAttempts(before: number): Promise<void> {
+    await this.db.delete(pgUnlockAttempts).where(lt(pgUnlockAttempts.windowStart, before));
   }
 
   async getReactions(postSlug: string): Promise<Record<string, number>> {

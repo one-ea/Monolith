@@ -62,8 +62,21 @@ export default defineConfig({
         globPatterns: ["**/*.{js,css,html,ico,png,svg}"],
         // og-default.png 仅用于社交分享卡（爬虫抓取），无需离线预缓存
         globIgnores: ["**/og-default.png"],
-        navigateFallbackDenylist: [/^\/sitemap\.xml$/i, /^\/robots\.txt$/i, /^\/rss\.xml$/i],
+        cleanupOutdatedCaches: true,
+        navigateFallbackDenylist: [
+          /^\/sitemap\.xml$/i,
+          /^\/robots\.txt$/i,
+          /^\/rss\.xml$/i,
+          /^\/llms(?:-full)?\.txt$/i,
+          /^\/posts\/.*\.md$/i,
+        ],
         runtimeCaching: [
+          {
+            // 文章 / 系列 / 搜索 / 标签 / 分类可能包含访问密码状态，
+            // 不能进入 Service Worker 缓存，否则锁变更后仍可能读到旧内容。
+            urlPattern: /\/api\/(?:posts|series|search|tags|categories)(?:[/?]|$)/i,
+            handler: "NetworkOnly",
+          },
           {
             urlPattern: /\/(?:sitemap\.xml|robots\.txt|rss\.xml)$/i,
             handler: "NetworkOnly",
@@ -81,7 +94,7 @@ export default defineConfig({
             urlPattern: /\/api\/(?!auth\/|admin\/).*/i,
             handler: "NetworkFirst",
             options: {
-              cacheName: "monolith-api",
+              cacheName: "monolith-api-v2",
               expiration: { maxEntries: 100, maxAgeSeconds: 24 * 60 * 60 },
               networkTimeoutSeconds: 5,
               cacheableResponse: { statuses: [0, 200] }

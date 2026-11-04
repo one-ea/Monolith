@@ -5,11 +5,12 @@
 
 import { drizzle } from "drizzle-orm/d1";
 import { and, eq, desc, inArray, lt, sql } from "drizzle-orm";
-import { posts, tags, postTags, pages, comments, guestbookMessages, friendLinks, reactions, visits, postVersions } from "../../db/schema";
+import { posts, tags, postTags, pages, comments, guestbookMessages, friendLinks, reactions, visits, postVersions, contentLocks, unlockAttempts } from "../../db/schema";
 import type {
   IDatabase, Post, PostSummary, Tag, Page, PageSummary,
   CreatePostInput, UpdatePostInput, UpsertPageInput,
   BackupData, ImportResult, ViewStats, Comment, CreateCommentInput, GuestbookMessage, CreateGuestbookMessageInput, FriendLink, CreateFriendLinkInput, UpdateFriendLinkInput, PostVersion,
+  ContentLock, ContentLockKind, PostAccess, PostLock,
 } from "../interfaces";
 import { normalizeCardHeight, normalizeCardWidth } from "./card-layout";
 
@@ -43,6 +44,7 @@ export class D1Adapter implements IDatabase {
         await this.ensureCategoryColumn();
         await this.ensureCoverImageColumn();
         await this.ensureCardLayoutColumns();
+        await this.ensureAccessTables();
       })();
     }
     await this.schemaReady;
@@ -79,6 +81,8 @@ export class D1Adapter implements IDatabase {
       post_versions: ["id", "post_id", "title", "content", "excerpt", "created_at"],
       reactions: ["id", "post_slug", "type", "ip_hash", "created_at"],
       visits: ["id", "path", "country", "referer_domain", "device_type", "created_at"],
+      content_locks: ["kind", "name", "password_hash", "created_at", "updated_at"],
+      unlock_attempts: ["key", "window_start", "count", "updated_at"],
     };
     const missingTables: string[] = [];
     const missingColumns: string[] = [];
@@ -141,6 +145,31 @@ export class D1Adapter implements IDatabase {
     }
 
     return tagMap;
+  }
+
+  /**
+   * 公开列表/搜索/feed 的统一可见性谓词：
+   * 已发布 + 已到发布时间 + 没有命中 post/tag/category/series 任一把锁。
+   */
+  private publicPostFilter(ignoreSeriesLock = false) {
+    const seriesCondition = ignoreSeriesLock
+      ? sql`false`
+      : sql`(cl.kind = 'series' AND cl.name = ${posts.seriesSlug} AND ${posts.seriesSlug} IS NOT NULL)`;
+    return sql`(
+      ${posts.published} = 1
+      AND (${posts.publishAt} IS NULL OR ${posts.publishAt} <= datetime('now'))
+      AND NOT EXISTS (
+        SELECT 1 FROM content_locks cl
+        WHERE (cl.kind = 'post' AND cl.name = ${posts.slug})
+          OR (cl.kind = 'category' AND cl.name = ${posts.category} AND ${posts.category} != '')
+          OR ${seriesCondition}
+          OR (cl.kind = 'tag' AND cl.name IN (
+            SELECT t.name FROM post_tags pt
+            INNER JOIN tags t ON t.id = pt.tag_id
+            WHERE pt.post_id = ${posts.id}
+          ))
+      )
+    )`;
   }
 
   private async syncPostTags(postId: number, tagNames: string[]): Promise<void> {
@@ -218,6 +247,26 @@ export class D1Adapter implements IDatabase {
     try {
       await this.db.run(sql`ALTER TABLE posts ADD COLUMN card_height INTEGER NOT NULL DEFAULT 220`);
     } catch { /* 已存在 */ }
+  }
+
+  private async ensureAccessTables(): Promise<void> {
+    await this.db.run(sql`CREATE TABLE IF NOT EXISTS content_locks (
+      kind TEXT NOT NULL,
+      name TEXT NOT NULL,
+      password_hash TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      PRIMARY KEY (kind, name)
+    )`);
+    await this.db.run(sql`CREATE INDEX IF NOT EXISTS content_locks_kind_idx ON content_locks(kind)`);
+    await this.db.run(sql`CREATE TABLE IF NOT EXISTS unlock_attempts (
+      key TEXT NOT NULL,
+      window_start INTEGER NOT NULL,
+      count INTEGER NOT NULL DEFAULT 0,
+      updated_at INTEGER NOT NULL,
+      PRIMARY KEY (key, window_start)
+    )`);
+    await this.db.run(sql`CREATE INDEX IF NOT EXISTS unlock_attempts_window_idx ON unlock_attempts(window_start)`);
   }
 
   private async ensurePagesTable(): Promise<void> {
@@ -298,9 +347,7 @@ export class D1Adapter implements IDatabase {
         category: posts.category,
       })
       .from(posts)
-      .where(
-        sql`${posts.published} = 1 AND (${posts.publishAt} IS NULL OR ${posts.publishAt} <= datetime('now'))`
-      )
+      .where(this.publicPostFilter())
       .orderBy(desc(posts.pinned), desc(posts.createdAt));
 
     const tagMap = await this.getPostTagsMap(allPosts.map((post) => post.id));
@@ -330,6 +377,12 @@ export class D1Adapter implements IDatabase {
       .orderBy(desc(posts.createdAt));
 
     const tagMap = await this.getPostTagsMap(allPosts.map((post) => post.id));
+    const lockedSlugs = new Set(
+      (await this.db
+        .select({ name: contentLocks.name })
+        .from(contentLocks)
+        .where(eq(contentLocks.kind, "post"))).map((row) => row.name)
+    );
 
     return allPosts.map((post) => ({
       id: post.id,
@@ -352,6 +405,7 @@ export class D1Adapter implements IDatabase {
       category: post.category || "",
       seriesOrder: post.seriesOrder ?? 0,
       tags: tagMap.get(post.id) || [],
+      hasPassword: lockedSlugs.has(post.slug),
     }));
   }
 
@@ -385,6 +439,7 @@ export class D1Adapter implements IDatabase {
       category: post.category || "",
       seriesOrder: post.seriesOrder ?? 0,
       tags: await this.getPostTags(post.id),
+      hasPassword: (await this.getContentLock("post", slug)) !== null,
     };
   }
 
@@ -413,6 +468,9 @@ export class D1Adapter implements IDatabase {
     if (data.tags?.length) {
       await this.syncPostTags(newPost.id, data.tags);
     }
+    if (data.passwordHash) {
+      await this.setContentLock("post", newPost.slug, data.passwordHash);
+    }
 
     return {
       id: newPost.id,
@@ -434,6 +492,7 @@ export class D1Adapter implements IDatabase {
       seriesSlug: newPost.seriesSlug || null,
       category: newPost.category || "",
       seriesOrder: newPost.seriesOrder ?? 0,
+      hasPassword: Boolean(data.passwordHash),
     };
   }
 
@@ -473,6 +532,22 @@ export class D1Adapter implements IDatabase {
       await this.syncPostTags(existing.id, data.tags);
     }
 
+    // 单篇锁跟随 slug 迁移；显式传 passwordHash 时覆盖或删除。
+    if (data.slug !== undefined && data.slug !== slug) {
+      const existingLock = await this.getContentLock("post", slug);
+      if (existingLock) {
+        await this.setContentLock("post", slug, null);
+        await this.setContentLock("post", updated.slug, existingLock.passwordHash);
+      }
+    }
+    if (data.passwordHash !== undefined) {
+      await this.setContentLock("post", updated.slug, data.passwordHash);
+    }
+
+    const hasPassword = data.passwordHash !== undefined
+      ? Boolean(data.passwordHash)
+      : (await this.getContentLock("post", updated.slug)) !== null;
+
     return {
       id: updated.id,
       slug: updated.slug,
@@ -493,10 +568,12 @@ export class D1Adapter implements IDatabase {
       seriesSlug: updated.seriesSlug || null,
       category: updated.category || "",
       seriesOrder: updated.seriesOrder ?? 0,
+      hasPassword,
     };
   }
 
   async deletePost(slug: string): Promise<boolean> {
+    await this.setContentLock("post", slug, null);
     const result = await this.db.delete(posts).where(eq(posts.slug, slug)).returning();
     return result.length > 0;
   }
@@ -504,6 +581,9 @@ export class D1Adapter implements IDatabase {
   async batchOperatePosts(slugs: string[], action: "publish" | "unpublish" | "delete"): Promise<number> {
     if (!slugs || slugs.length === 0) return 0;
     if (action === "delete") {
+      await this.db
+        .delete(contentLocks)
+        .where(and(eq(contentLocks.kind, "post"), inArray(contentLocks.name, slugs)));
       const result = await this.db.delete(posts).where(inArray(posts.slug, slugs)).returning();
       return result.length;
     } else {
@@ -568,7 +648,18 @@ export class D1Adapter implements IDatabase {
   /* ── 标签 ─────────────────────── */
 
   async getAllTags(): Promise<Tag[]> {
-    return this.db.select().from(tags).orderBy(tags.name);
+    const result = await this.db.run(
+      sql`SELECT t.id, t.name FROM tags t
+          WHERE NOT EXISTS (
+            SELECT 1 FROM content_locks cl WHERE cl.kind = 'tag' AND cl.name = t.name
+          )
+          ORDER BY t.name`
+    );
+    type Row = { id: number; name: string };
+    return ((result.results as Row[] | undefined) || []).map((row) => ({
+      id: row.id,
+      name: row.name,
+    }));
   }
 
   /* ── 独立页 ───────────────────── */
@@ -889,7 +980,7 @@ export class D1Adapter implements IDatabase {
       .from(posts)
       .where(
         // 只搜索 title 和 excerpt，避免对大字段 content 做全表 LIKE 扫描
-        sql`${posts.published} = 1 AND (${posts.publishAt} IS NULL OR ${posts.publishAt} <= datetime('now')) AND (${posts.title} LIKE ${pattern} OR ${posts.excerpt} LIKE ${pattern})`
+        sql`(${posts.title} LIKE ${pattern} OR ${posts.excerpt} LIKE ${pattern}) AND ${this.publicPostFilter()}`
       )
       .orderBy(desc(posts.createdAt))
       .limit(limit);
@@ -965,7 +1056,7 @@ export class D1Adapter implements IDatabase {
         updatedAt: posts.updatedAt,
       })
       .from(posts)
-      .where(eq(posts.published, true))
+      .where(this.publicPostFilter())
       .orderBy(desc(posts.createdAt))
       .limit(limit);
 
@@ -1268,17 +1359,148 @@ export class D1Adapter implements IDatabase {
     const rows = await this.db
       .select({ slug: posts.slug, title: posts.title, seriesOrder: posts.seriesOrder })
       .from(posts)
-      .where(sql`${posts.seriesSlug} = ${seriesSlug} AND ${posts.published} = 1 AND (${posts.publishAt} IS NULL OR ${posts.publishAt} <= datetime('now'))`)
+      .where(sql`${posts.seriesSlug} = ${seriesSlug} AND ${this.publicPostFilter(true)}`)
       .orderBy(posts.seriesOrder);
     return rows.map(r => ({ slug: r.slug, title: r.title, seriesOrder: r.seriesOrder ?? 0 }));
   }
 
   async getCategories(): Promise<{ name: string; count: number }[]> {
     const result = await this.db.run(
-      sql`SELECT category as name, COUNT(*) as count FROM posts WHERE published = 1 AND (publish_at IS NULL OR publish_at <= datetime('now')) AND category != '' AND category IS NOT NULL GROUP BY category ORDER BY count DESC`
+      sql`SELECT category as name, COUNT(*) as count FROM posts
+          WHERE ${this.publicPostFilter()}
+            AND category != '' AND category IS NOT NULL
+            AND NOT EXISTS (
+              SELECT 1 FROM content_locks cl WHERE cl.kind = 'category' AND cl.name = posts.category
+            )
+          GROUP BY category ORDER BY count DESC`
     );
     type Row = Record<string, unknown>;
     return (result.results as Row[] || []).map(r => ({ name: r.name as string, count: r.count as number }));
+  }
+
+  /* ── 访问控制 ─────────────────── */
+
+  async getPostAccess(slug: string): Promise<PostAccess | null> {
+    const post = await this.getPostBySlug(slug);
+    if (!post) return null;
+
+    const rows = await this.db
+      .select({
+        kind: contentLocks.kind,
+        name: contentLocks.name,
+        passwordHash: contentLocks.passwordHash,
+      })
+      .from(contentLocks);
+
+    const tagSet = new Set(post.tags);
+    const locks: PostLock[] = [];
+    for (const row of rows) {
+      const kind = row.kind as ContentLockKind;
+      const matches =
+        (kind === "post" && row.name === slug)
+        || (kind === "tag" && tagSet.has(row.name))
+        || (kind === "category" && Boolean(post.category) && row.name === post.category)
+        || (kind === "series" && Boolean(post.seriesSlug) && row.name === post.seriesSlug);
+      if (matches) locks.push({ kind, key: row.name, passwordHash: row.passwordHash });
+    }
+
+    return { post, locks };
+  }
+
+  async listContentLocks(): Promise<ContentLock[]> {
+    const rows = await this.db
+      .select({
+        kind: contentLocks.kind,
+        name: contentLocks.name,
+        createdAt: contentLocks.createdAt,
+        updatedAt: contentLocks.updatedAt,
+      })
+      .from(contentLocks)
+      .orderBy(contentLocks.kind, contentLocks.name);
+    return rows.map((row) => ({
+      kind: row.kind as ContentLockKind,
+      name: row.name,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+      hasPassword: true,
+    }));
+  }
+
+  async getContentLock(kind: ContentLockKind, name: string): Promise<{ passwordHash: string } | null> {
+    const [row] = await this.db
+      .select({ passwordHash: contentLocks.passwordHash })
+      .from(contentLocks)
+      .where(and(eq(contentLocks.kind, kind), eq(contentLocks.name, name)))
+      .limit(1);
+    return row || null;
+  }
+
+  async setContentLock(kind: ContentLockKind, name: string, passwordHash: string | null): Promise<void> {
+    if (!passwordHash) {
+      await this.db
+        .delete(contentLocks)
+        .where(and(eq(contentLocks.kind, kind), eq(contentLocks.name, name)));
+      return;
+    }
+
+    await this.db
+      .insert(contentLocks)
+      .values({ kind, name, passwordHash })
+      .onConflictDoUpdate({
+        target: [contentLocks.kind, contentLocks.name],
+        set: { passwordHash, updatedAt: sql`datetime('now')` },
+      });
+  }
+
+  async contentGroupExists(kind: ContentLockKind, name: string): Promise<boolean> {
+    if (kind === "post") {
+      const [row] = await this.db.select({ id: posts.id }).from(posts).where(eq(posts.slug, name)).limit(1);
+      return Boolean(row);
+    }
+    if (kind === "tag") {
+      const [row] = await this.db.select({ id: tags.id }).from(tags).where(eq(tags.name, name)).limit(1);
+      return Boolean(row);
+    }
+    if (kind === "category") {
+      const [row] = await this.db.select({ id: posts.id }).from(posts).where(eq(posts.category, name)).limit(1);
+      return Boolean(row);
+    }
+    const [row] = await this.db.select({ id: posts.id }).from(posts).where(eq(posts.seriesSlug, name)).limit(1);
+    return Boolean(row);
+  }
+
+  async getUnlockAttemptCount(key: string, windowStart: number): Promise<number> {
+    const [row] = await this.db
+      .select({ count: unlockAttempts.count })
+      .from(unlockAttempts)
+      .where(and(eq(unlockAttempts.key, key), eq(unlockAttempts.windowStart, windowStart)))
+      .limit(1);
+    return row?.count ?? 0;
+  }
+
+  async recordUnlockFailure(key: string, windowStart: number, now: number): Promise<number> {
+    const [row] = await this.db
+      .insert(unlockAttempts)
+      .values({ key, windowStart, count: 1, updatedAt: now })
+      .onConflictDoUpdate({
+        target: [unlockAttempts.key, unlockAttempts.windowStart],
+        set: {
+          count: sql`${unlockAttempts.count} + 1`,
+          updatedAt: now,
+        },
+      })
+      .returning({ count: unlockAttempts.count });
+    return row?.count ?? 1;
+  }
+
+  async clearUnlockFailures(key: string, windowStart: number): Promise<void> {
+    await this.db
+      .delete(unlockAttempts)
+      .where(and(eq(unlockAttempts.key, key), eq(unlockAttempts.windowStart, windowStart)));
+  }
+
+  async pruneUnlockAttempts(before: number): Promise<void> {
+    await this.db.delete(unlockAttempts).where(lt(unlockAttempts.windowStart, before));
   }
 
   private async ensureReactionsTable(): Promise<void> {

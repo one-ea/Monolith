@@ -145,8 +145,15 @@ const prerender: PagesFunction<Env> = async (context) => {
     const apiRes = apiResult.value;
 
     if (!apiRes.ok) {
-      // 文章不存在，返回正常 SPA 处理 404
-      return context.next();
+      // 文章不存在或需要访问密码：不要把受保护内容渲染进 head。
+      // 401 时额外标记 noindex，避免搜索引擎索引“需要密码”的占位页。
+      const fallback = await context.next();
+      if (apiRes.status === 401) {
+        const secured = new Response(fallback.body, fallback);
+        secured.headers.set("X-Robots-Tag", "noindex, nofollow");
+        return secured;
+      }
+      return fallback;
     }
 
     const post = (await apiRes.json()) as {

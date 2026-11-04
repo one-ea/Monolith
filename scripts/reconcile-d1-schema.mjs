@@ -1,12 +1,10 @@
-import { spawnSync } from "node:child_process";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import process from "node:process";
+import { runWrangler as runWranglerCli } from "./lib/wrangler-cli.mjs";
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const serverRoot = resolve(projectRoot, "server");
-const IS_WIN = process.platform === "win32";
-const SHELL = IS_WIN;
 
 function parseArgs(argv) {
   const options = {
@@ -37,20 +35,17 @@ function parseArgs(argv) {
 }
 
 function runWrangler(args, title) {
-  const result = spawnSync("npx", ["wrangler", ...args], {
-    cwd: serverRoot,
-    encoding: "utf8",
-    shell: SHELL,
-  });
+  let result;
+  try {
+    result = runWranglerCli(args, { cwd: serverRoot, stdio: "pipe" });
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    console.error(`\n[error] ${title} 失败：${detail}`);
+    process.exit(1);
+  }
 
   if (result.stdout) process.stdout.write(result.stdout);
   if (result.stderr) process.stderr.write(result.stderr);
-
-  if (result.error || result.status !== 0) {
-    const detail = result.error ? result.error.message : `exit code ${result.status}`;
-    console.error(`\n[error] ${title} 失败：${detail}`);
-    process.exit(typeof result.status === "number" ? result.status : 1);
-  }
 
   return `${result.stdout || ""}\n${result.stderr || ""}`;
 }
@@ -66,6 +61,7 @@ function queryPostsColumns(options) {
       "execute",
       options.database,
       d1Scope(options.mode),
+      "--yes",
       "--json",
       "--command",
       "SELECT name FROM pragma_table_info('posts');",
@@ -92,6 +88,7 @@ function addColumn(options, column) {
       "execute",
       options.database,
       d1Scope(options.mode),
+      "--yes",
       "--command",
       `ALTER TABLE posts ADD COLUMN ${column.sql};`,
     ],
@@ -115,6 +112,11 @@ const options = parseArgs(process.argv.slice(2));
 console.log(`[info] D1 schema reconcile: ${options.database} (${options.mode})`);
 
 const columns = queryPostsColumns(options);
+if (columns.size === 0) {
+  console.log("[skip] posts 表不存在，请先执行数据库迁移。");
+  process.exit(0);
+}
+
 const missing = POST_COLUMNS.filter((column) => !columns.has(column.name));
 
 if (missing.length === 0) {
@@ -126,4 +128,35 @@ for (const column of missing) {
   addColumn(options, column);
 }
 
-console.log(`[ok] 已补全 posts 表列：${missing.map((column) => column.name).join(", ")}`);
+// 访问控制表：0013 迁移会创建；这里再跑一次幂等 DDL，
+// 保证 --skip-migrate 的部署或旧库也能拿到表。
+runWrangler(
+  [
+    "d1",
+    "execute",
+    options.database,
+    d1Scope(options.mode),
+    "--yes",
+    "--command",
+    `CREATE TABLE IF NOT EXISTS content_locks (
+      kind TEXT NOT NULL,
+      name TEXT NOT NULL,
+      password_hash TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      PRIMARY KEY (kind, name)
+    );
+    CREATE INDEX IF NOT EXISTS content_locks_kind_idx ON content_locks(kind);
+    CREATE TABLE IF NOT EXISTS unlock_attempts (
+      key TEXT NOT NULL,
+      window_start INTEGER NOT NULL,
+      count INTEGER NOT NULL DEFAULT 0,
+      updated_at INTEGER NOT NULL,
+      PRIMARY KEY (key, window_start)
+    );
+    CREATE INDEX IF NOT EXISTS unlock_attempts_window_idx ON unlock_attempts(window_start);`,
+  ],
+  "补齐访问控制表"
+);
+
+console.log(`[ok] 已补全 posts 表列：${missing.length > 0 ? missing.map((column) => column.name).join(", ") : "无"}`);

@@ -56,6 +56,7 @@ export type PostMeta = {
   publishAt: string | null;
   seriesSlug: string | null;
   category: string;
+  hasPassword?: boolean;
 };
 
 export type Post = PostMeta & {
@@ -66,6 +67,43 @@ export type Post = PostMeta & {
   viewCount: number;
   seriesOrder: number;
 };
+
+export type LockInfo = {
+  kind: "post" | "tag" | "category" | "series";
+  key: string;
+};
+
+export class ApiError extends Error {
+  status: number;
+  code?: string;
+  details?: unknown;
+
+  constructor(message: string, status: number, code?: string, details?: unknown) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+    this.code = code;
+    this.details = details;
+  }
+}
+
+export class LockedPostError extends ApiError {
+  locks: LockInfo[];
+
+  constructor(message: string, details: { locks?: LockInfo[] } | null) {
+    super(message, 401, "post_locked", details);
+    this.name = "LockedPostError";
+    this.locks = Array.isArray(details?.locks) ? details.locks : [];
+  }
+}
+
+async function toApiError(res: Response, fallback: string): Promise<ApiError> {
+  const data = await res.json().catch(() => null) as { error?: string; code?: string; locks?: LockInfo[] } | null;
+  if (res.status === 401 && data?.code === "post_locked") {
+    return new LockedPostError(data.error || "需要密码", data);
+  }
+  return new ApiError(data?.error || fallback, res.status, data?.code, data);
+}
 
 export type FriendLinkStatus = "pending" | "approved" | "rejected";
 export type FriendLinkSource = "manual" | "submission" | "imported";
@@ -111,8 +149,67 @@ export async function fetchPosts(): Promise<PostMeta[]> {
   return fetchJsonWithCache<PostMeta[]>("/api/posts", 60_000);
 }
 
-export async function fetchPost(slug: string): Promise<Post> {
-  return fetchJsonWithCache<Post>(`/api/posts/${slug}`, 60_000);
+export async function fetchPost(slug: string, options?: { unlockToken?: string }): Promise<Post> {
+  const headers: HeadersInit = {};
+  if (options?.unlockToken) headers.Authorization = `Bearer ${options.unlockToken}`;
+
+  const res = await fetch(`${API_BASE}/api/posts/${slug}`, {
+    headers,
+    cache: "no-store",
+    credentials: "same-origin",
+  });
+  if (!res.ok) throw await toApiError(res, "文章未找到");
+  return res.json();
+}
+
+export type UnlockResult = {
+  ok: boolean;
+  fullyUnlocked: boolean;
+  remaining: number;
+  expiresAt: string;
+};
+
+/** 提交访问密码；成功后后端写入 HttpOnly cookie，后续 fetch 自动携带。 */
+export async function unlockPost(slug: string, password: string): Promise<UnlockResult> {
+  const res = await fetch(`${API_BASE}/api/posts/${slug}/unlock`, {
+    method: "POST",
+    cache: "no-store",
+    credentials: "same-origin",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ password }),
+  });
+  if (!res.ok) throw await toApiError(res, "密码错误");
+  return res.json();
+}
+
+export type ContentLockKind = "post" | "tag" | "category" | "series";
+
+export type ContentLock = {
+  kind: ContentLockKind;
+  name: string;
+  createdAt: string;
+  updatedAt: string;
+  hasPassword: boolean;
+};
+
+export async function fetchContentLocks(): Promise<ContentLock[]> {
+  const res = await fetch(`${API_BASE}/api/admin/locks`, { headers: authHeaders() });
+  if (!res.ok) throw await toApiError(res, "获取访问控制列表失败");
+  return res.json();
+}
+
+export async function setContentLock(
+  kind: ContentLockKind,
+  name: string,
+  password: string | null
+): Promise<{ success: boolean; locked: boolean }> {
+  const res = await fetch(`${API_BASE}/api/admin/locks`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify({ kind, name, password }),
+  });
+  if (!res.ok) throw await toApiError(res, "保存访问控制失败");
+  return res.json();
 }
 
 export async function fetchTags(): Promise<{ id: number; name: string }[]> {
@@ -148,8 +245,24 @@ export async function fetchCategories(): Promise<CategoryInfo[]> {
 export type SeriesPost = { slug: string; title: string; seriesOrder: number };
 
 export async function fetchSeriesPosts(seriesSlug: string): Promise<SeriesPost[]> {
-  const res = await fetch(`${API_BASE}/api/series/${seriesSlug}`);
+  const res = await fetch(`${API_BASE}/api/series/${seriesSlug}`, {
+    cache: "no-store",
+    credentials: "same-origin",
+  });
+  if (res.status === 401) throw await toApiError(res, "系列需要密码");
   if (!res.ok) return [];
+  return res.json();
+}
+
+export async function unlockSeries(seriesSlug: string, password: string): Promise<UnlockResult> {
+  const res = await fetch(`${API_BASE}/api/series/${seriesSlug}/unlock`, {
+    method: "POST",
+    cache: "no-store",
+    credentials: "same-origin",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ password }),
+  });
+  if (!res.ok) throw await toApiError(res, "密码错误");
   return res.json();
 }
 
@@ -249,6 +362,15 @@ export async function fetchAdminPosts(): Promise<Post[]> {
   return res.json();
 }
 
+export async function fetchAdminPost(slug: string): Promise<Post> {
+  const res = await fetch(`${API_BASE}/api/admin/posts/${slug}`, {
+    headers: authHeaders(),
+    cache: "no-store",
+  });
+  if (!res.ok) throw await toApiError(res, "文章未找到");
+  return res.json();
+}
+
 export async function createPost(data: {
   slug: string;
   title: string;
@@ -259,29 +381,34 @@ export async function createPost(data: {
   cardWidth?: number;
   cardHeight?: number;
   published?: boolean;
+  listed?: boolean;
   tags?: string[];
   pinned?: boolean;
   publishAt?: string | null;
+  seriesSlug?: string | null;
+  seriesOrder?: number;
+  category?: string;
+  password?: string | null;
 }): Promise<Post> {
   const res = await fetch(`${API_BASE}/api/admin/posts`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...authHeaders() },
     body: JSON.stringify(data),
   });
-  if (!res.ok) throw new Error("创建文章失败");
+  if (!res.ok) throw await toApiError(res, "创建文章失败");
   return res.json();
 }
 
 export async function updatePost(
   slug: string,
-  data: Partial<Post & { tags: string[]; saveVersion?: boolean }>
+  data: Partial<Post & { tags: string[]; saveVersion?: boolean; password?: string | null }>
 ): Promise<Post> {
   const res = await fetch(`${API_BASE}/api/admin/posts/${slug}`, {
     method: "PUT",
     headers: { "Content-Type": "application/json", ...authHeaders() },
     body: JSON.stringify(data),
   });
-  if (!res.ok) throw new Error("更新文章失败");
+  if (!res.ok) throw await toApiError(res, "更新文章失败");
   return res.json();
 }
 

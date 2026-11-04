@@ -94,6 +94,7 @@ Monolith 是一个面向个人创作者的全栈博客系统：前端运行在 C
 | 模块 | 控制能力 |
 | --- | --- |
 | **安全** | Turnstile 登录保护、JWT 会话时长、登录 / 友链 / 留言限流 |
+| **访问控制** | 文章 / 标签 / 分类 / 系列密码锁，服务端验密，列表 / 搜索 / RSS / sitemap 自动排除 |
 | **通知** | 多 Webhook、一键测试、Resend 发件人与管理员邮箱 |
 | **主题** | 亮色、暗色、跟随系统；简洁与液态玻璃风格 |
 | **发现与注入** | 外部脚本、统计服务预设、作用域、位置与 Cookie 同意策略 |
@@ -214,9 +215,13 @@ npm run deploy:cloudflare
 部署脚本会按顺序处理：
 
 ```text
+D1 schema reconcile（预补兼容列）
+        ↓
+D1 迁移记录修复（预建库按结构补记）
+        ↓
 远程 D1 migrations
         ↓
-D1 schema reconcile
+D1 schema reconcile（复核）
         ↓
 Workers 部署
         ↓
@@ -227,6 +232,21 @@ Pages API_BASE 注入
 生产健康检查
 ```
 
+`CLOUDFLARE_ACCOUNT_ID` 不再写死在仓库里。脚本解析顺序为：环境变量 → `npx wrangler whoami --json` 的单账户登录态 → 明确报错。OAuth 单账户用户无需配置；多账户或 API Token 模式下请显式设置：
+
+```bash
+# macOS / Linux
+export CLOUDFLARE_ACCOUNT_ID="<32 位十六进制账户 ID>"
+
+# Windows PowerShell
+$env:CLOUDFLARE_ACCOUNT_ID = "<32 位十六进制账户 ID>"
+
+# Windows CMD
+set "CLOUDFLARE_ACCOUNT_ID=<32 位十六进制账户 ID>"
+```
+
+`--skip-migrate` 只跳过远程数据库迁移；schema reconcile 仍会执行。需要完全跳过数据库操作时同时传 `--skip-migrate --skip-reconcile`。
+
 ### 配置边界
 
 **必须保留为 Workers secret 的凭据：**
@@ -234,6 +254,7 @@ Pages API_BASE 注入
 - `ADMIN_PASSWORD`
 - `JWT_SECRET`
 - `REACTION_SALT`
+- `UNLOCK_SECRET`（可选；访问密码解锁 token 的独立签名密钥，未设置时从 `JWT_SECRET` 域分离派生）
 - `TURNSTILE_SECRET`
 - `RESEND_API_KEY`
 - `CLOUDFLARE_API_TOKEN`

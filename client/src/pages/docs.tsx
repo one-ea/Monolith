@@ -5,7 +5,8 @@ import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { SeoHead } from "@/components/seo-head";
 import { TableOfContents, ReadingProgressBar } from "@/components/toc";
-import { fetchPost, fetchSeriesPosts, type Post, type SeriesPost } from "@/lib/api";
+import { fetchPost, fetchSeriesPosts, LockedPostError, ApiError, type LockInfo, type Post, type SeriesPost } from "@/lib/api";
+import { UnlockGate } from "@/components/unlock-gate";
 import { extractHeadings, renderMarkdown, type TocHeading } from "@/lib/markdown";
 import { formatSiteDate } from "@/lib/date-format";
 import { useSiteSettings } from "@/lib/site-settings";
@@ -55,6 +56,9 @@ export function DocsPage() {
   const [htmlContent, setHtmlContent] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [seriesLocked, setSeriesLocked] = useState(false);
+  const [lockedLocks, setLockedLocks] = useState<LockInfo[]>([]);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     if (!params.seriesSlug) return;
@@ -62,6 +66,8 @@ export function DocsPage() {
     setLoading(true);
     setError("");
     setPost(null);
+    setSeriesLocked(false);
+    setLockedLocks([]);
 
     fetchSeriesPosts(params.seriesSlug)
       .then(async (items) => {
@@ -77,6 +83,14 @@ export function DocsPage() {
       })
       .catch((cause: unknown) => {
         if (cancelled) return;
+        if (cause instanceof ApiError && cause.code === "series_locked") {
+          setSeriesLocked(true);
+          return;
+        }
+        if (cause instanceof LockedPostError) {
+          setLockedLocks(cause.locks);
+          return;
+        }
         if (
           cause instanceof Error
           && (cause.message === "文档系列不存在" || cause.message === "文章不存在")
@@ -93,7 +107,7 @@ export function DocsPage() {
     return () => {
       cancelled = true;
     };
-  }, [params.seriesSlug, params.slug]);
+  }, [params.seriesSlug, params.slug, reloadKey]);
 
   useEffect(() => {
     if (!post) {
@@ -125,6 +139,36 @@ export function DocsPage() {
         </div>
       </div>
     );
+  }
+
+  if (!loading && seriesLocked && params.seriesSlug) {
+    return (
+      <>
+        <SeoHead title="受保护的文档系列" description="这个文档系列需要密码才能阅读。" url={`/docs/${params.seriesSlug}`} noindex />
+        <UnlockGate
+          seriesSlug={params.seriesSlug}
+          locks={[{ kind: "series", key: params.seriesSlug }]}
+          title="受保护的文档系列"
+          onUnlocked={() => setReloadKey((value) => value + 1)}
+        />
+      </>
+    );
+  }
+
+  if (!loading && lockedLocks.length > 0) {
+    const lockedSlug = params.slug ?? seriesPosts[0]?.slug;
+    if (lockedSlug) {
+      return (
+        <>
+          <SeoHead title="受保护的文章" description="这篇文章需要密码才能阅读。" url={`/docs/${params.seriesSlug}/${lockedSlug}`} noindex />
+          <UnlockGate
+            slug={lockedSlug}
+            locks={lockedLocks}
+            onUnlocked={() => setReloadKey((value) => value + 1)}
+          />
+        </>
+      );
+    }
   }
 
   if (error || !post) {

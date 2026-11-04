@@ -36,6 +36,7 @@ const AdminGuestbook = lazy(() => import("@/pages/admin/guestbook").then((m) => 
 const AdminMedia = lazy(() => import("@/pages/admin/media").then((m) => ({ default: m.AdminMedia })));
 const AdminAnalytics = lazy(() => import("@/pages/admin/analytics").then((m) => ({ default: m.AdminAnalytics })));
 const AdminSeo = lazy(() => import("@/pages/admin/seo").then((m) => ({ default: m.AdminSeo })));
+const AdminAccess = lazy(() => import("@/pages/admin/access").then((m) => ({ default: m.AdminAccess })));
 const PrivacyPage = lazy(() => import("@/pages/privacy").then((m) => ({ default: m.PrivacyPage })));
 const DynamicPage = lazy(() => import("@/pages/dynamic-page").then((m) => ({ default: m.DynamicPage })));
 const NotFoundPage = lazy(() => import("@/pages/not-found").then((m) => ({ default: m.NotFoundPage })));
@@ -175,6 +176,7 @@ export function App() {
                 <Route path="/admin/media"><AdminMedia /></Route>
                 <Route path="/admin/analytics"><AdminAnalytics /></Route>
                 <Route path="/admin/seo"><AdminSeo /></Route>
+                <Route path="/admin/access"><AdminAccess /></Route>
                 <Route path="/admin"><AdminDashboard /></Route>
                 <Route><NotFoundPage /></Route>
               </Switch>

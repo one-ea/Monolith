@@ -16,6 +16,7 @@ import {
   Menu,
   Search,
   X,
+  ShieldCheck,
 } from "lucide-react";
 
 interface AdminLayoutProps {
@@ -39,6 +40,7 @@ const NAV_GROUPS = [
       { href: "/admin/media", icon: ImageIcon, label: "媒体资产" },
       { href: "/admin/analytics", icon: BarChart3, label: "运营洞察" },
       { href: "/admin/seo", icon: Sparkles, label: "搜索优化" },
+      { href: "/admin/access", icon: ShieldCheck, label: "访问控制" },
       { href: "/admin/backup", icon: HardDrive, label: "备份恢复" },
     ],
   },

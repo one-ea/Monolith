@@ -50,6 +50,43 @@ export const postTags = sqliteTable(
   })
 );
 
+/* ── 访问控制 ─────────────────────────────── */
+// 统一存放文章、标签、分类、系列的访问密码哈希。
+// kind = post/tag/category/series；name 为 slug / 标签名 / 分类名 / 系列 slug。
+export const contentLocks = sqliteTable(
+  "content_locks",
+  {
+    kind: text("kind").notNull(),
+    name: text("name").notNull(),
+    passwordHash: text("password_hash").notNull(),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`(datetime('now'))`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`(datetime('now'))`),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.kind, table.name] }),
+    kindIdx: index("content_locks_kind_idx").on(table.kind),
+  })
+);
+
+/* ── 解锁失败计数（跨 isolate 的限流兜底） ── */
+export const unlockAttempts = sqliteTable(
+  "unlock_attempts",
+  {
+    key: text("key").notNull(),
+    windowStart: integer("window_start").notNull(),
+    count: integer("count").notNull().default(0),
+    updatedAt: integer("updated_at").notNull(),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.key, table.windowStart] }),
+    windowIdx: index("unlock_attempts_window_idx").on(table.windowStart),
+  })
+);
+
 /* ── 独立页表 ──────────────────────────────── */
 export const pages = sqliteTable("pages", {
   id: integer("id").primaryKey({ autoIncrement: true }),

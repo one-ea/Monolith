@@ -3,7 +3,8 @@ import { useParams } from "wouter";
 import { Link } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { fetchPost, type Post } from "@/lib/api";
+import { fetchPost, LockedPostError, ApiError, type Post, type LockInfo } from "@/lib/api";
+import { UnlockGate } from "@/components/unlock-gate";
 import { renderMarkdown, extractHeadings } from "@/lib/markdown";
 import { ArrowLeft, Eye, BookOpen, X } from "lucide-react";
 import { ReadingControls, useReadingPreferences } from "@/components/reading-controls";
@@ -33,8 +34,30 @@ export function PostPage() {
   const [post, setPost] = useState<Post | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [lockedLocks, setLockedLocks] = useState<LockInfo[]>([]);
   const [readingMode, setReadingMode] = useState(false);
   const { preferences, updatePreference } = useReadingPreferences();
+
+  const loadPost = useCallback(async (slug: string) => {
+    setLoading(true);
+    setError("");
+    setLockedLocks([]);
+    try {
+      const data = await fetchPost(slug);
+      setPost(data);
+    } catch (cause) {
+      setPost(null);
+      if (cause instanceof LockedPostError) {
+        setLockedLocks(cause.locks);
+      } else if (cause instanceof ApiError && cause.status === 404) {
+        setError("文章未找到");
+      } else {
+        setError("文章加载失败，请稍后重试");
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   // 阅读模式切换
   const toggleReadingMode = useCallback(() => {
@@ -70,18 +93,14 @@ export function PostPage() {
 
   useEffect(() => {
     if (!params.slug) return;
-    
+
     // 路由跳转时如果不带锚点，强制回到顶部
     if (!window.location.hash) {
       window.scrollTo({ top: 0, left: 0, behavior: "instant" });
     }
-    
-    setLoading(true);
-    fetchPost(params.slug)
-      .then(setPost)
-      .catch(() => setError("文章未找到"))
-      .finally(() => setLoading(false));
-  }, [params.slug]);
+
+    void loadPost(params.slug);
+  }, [params.slug, loadPost]);
 
   // 提取标题列表（用于 TOC）和 Markdown 渲染
   const [headings, setHeadings] = useState<{ id: string; text: string; level: number }[]>([]);
@@ -154,6 +173,24 @@ export function PostPage() {
           <div className="h-[16px] w-5/6 rounded bg-card/30" />
         </div>
       </div>
+    );
+  }
+
+  if (!loading && lockedLocks.length > 0 && params.slug) {
+    return (
+      <>
+        <SeoHead
+          title="受保护的文章"
+          description="这篇文章需要密码才能阅读。"
+          url={`/posts/${params.slug}`}
+          noindex
+        />
+        <UnlockGate
+          slug={params.slug}
+          locks={lockedLocks}
+          onUnlocked={() => void loadPost(params.slug)}
+        />
+      </>
     );
   }
 
