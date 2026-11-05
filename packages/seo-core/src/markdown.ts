@@ -35,8 +35,20 @@ export function extractHeadingLevels(md: string): { h1: number; h2: number; h3: 
 export function extractHeadings(md: string): HeadingRef[] {
   const headings: HeadingRef[] = [];
   for (const line of md.split(/\r?\n/)) {
-    const m = line.match(/^(#{1,6})\s+(.+?)\s*#*\s*$/);
-    if (m) headings.push({ level: m[1].length, text: m[2].trim() });
+    let level = 0;
+    while (level < 6 && line.charCodeAt(level) === 35) level += 1;
+    if (level === 0) continue;
+
+    const separator = line.charCodeAt(level);
+    if (separator !== 32 && separator !== 9) continue;
+
+    let end = line.length;
+    while (end > level && (line.charCodeAt(end - 1) === 32 || line.charCodeAt(end - 1) === 9)) end -= 1;
+    while (end > level && line.charCodeAt(end - 1) === 35) end -= 1;
+    while (end > level && (line.charCodeAt(end - 1) === 32 || line.charCodeAt(end - 1) === 9)) end -= 1;
+
+    const text = line.slice(level, end).trim();
+    if (text) headings.push({ level, text });
   }
   return headings;
 }

@@ -9,7 +9,8 @@ export function countDefinitionSentences(text: string): number {
 
 /** 事实性信号：带单位的数字 / 百分比 / 年份 */
 export function countFactualSignals(text: string): number {
-  const re = /(\d+(?:\.\d+)?\s*(?:%|％|ms|μs|s|秒|分钟|分|小时|时|天|周|月|年|kb|mb|gb|tb|px|倍|次|个|名|位|元|万|亿|k|qps|rps|fps|db)|\b(?:19|20)\d{2}\s*年\b|\b\d+(?:\.\d+)?%)/gi;
+  // 使用有界量词，避免长数字串触发正则回溯。
+  const re = /(\d{1,6}(?:\.\d{1,6})?\s*(?:%|％|ms|μs|s|秒|分钟|分|小时|时|天|周|月|年|kb|mb|gb|tb|px|倍|次|个|名|位|元|万|亿|k|qps|rps|fps|db)|\b(?:19|20)\d{2}\s*年\b|\b\d{1,6}(?:\.\d{1,6})?%)/gi;
   return (text.match(re) || []).length;
 }
 

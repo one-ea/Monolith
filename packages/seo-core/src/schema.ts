@@ -3,11 +3,12 @@
    WebSite 声明 SearchAction —— 站内搜索浮层已支持 /?q= 深链（client/src/components/search.tsx）。 */
 
 import type { PageDocument } from "./types";
+import { trimTrailingSlashes } from "./text";
 
 type JsonLdNode = Record<string, unknown>;
 
 export function buildJsonLdGraph(doc: PageDocument): { "@context": string; "@graph": JsonLdNode[] } {
-  const origin = doc.site.origin.replace(/\/+$/, "");
+  const origin = trimTrailingSlashes(doc.site.origin);
   const websiteId = `${origin}/#website`;
   const authorId = `${origin}/#author`;
   const orgId = `${origin}/#organization`;

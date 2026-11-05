@@ -28,7 +28,13 @@ async function createHarness(): Promise<Harness> {
 
   const resendCalls: ResendCall[] = [];
   vi.stubGlobal("fetch", async (input: unknown, init?: RequestInit) => {
-    if (String(input).includes("api.resend.com")) {
+    let hostname = "";
+    try {
+      hostname = new URL(String(input)).hostname;
+    } catch {
+      hostname = "";
+    }
+    if (hostname === "api.resend.com") {
       const body = JSON.parse(String(init?.body ?? "{}")) as ResendCall;
       resendCalls.push(body);
       return new Response("{}", { status: 200 });

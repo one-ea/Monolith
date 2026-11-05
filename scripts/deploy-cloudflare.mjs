@@ -87,7 +87,9 @@ function runResult(command, args, extra = {}) {
 }
 
 function failHard(message) {
-  console.error(`\n[error] ${message}`);
+  // 不把 wrangler 输出 / 环境变量原样打印到日志；长十六进制串一律脱敏。
+  const safe = String(message).replace(/[0-9a-f]{32,}/gi, "[redacted]");
+  console.error(`\n[error] ${safe}`);
   process.exit(1);
 }
 
@@ -116,7 +118,8 @@ function probeWranglerIdentity() {
     return cachedIdentity;
   }
   if (result.status !== 0) {
-    cachedIdentity = { ok: false, message: output || `wrangler whoami 退出码 ${result.status}` };
+    // 不把 whoami 原始输出（可能含邮箱 / 账户信息）带进错误消息。
+    cachedIdentity = { ok: false, message: `wrangler whoami 失败（退出码 ${result.status}）` };
     return cachedIdentity;
   }
 

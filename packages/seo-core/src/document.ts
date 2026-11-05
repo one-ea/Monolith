@@ -8,6 +8,7 @@ import {
 } from "./markdown";
 import type { ImageSize } from "./image-size";
 import type { PageDocument, PageType, SiteContext, BreadcrumbRef } from "./types";
+import { trimTrailingSlashes } from "./text";
 
 /** 归一为绝对 http(s) 地址；非法输入返回 "" */
 export function toAbsoluteUrl(value: string, origin: string): string {
@@ -38,7 +39,7 @@ export interface PageDocumentInput {
 }
 
 export function buildPageDocument(input: PageDocumentInput): PageDocument {
-  const origin = input.site.origin.replace(/\/+$/, "");
+  const origin = trimTrailingSlashes(input.site.origin);
   const site: SiteContext = { ...input.site, origin };
   const md = input.contentMarkdown ?? "";
   const url = toAbsoluteUrl(input.path, origin) || `${origin}/`;
