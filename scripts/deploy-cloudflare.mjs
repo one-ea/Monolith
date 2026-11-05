@@ -142,9 +142,7 @@ function resolveCloudflareAccountId() {
   const fromEnv = (process.env.CLOUDFLARE_ACCOUNT_ID || "").trim();
   if (fromEnv) {
     if (!ACCOUNT_ID_RE.test(fromEnv)) {
-      failHard(
-        `CLOUDFLARE_ACCOUNT_ID 格式无效：需要 32 位十六进制 Account ID，当前长度为 ${fromEnv.length}。`
-      );
+      failHard("CLOUDFLARE_ACCOUNT_ID 格式无效：需要 32 位十六进制 Account ID。");
     }
     resolvedAccountId = fromEnv.toLowerCase();
     return resolvedAccountId;
