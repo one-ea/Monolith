@@ -18,6 +18,9 @@ import { normalizeCardHeight, normalizeCardWidth } from "./card-layout";
 
 type DrizzlePG = ReturnType<typeof drizzle>;
 
+// 每个 isolate 只检查一次：早期版本把毫秒窗口写成 INTEGER，需要一次性升级到 BIGINT。
+let pgUnlockAttemptsChecked = false;
+
 export class PostgresAdapter implements IDatabase {
   private db: DrizzlePG;
   private client: ReturnType<typeof postgres>;
@@ -110,15 +113,29 @@ export class PostgresAdapter implements IDatabase {
     await this.client`
       CREATE TABLE IF NOT EXISTS unlock_attempts (
         key TEXT NOT NULL,
-        window_start INTEGER NOT NULL,
+        window_start BIGINT NOT NULL,
         count INTEGER NOT NULL DEFAULT 0,
-        updated_at INTEGER NOT NULL,
+        updated_at BIGINT NOT NULL,
         PRIMARY KEY (key, window_start)
       )
     `;
     await this.client`
       CREATE INDEX IF NOT EXISTS unlock_attempts_window_idx ON unlock_attempts(window_start)
     `.catch(() => {});
+    if (!pgUnlockAttemptsChecked) {
+      const rows = await this.client`
+        SELECT data_type FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'unlock_attempts' AND column_name = 'window_start'
+      `;
+      if (rows[0]?.data_type === "integer") {
+        await this.client`
+          ALTER TABLE unlock_attempts
+            ALTER COLUMN window_start TYPE BIGINT,
+            ALTER COLUMN updated_at TYPE BIGINT
+        `;
+      }
+      pgUnlockAttemptsChecked = true;
+    }
     await this.client`
       CREATE TABLE IF NOT EXISTS pages (
         id SERIAL PRIMARY KEY,
@@ -271,6 +288,7 @@ export class PostgresAdapter implements IDatabase {
       : sql`(cl.kind = 'series' AND cl.name = ${pgPosts.seriesSlug} AND ${pgPosts.seriesSlug} IS NOT NULL)`;
     return sql`(
       ${pgPosts.published} = true
+      AND ${pgPosts.listed} = true
       AND (${pgPosts.publishAt} IS NULL OR ${pgPosts.publishAt} <= NOW())
       AND NOT EXISTS (
         SELECT 1 FROM content_locks cl
@@ -437,9 +455,8 @@ export class PostgresAdapter implements IDatabase {
     if (data.tags?.length) {
       await this.syncPostTags(newPost.id, data.tags);
     }
-    if (data.passwordHash) {
-      await this.setContentLock("post", newPost.slug, data.passwordHash);
-    }
+    // 新文章显式写入/清除单篇锁，避免复用已删除文章的 slug 时继承孤儿锁。
+    await this.setContentLock("post", newPost.slug, data.passwordHash || null);
 
     return {
       id: newPost.id,
@@ -541,18 +558,23 @@ export class PostgresAdapter implements IDatabase {
   }
 
   async deletePost(slug: string): Promise<boolean> {
-    await this.setContentLock("post", slug, null);
+    // 先删文章，成功后再清锁；避免删除失败时把仍存在的文章意外解锁。
     const result = await this.db.delete(pgPosts).where(eq(pgPosts.slug, slug)).returning();
-    return result.length > 0;
+    if (result.length === 0) return false;
+    await this.setContentLock("post", slug, null);
+    return true;
   }
 
   async batchOperatePosts(slugs: string[], action: "publish" | "unpublish" | "delete"): Promise<number> {
     if (!slugs || slugs.length === 0) return 0;
     if (action === "delete") {
-      await this.db
-        .delete(pgContentLocks)
-        .where(and(eq(pgContentLocks.kind, "post"), inArray(pgContentLocks.name, slugs)));
       const result = await this.db.delete(pgPosts).where(inArray(pgPosts.slug, slugs)).returning();
+      const deletedSlugs = result.map((row) => row.slug);
+      if (deletedSlugs.length > 0) {
+        await this.db
+          .delete(pgContentLocks)
+          .where(and(eq(pgContentLocks.kind, "post"), inArray(pgContentLocks.name, deletedSlugs)));
+      }
       return result.length;
     } else {
       const published = action === "publish";
@@ -1360,7 +1382,8 @@ export class PostgresAdapter implements IDatabase {
     const rows = await this.client`
       SELECT p.slug, p.title, p.series_order FROM posts p
       WHERE p.series_slug = ${seriesSlug}
-        AND p.published = true AND (p.publish_at IS NULL OR p.publish_at <= NOW())
+        AND p.published = true AND p.listed = true
+        AND (p.publish_at IS NULL OR p.publish_at <= NOW())
         AND NOT EXISTS (
           SELECT 1 FROM content_locks cl
           WHERE (cl.kind = 'post' AND cl.name = p.slug)
@@ -1377,7 +1400,8 @@ export class PostgresAdapter implements IDatabase {
   async getCategories(): Promise<{ name: string; count: number }[]> {
     const rows = await this.client`
       SELECT p.category as name, COUNT(*)::int as count FROM posts p
-      WHERE p.published = true AND (p.publish_at IS NULL OR p.publish_at <= NOW())
+      WHERE p.published = true AND p.listed = true
+        AND (p.publish_at IS NULL OR p.publish_at <= NOW())
         AND p.category != '' AND p.category IS NOT NULL
         AND NOT EXISTS (
           SELECT 1 FROM content_locks cl
@@ -1579,7 +1603,7 @@ export class PostgresAdapter implements IDatabase {
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )
     `;
-    const byDay = await this.client`SELECT DATE(created_at) as date, COUNT(*)::int as count FROM visits WHERE created_at >= NOW() - INTERVAL '1 day' * ${days} GROUP BY DATE(created_at) ORDER BY date`;
+    const byDay = await this.client`SELECT TO_CHAR(DATE(created_at), 'YYYY-MM-DD') as date, COUNT(*)::int as count FROM visits WHERE created_at >= NOW() - INTERVAL '1 day' * ${days} GROUP BY DATE(created_at) ORDER BY DATE(created_at)`;
     const byCountry = await this.client`SELECT country, COUNT(*)::int as count FROM visits WHERE created_at >= NOW() - INTERVAL '1 day' * ${days} GROUP BY country ORDER BY count DESC LIMIT 10`;
     const byReferer = await this.client`SELECT referer_domain as referer, COUNT(*)::int as count FROM visits WHERE created_at >= NOW() - INTERVAL '1 day' * ${days} AND referer_domain != '' GROUP BY referer_domain ORDER BY count DESC LIMIT 10`;
     const byDevice = await this.client`SELECT device_type as device, COUNT(*)::int as count FROM visits WHERE created_at >= NOW() - INTERVAL '1 day' * ${days} GROUP BY device_type ORDER BY count DESC`;

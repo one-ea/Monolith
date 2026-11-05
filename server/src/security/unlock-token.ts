@@ -36,7 +36,9 @@ type UnlockEnv = {
 const keyCache = new Map<string, Promise<CryptoKey>>();
 
 export function getUnlockSecret(env: UnlockEnv): string {
-  return (env.UNLOCK_SECRET || env.JWT_SECRET || "").trim();
+  const dedicated = env.UNLOCK_SECRET?.trim();
+  if (dedicated) return dedicated;
+  return (env.JWT_SECRET || "").trim();
 }
 
 export function resolveUnlockTtlSeconds(env: UnlockEnv): number {

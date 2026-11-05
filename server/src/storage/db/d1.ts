@@ -36,6 +36,7 @@ export class D1Adapter implements IDatabase {
         await this.ensureSettingsTable();
         await this.ensurePagesTable();
         await this.ensureCommentsTable();
+        await this.ensurePostVersionsTable();
         await this.ensureGuestbookMessagesTable();
         await this.ensureFriendLinksTable();
         await this.ensureSeriesColumns();
@@ -157,7 +158,8 @@ export class D1Adapter implements IDatabase {
       : sql`(cl.kind = 'series' AND cl.name = ${posts.seriesSlug} AND ${posts.seriesSlug} IS NOT NULL)`;
     return sql`(
       ${posts.published} = 1
-      AND (${posts.publishAt} IS NULL OR ${posts.publishAt} <= datetime('now'))
+      AND ${posts.listed} = 1
+      AND (${posts.publishAt} IS NULL OR datetime(${posts.publishAt}) <= datetime('now'))
       AND NOT EXISTS (
         SELECT 1 FROM content_locks cl
         WHERE (cl.kind = 'post' AND cl.name = ${posts.slug})
@@ -312,8 +314,19 @@ export class D1Adapter implements IDatabase {
     this.commentsTableEnsured = true;
   }
 
-  private async ensureGuestbookMessagesTable(): Promise<void> {
-    await this.db.run(sql`CREATE TABLE IF NOT EXISTS guestbook_messages (
+  private async ensurePostVersionsTable(): Promise<void> {
+    await this.db.run(sql`CREATE TABLE IF NOT EXISTS post_versions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      post_id INTEGER NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+      title TEXT NOT NULL,
+      content TEXT NOT NULL,
+      excerpt TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )`);
+    await this.db.run(sql`CREATE INDEX IF NOT EXISTS post_versions_post_id_idx ON post_versions(post_id)`);
+  }
+
+  private async ensureGuestbookMessagesTable(): Promise<void> {    await this.db.run(sql`CREATE TABLE IF NOT EXISTS guestbook_messages (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       author_name TEXT NOT NULL,
       author_email TEXT NOT NULL DEFAULT '',
@@ -484,9 +497,8 @@ export class D1Adapter implements IDatabase {
     if (data.tags?.length) {
       await this.syncPostTags(newPost.id, data.tags);
     }
-    if (data.passwordHash) {
-      await this.setContentLock("post", newPost.slug, data.passwordHash);
-    }
+    // 新文章显式写入/清除单篇锁，避免复用已删除文章的 slug 时继承孤儿锁。
+    await this.setContentLock("post", newPost.slug, data.passwordHash || null);
 
     return {
       id: newPost.id,
@@ -589,18 +601,23 @@ export class D1Adapter implements IDatabase {
   }
 
   async deletePost(slug: string): Promise<boolean> {
-    await this.setContentLock("post", slug, null);
+    // 先删文章，成功后再清锁；避免删除失败时把仍存在的文章意外解锁。
     const result = await this.db.delete(posts).where(eq(posts.slug, slug)).returning();
-    return result.length > 0;
+    if (result.length === 0) return false;
+    await this.setContentLock("post", slug, null);
+    return true;
   }
 
   async batchOperatePosts(slugs: string[], action: "publish" | "unpublish" | "delete"): Promise<number> {
     if (!slugs || slugs.length === 0) return 0;
     if (action === "delete") {
-      await this.db
-        .delete(contentLocks)
-        .where(and(eq(contentLocks.kind, "post"), inArray(contentLocks.name, slugs)));
       const result = await this.db.delete(posts).where(inArray(posts.slug, slugs)).returning();
+      const deletedSlugs = result.map((row) => row.slug);
+      if (deletedSlugs.length > 0) {
+        await this.db
+          .delete(contentLocks)
+          .where(and(eq(contentLocks.kind, "post"), inArray(contentLocks.name, deletedSlugs)));
+      }
       return result.length;
     } else {
       const published = action === "publish";
@@ -618,7 +635,7 @@ export class D1Adapter implements IDatabase {
       .update(posts)
       .set({ published: true })
       .where(
-        sql`${posts.published} = 0 AND ${posts.publishAt} IS NOT NULL AND ${posts.publishAt} <= datetime('now')`
+        sql`${posts.published} = 0 AND ${posts.publishAt} IS NOT NULL AND datetime(${posts.publishAt}) <= datetime('now')`
       )
       .returning();
     return result.length;

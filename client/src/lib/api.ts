@@ -66,6 +66,8 @@ export type Post = PostMeta & {
   updatedAt: string;
   viewCount: number;
   seriesOrder: number;
+  /** 后台编辑接口返回：单篇锁之外的标签 / 分类 / 系列锁（仅 kind/key，无哈希） */
+  inheritedLocks?: LockInfo[];
 };
 
 export type LockInfo = {
@@ -98,11 +100,12 @@ export class LockedPostError extends ApiError {
 }
 
 async function toApiError(res: Response, fallback: string): Promise<ApiError> {
-  const data = await res.json().catch(() => null) as { error?: string; code?: string; locks?: LockInfo[] } | null;
+  const data = await res.json().catch(() => null) as { error?: string; message?: string; code?: string; locks?: LockInfo[] } | null;
+  const message = data?.message || data?.error || fallback;
   if (res.status === 401 && data?.code === "post_locked") {
-    return new LockedPostError(data.error || "需要密码", data);
+    return new LockedPostError(message, data);
   }
-  return new ApiError(data?.error || fallback, res.status, data?.code, data);
+  return new ApiError(message, res.status, data?.code, data);
 }
 
 export type FriendLinkStatus = "pending" | "approved" | "rejected";
@@ -249,8 +252,7 @@ export async function fetchSeriesPosts(seriesSlug: string): Promise<SeriesPost[]
     cache: "no-store",
     credentials: "same-origin",
   });
-  if (res.status === 401) throw await toApiError(res, "系列需要密码");
-  if (!res.ok) return [];
+  if (!res.ok) throw await toApiError(res, "获取系列失败");
   return res.json();
 }
 

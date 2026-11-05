@@ -19,6 +19,7 @@ import {
   hashPassword,
   normalizePassword,
   resolvePbkdf2Iterations,
+  shortHash,
   verifyPassword,
 } from "./security/password";
 import {
@@ -151,8 +152,8 @@ function sanitizeIndexNowKey(value: unknown): string {
 }
 
 // 文章是否已对外可见：已发布且定时发布时间（如有）已到达
-function isPostPubliclyVisible(post: { published: boolean; publishAt: string | null }): boolean {
-  if (!post.published) return false;
+function isPostPubliclyVisible(post: { published: boolean; listed: boolean; publishAt: string | null }): boolean {
+  if (!post.published || !post.listed) return false;
   if (!post.publishAt) return true;
   const publishAt = new Date(post.publishAt).getTime();
   return Number.isNaN(publishAt) || publishAt <= Date.now();
@@ -699,6 +700,7 @@ const UNLOCK_MAX_PER_SCOPE = 10;
 const UNLOCK_MAX_PER_IP = 30;
 const UNLOCK_BURST_WINDOW_MS = 60 * 1000;
 const UNLOCK_BURST_MAX = 5;
+const UNLOCK_BURST_MAX_KEYS = 1000;
 const unlockBurst = new Map<string, { count: number; first: number }>();
 
 function setPrivateNoStore(c: AppContext): void {
@@ -709,6 +711,19 @@ function setPrivateNoStore(c: AppContext): void {
 
 function burstLimited(key: string): boolean {
   const now = Date.now();
+
+  // 防止大量 IP / slug 组合把 isolate 内存撑爆：先清过期项，再按插入顺序淘汰。
+  if (unlockBurst.size > UNLOCK_BURST_MAX_KEYS) {
+    for (const [entryKey, entry] of unlockBurst) {
+      if (now - entry.first > UNLOCK_BURST_WINDOW_MS) unlockBurst.delete(entryKey);
+    }
+    while (unlockBurst.size > UNLOCK_BURST_MAX_KEYS) {
+      const oldest = unlockBurst.keys().next().value;
+      if (!oldest) break;
+      unlockBurst.delete(oldest);
+    }
+  }
+
   const record = unlockBurst.get(key);
   if (!record || now - record.first > UNLOCK_BURST_WINDOW_MS) {
     unlockBurst.set(key, { count: 1, first: now });
@@ -721,7 +736,7 @@ function burstLimited(key: string): boolean {
 type AccessResolution =
   | { status: "not_found" }
   | { status: "ok"; access: PostAccess; grants: UnlockGrant[]; unlockRequired: boolean }
-  | { status: "locked"; access: PostAccess };
+  | { status: "locked"; access: PostAccess; locks: PostLock[] };
 
 async function fingerprintLocks(locks: PostLock[]): Promise<Map<string, string>> {
   const entries = await Promise.all(
@@ -742,24 +757,24 @@ async function resolvePostAccess(c: AppContext, slug: string): Promise<AccessRes
   const secret = getUnlockSecret(c.env);
   const proof = readUnlockProof(c);
   const grants = secret && proof ? await verifyUnlockToken(proof, secret) : null;
-  if (!grants) return { status: "locked", access };
+  if (!grants) return { status: "locked", access, locks: access.locks };
 
   const fingerprints = await fingerprintLocks(access.locks);
-  const satisfied = access.locks.every((lock) =>
-    grantsSatisfyLock(grants, lock, fingerprints.get(`${lock.kind}:${lock.key}`) || "")
+  const unsatisfied = access.locks.filter(
+    (lock) => !grantsSatisfyLock(grants, lock, fingerprints.get(`${lock.kind}:${lock.key}`) || "")
   );
 
-  return satisfied
+  return unsatisfied.length === 0
     ? { status: "ok", access, grants, unlockRequired: true }
-    : { status: "locked", access };
+    : { status: "locked", access, locks: unsatisfied };
 }
 
-function lockedPostResponse(c: AppContext, access: PostAccess) {
+function lockedPostResponse(c: AppContext, access: PostAccess, locks: PostLock[] = access.locks) {
   setPrivateNoStore(c);
   return c.json({
     error: "需要密码",
     code: "post_locked",
-    locks: access.locks.map((lock) => ({ kind: lock.kind, key: lock.key })),
+    locks: locks.map((lock) => ({ kind: lock.kind, key: lock.key })),
   }, 401);
 }
 
@@ -769,7 +784,8 @@ async function checkUnlockLimits(
   ip: string
 ): Promise<{ limited: boolean; windowStart: number; keys: string[] }> {
   const windowStart = Math.floor(Date.now() / UNLOCK_WINDOW_MS) * UNLOCK_WINDOW_MS;
-  const ipKey = `ip:${ip}`;
+  // 不把原始 IP 写进 D1；短哈希足以做窗口内计数，且降低隐私面。
+  const ipKey = `ip:${await shortHash(ip)}`;
 
   if (burstLimited(`${ipKey}:${scopeKey}`)) {
     return { limited: true, windowStart, keys: [ipKey, scopeKey] };
@@ -804,15 +820,25 @@ async function purgeZoneCacheBestEffort(c: AppContext): Promise<void> {
   const zoneId = c.env.CLOUDFLARE_ZONE_ID;
   const token = c.env.CLOUDFLARE_API_TOKEN;
   if (!zoneId || !token) return;
-  try {
-    await fetch(`https://api.cloudflare.com/client/v4/zones/${zoneId}/purge_cache`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ purge_everything: true }),
-    });
-  } catch {
+  const task = fetch(`https://api.cloudflare.com/client/v4/zones/${zoneId}/purge_cache`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ purge_everything: true }),
+    signal: AbortSignal.timeout(5000),
+  }).catch(() => {
     /* 缓存清理失败不影响锁写入 */
+  });
+
+  // 不阻塞管理端保存请求；边缘环境用 waitUntil 保活。
+  try {
+    if (c.executionCtx?.waitUntil) {
+      c.executionCtx.waitUntil(task);
+      return;
+    }
+  } catch {
+    /* 无 ExecutionContext 的测试/Node 环境，走阻塞路径 */
   }
+  await task;
 }
 
 // 获取单篇文章（同时异步递增浏览量）
@@ -825,7 +851,7 @@ app.get("/api/posts/:slug", async (c) => {
     return c.json({ error: "文章未找到", code: "post_not_found" }, 404);
   }
   if (resolution.status === "locked") {
-    return lockedPostResponse(c, resolution.access);
+    return lockedPostResponse(c, resolution.access, resolution.locks);
   }
 
   const post = resolution.access.post;
@@ -934,7 +960,7 @@ app.post("/api/posts/:slug/unlock", async (c) => {
     return Boolean(lock) && grant.f === fingerprints.get(`${lock!.kind}:${lock!.key}`);
   });
 
-  const grants = [...stillValid, ...matched];
+  const grants = [...matched, ...stillValid];
   const ttl = resolveUnlockTtlSeconds(c.env);
   const token = await createUnlockToken(grants, secret, ttl);
   setUnlockCookie(c, token, ttl);
@@ -1011,7 +1037,7 @@ app.post("/api/series/:slug/unlock", async (c) => {
     f: await fingerprintPasswordHash(lock.passwordHash),
   };
   const ttl = resolveUnlockTtlSeconds(c.env);
-  const token = await createUnlockToken([...existing, grant], secret, ttl);
+  const token = await createUnlockToken([grant, ...existing], secret, ttl);
   setUnlockCookie(c, token, ttl);
 
   return c.json({ ok: true, fullyUnlocked: true, remaining: 0, expiresAt: new Date(Date.now() + ttl * 1000).toISOString() });
@@ -1037,7 +1063,7 @@ app.get("/api/posts/:slug/comments", async (c) => {
   const db = c.get("db");
   const access = await resolvePostAccess(c, slug);
   if (access.status === "not_found") return c.json({ error: "文章未找到" }, 404);
-  if (access.status === "locked") return lockedPostResponse(c, access.access);
+  if (access.status === "locked") return lockedPostResponse(c, access.access, access.locks);
   if (access.unlockRequired) setPrivateNoStore(c);
   const comments = await db.getApprovedComments(slug);
   const safe = comments.map(({ author_email, authorEmail, ...rest }: any) => rest);
@@ -1050,8 +1076,9 @@ app.post("/api/posts/:slug/comments", async (c) => {
   let isAdmin = false;
   if (authHeader?.startsWith("Bearer ")) {
     try {
-      await verify(authHeader.slice(7), c.env.JWT_SECRET, "HS256");
-      isAdmin = true;
+      const payload = await verify(authHeader.slice(7), c.env.JWT_SECRET, "HS256");
+      isAdmin = payload.sub === "admin"
+        && (payload.scope === undefined || payload.scope === "admin");
     } catch {
       isAdmin = false;
     }
@@ -1123,7 +1150,7 @@ app.post("/api/posts/:slug/comments", async (c) => {
   // 访问密码门禁：普通访客必须已解锁；博主可直接评论锁定文章。
   const access = await resolvePostAccess(c, slug);
   if (access.status === "not_found") return c.json({ error: "文章未找到" }, 404);
-  if (access.status === "locked" && !isAdmin) return lockedPostResponse(c, access.access);
+  if (access.status === "locked" && !isAdmin) return lockedPostResponse(c, access.access, access.locks);
   if (access.status === "ok" && access.unlockRequired) setPrivateNoStore(c);
   const post = access.access.post;
 
@@ -1257,7 +1284,7 @@ app.get("/api/posts/:slug/reactions", async (c) => {
   const db = c.get("db");
   const access = await resolvePostAccess(c, slug);
   if (access.status === "not_found") return c.json({ error: "文章未找到" }, 404);
-  if (access.status === "locked") return lockedPostResponse(c, access.access);
+  if (access.status === "locked") return lockedPostResponse(c, access.access, access.locks);
   if (access.unlockRequired) setPrivateNoStore(c);
   const reactions = await db.getReactions(slug);
   return c.json(reactions);
@@ -1278,7 +1305,7 @@ app.post("/api/posts/:slug/reactions", async (c) => {
   const db = c.get("db");
   const access = await resolvePostAccess(c, slug);
   if (access.status === "not_found") return c.json({ error: "文章未找到" }, 404);
-  if (access.status === "locked") return lockedPostResponse(c, access.access);
+  if (access.status === "locked") return lockedPostResponse(c, access.access, access.locks);
   if (access.unlockRequired) setPrivateNoStore(c);
 
   // IP hash 去重（使用环境变量盐值，避免源码泄露后可反推）
@@ -1903,10 +1930,18 @@ app.get("/api/admin/posts", async (c) => {
 // 获取单篇文章（后台编辑器专用：不受访问密码拦截，但绝不返回密码哈希）
 app.get("/api/admin/posts/:slug", async (c) => {
   const db = c.get("db");
-  const post = await db.getPostBySlug(c.req.param("slug"));
+  const access = await db.getPostAccess(c.req.param("slug"));
   setPrivateNoStore(c);
-  if (!post) return c.json({ error: "文章未找到" }, 404);
-  return c.json(post);
+  if (!access) return c.json({ error: "文章未找到" }, 404);
+
+  // 只返回锁的 kind/key，不返回哈希；同时让编辑器知道单篇锁之外的继承锁。
+  return c.json({
+    ...access.post,
+    hasPassword: access.locks.some((lock) => lock.kind === "post"),
+    inheritedLocks: access.locks
+      .filter((lock) => lock.kind !== "post")
+      .map((lock) => ({ kind: lock.kind, key: lock.key })),
+  });
 });
 
 // 访问控制：列出 / 设置 / 移除文章、标签、分类、系列密码
@@ -2330,14 +2365,29 @@ function isSafeImageUrl(url: string): boolean {
   }
 }
 
-async function fetchImageWithLimit(url: string): Promise<{ body: ArrayBuffer; contentType: string }> {
+async function fetchImageWithLimit(url: string, redirectCount = 0): Promise<{ body: ArrayBuffer; contentType: string }> {
+  if (redirectCount > 3) throw new Error("图片重定向次数过多");
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 10_000);
   try {
     const response = await fetch(url, {
       headers: { "User-Agent": "Monolith-Bot/1.0" },
       signal: controller.signal,
+      // 手动跟随重定向并逐跳校验，避免公开 URL 302 到内网 / 非 https 目标。
+      redirect: "manual",
     });
+    if (response.status >= 300 && response.status < 400) {
+      const location = response.headers.get("location");
+      if (!location) throw new Error("图片重定向缺少 Location");
+      let next: string;
+      try {
+        next = new URL(location, url).toString();
+      } catch {
+        throw new Error("图片重定向地址无效");
+      }
+      if (!isSafeImageUrl(next)) throw new Error("图片重定向目标不允许");
+      return fetchImageWithLimit(next, redirectCount + 1);
+    }
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const contentType = response.headers.get("content-type") || "";
     if (!contentType.startsWith("image/")) throw new Error("响应不是图片");
@@ -2809,6 +2859,37 @@ app.post("/api/admin/backup/preview", async (c) => {
   }));
 });
 
+// 备份里的 postTags 使用原始 id；恢复时映射回 slug 对应的 tags 数组，
+// 否则 importAll 无法重建文章-标签关联（备份会静默丢标签）。
+function hydrateBackupPostTags(posts: any, tags: any, postTags: any): any {
+  if (!Array.isArray(posts) || !Array.isArray(tags) || !Array.isArray(postTags)) return posts;
+
+  const tagNameById = new Map<number, string>();
+  for (const tag of tags) {
+    if (tag && typeof tag.id === "number" && typeof tag.name === "string") {
+      tagNameById.set(tag.id, tag.name);
+    }
+  }
+
+  const tagsByPostId = new Map<number, string[]>();
+  for (const link of postTags) {
+    if (!link || typeof link.postId !== "number" || typeof link.tagId !== "number") continue;
+    const name = tagNameById.get(link.tagId);
+    if (!name) continue;
+    const list = tagsByPostId.get(link.postId) || [];
+    if (!list.includes(name)) list.push(name);
+    tagsByPostId.set(link.postId, list);
+  }
+
+  return posts.map((post: any) => {
+    if (!post || typeof post !== "object" || typeof post.id !== "number") return post;
+    const names = tagsByPostId.get(post.id);
+    if (!names || names.length === 0) return post;
+    const existing = Array.isArray(post.tags) ? post.tags : [];
+    return { ...post, tags: [...new Set([...existing, ...names])] };
+  });
+}
+
 // 从 JSON 文件恢复/导入数据
 app.post("/api/admin/backup/restore", async (c) => {
   const parsed = await readJson<any>(c);
@@ -2819,7 +2900,7 @@ app.post("/api/admin/backup/restore", async (c) => {
 
   try {
     const imported = await db.importAll({
-      posts: body.posts,
+      posts: hydrateBackupPostTags(body.posts, body.tags, body.postTags),
       tags: body.tags,
       settings: includeSettings ? normalizeSettings(body.settings) : undefined,
       mode: body.mode || "merge",
@@ -2858,7 +2939,7 @@ app.post("/api/admin/backup/r2-restore", async (c) => {
 
   try {
     const imported = await db.importAll({
-      posts: data.posts as Parameters<typeof db.importAll>[0]["posts"],
+      posts: hydrateBackupPostTags(data.posts, data.tags, (data as any).postTags),
       tags: data.tags as Parameters<typeof db.importAll>[0]["tags"],
       settings: (includeSettings ?? true) ? normalizeSettings(data.settings) : undefined,
       mode: mode || "merge",

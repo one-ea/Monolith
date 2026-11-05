@@ -4,7 +4,7 @@
    但使用 PostgreSQL 方言（serial, timestamp 等）
    ────────────────────────────────────────────── */
 
-import { pgTable, serial, text, boolean, integer, timestamp, primaryKey, uniqueIndex, index, type AnyPgColumn } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, boolean, integer, bigint, timestamp, primaryKey, uniqueIndex, index, type AnyPgColumn } from "drizzle-orm/pg-core";
 
 /* ── 文章表 ────────────────────────────────── */
 export const pgPosts = pgTable("posts", {
@@ -72,9 +72,10 @@ export const pgUnlockAttempts = pgTable(
   "unlock_attempts",
   {
     key: text("key").notNull(),
-    windowStart: integer("window_start").notNull(),
+    // Date.now() 毫秒值远超 PostgreSQL INTEGER 上限，必须用 BIGINT。
+    windowStart: bigint("window_start", { mode: "number" }).notNull(),
     count: integer("count").notNull().default(0),
-    updatedAt: integer("updated_at").notNull(),
+    updatedAt: bigint("updated_at", { mode: "number" }).notNull(),
   },
   (table) => ({
     pk: primaryKey({ columns: [table.key, table.windowStart] }),

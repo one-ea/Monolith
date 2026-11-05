@@ -24,6 +24,7 @@ const KIND_PLACEHOLDER: Record<ContentLockKind, string> = {
 export function AdminAccess() {
   const [locks, setLocks] = useState<ContentLock[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [saving, setSaving] = useState(false);
   const [kind, setKind] = useState<ContentLockKind>("tag");
   const [name, setName] = useState("");
@@ -37,10 +38,13 @@ export function AdminAccess() {
 
   const load = async () => {
     setLoading(true);
+    setLoadError("");
     try {
       setLocks(await fetchContentLocks());
     } catch (error) {
-      showMessage(error instanceof Error ? error.message : "加载失败", "error");
+      const text = error instanceof Error ? error.message : "加载失败";
+      setLoadError(text);
+      showMessage(text, "error");
     } finally {
       setLoading(false);
     }
@@ -149,27 +153,34 @@ export function AdminAccess() {
           </button>
         </div>
         {message.text && (
-          <p className={`mt-[10px] text-[12px] ${message.type === "error" ? "text-destructive" : "text-emerald-500"}`}>{message.text}</p>
+          <p className={`mt-[10px] text-[12px] ${message.type === "error" ? "text-destructive" : "text-emerald-700 dark:text-emerald-400"}`}>{message.text}</p>
         )}
       </form>
 
       <div className="overflow-hidden rounded-md border border-border/20 bg-background/25">
-        <div className="grid grid-cols-[90px_minmax(0,1fr)_120px_80px] gap-[10px] border-b border-border/15 px-[14px] py-[10px] text-[10px] uppercase tracking-normal text-muted-foreground/45">
+        <div className="hidden grid-cols-[90px_minmax(0,1fr)_120px_80px] gap-[10px] border-b border-border/15 px-[14px] py-[10px] text-[10px] uppercase tracking-normal text-muted-foreground/45 sm:grid">
           <span>类型</span><span>名称</span><span>更新时间</span><span className="text-right">操作</span>
         </div>
         {loading ? (
           <div className="flex items-center justify-center py-[40px] text-[12px] text-muted-foreground/50">
             <LoaderCircle className="mr-[6px] h-[14px] w-[14px] animate-spin" />加载中
           </div>
+        ) : loadError ? (
+          <div className="flex flex-col items-center justify-center gap-[10px] py-[40px] text-center">
+            <p className="text-[12px] text-destructive">{loadError}</p>
+            <button type="button" onClick={() => void load()} className="inline-flex h-[30px] items-center gap-[6px] rounded-md border border-border/25 px-[10px] text-[12px] text-muted-foreground hover:text-foreground">
+              <RefreshCw className="h-[12px] w-[12px]" />重试
+            </button>
+          </div>
         ) : locks.length === 0 ? (
           <div className="py-[40px] text-center text-[12px] text-muted-foreground/45">还没有设置任何访问密码</div>
         ) : (
           locks.map((lock) => (
-            <div key={`${lock.kind}:${lock.name}`} className="grid grid-cols-[90px_minmax(0,1fr)_120px_80px] items-center gap-[10px] border-b border-border/10 px-[14px] py-[10px] last:border-b-0">
-              <span className="text-[11px] text-muted-foreground/60">{KIND_LABEL[lock.kind]}</span>
-              <span className="truncate font-mono text-[12px] text-foreground/80">{lock.name}</span>
-              <span className="text-[11px] text-muted-foreground/45">{new Date(lock.updatedAt).toLocaleDateString("zh-CN")}</span>
-              <div className="flex justify-end">
+            <div key={`${lock.kind}:${lock.name}`} className="flex items-center gap-[10px] border-b border-border/10 px-[14px] py-[10px] last:border-b-0 sm:grid sm:grid-cols-[90px_minmax(0,1fr)_120px_80px]">
+              <span className="shrink-0 text-[11px] text-muted-foreground/60">{KIND_LABEL[lock.kind]}</span>
+              <span className="min-w-0 flex-1 truncate font-mono text-[12px] text-foreground/80">{lock.name}</span>
+              <span className="hidden text-[11px] text-muted-foreground/45 sm:block">{lock.updatedAt ? lock.updatedAt.slice(0, 10) : ""}</span>
+              <div className="flex shrink-0 justify-end sm:justify-end">
                 <button
                   type="button"
                   onClick={() => void remove(lock)}

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { LockKeyhole, LoaderCircle } from "lucide-react";
-import { unlockPost, unlockSeries, type LockInfo, type UnlockResult } from "@/lib/api";
+import { unlockPost, unlockSeries, ApiError, type LockInfo, type UnlockResult } from "@/lib/api";
 
 type UnlockGateProps = {
   slug?: string;
@@ -41,6 +41,11 @@ export function UnlockGate({ slug, seriesSlug, locks, onUnlocked, title = "受�
       setPassword("");
       setError(`还需要 ${result.remaining} 个密码`);
     } catch (cause) {
+      if (cause instanceof ApiError && ["not_locked", "post_not_found"].includes(cause.code || "")) {
+        // 锁已被移除或文章已删除：重新加载，让页面回到公开内容或 404。
+        onUnlocked();
+        return;
+      }
       const message = cause instanceof Error ? cause.message : "密码错误";
       setError(message);
     } finally {

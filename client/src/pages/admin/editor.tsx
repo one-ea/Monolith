@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useParams, useLocation } from "wouter";
-import { fetchAdminPost, createPost, updatePost, uploadImage, localizePostImages, fetchPostVersions, restorePostVersion, type PostVersion } from "@/lib/api";
+import { fetchAdminPost, createPost, updatePost, uploadImage, localizePostImages, fetchPostVersions, restorePostVersion, type LockInfo, type PostVersion } from "@/lib/api";
 import { CARD_GRID_SIZE_LABEL, CARD_IMAGE_MODE_LABEL, clampCardHeight, clampCardWidth, getArticleCardImageMode, getCardGridSize } from "@/lib/card-layout";
 import { renderMarkdown } from "@/lib/markdown";
 import { analyzePost } from "@/lib/seo-analyzer";
@@ -15,8 +15,8 @@ import { formatSiteDate } from "@/lib/date-format";
 /** 检查面板状态图标（SEO / GEO 共用） */
 function AuditStatusIcon({ status }: { status: "pass" | "warn" | "fail" }) {
   if (status === "pass") return <CheckCircle2 className="h-[11px] w-[11px] shrink-0 text-foreground/70" />;
-  if (status === "warn") return <AlertTriangle className="h-[11px] w-[11px] shrink-0 text-amber-400" />;
-  return <XCircle className="h-[11px] w-[11px] shrink-0 text-red-400" />;
+  if (status === "warn") return <AlertTriangle className="h-[11px] w-[11px] shrink-0 text-amber-600 dark:text-amber-400" />;
+  return <XCircle className="h-[11px] w-[11px] shrink-0 text-red-600 dark:text-red-400" />;
 }
 
 /** 注册 Monolith 暗色主题 — 暗夜琥珀：黑 + 金点缀 */
@@ -147,7 +147,10 @@ export function AdminEditor() {
   });
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState({ text: "", type: "" as "" | "success" | "error" });
+  const [postLoading, setPostLoading] = useState(isEdit);
+  const [postLoadError, setPostLoadError] = useState("");
   const [hasPassword, setHasPassword] = useState(false);
+  const [inheritedLocks, setInheritedLocks] = useState<LockInfo[]>([]);
   const [passwordValue, setPasswordValue] = useState("");
   const [passwordChange, setPasswordChange] = useState(false);
   const [removePassword, setRemovePassword] = useState(false);
@@ -158,6 +161,9 @@ export function AdminEditor() {
   const [zenMode, setZenMode] = useState(false);
   const [autoSlug, setAutoSlug] = useState(!isEdit);
   const [lastSaved, setLastSaved] = useState<string>("");
+  const formRef = useRef(form);
+  const draftSlugRef = useRef<string | undefined>(params.slug);
+  const lastSavedContentRef = useRef("");
 
   const [saveVersion, setSaveVersion] = useState(false);
   const [versions, setVersions] = useState<PostVersion[]>([]);
@@ -237,6 +243,8 @@ export function AdminEditor() {
     document.title = isEdit ? "编辑文章 | Monolith" : "新建文章 | Monolith";
 
     if (isEdit && params.slug) {
+      setPostLoading(true);
+      setPostLoadError("");
       fetchAdminPost(params.slug).then((post) => {
         setForm({
           slug: post.slug,
@@ -256,12 +264,25 @@ export function AdminEditor() {
           category: post.category || "",
         });
         setHasPassword(Boolean(post.hasPassword));
+        setInheritedLocks(post.inheritedLocks ?? []);
         setPasswordValue("");
         setPasswordChange(false);
         setRemovePassword(false);
         setAutoSlug(false);
+        lastSavedContentRef.current = post.content;
+        const draft = loadDraft(post.slug);
+        if (draft && typeof draft.content === "string" && draft.content.trim()) {
+          setForm((prev) => ({ ...prev, ...draft }));
+          showMsg("已恢复本地草稿", "success");
+        }
+      }).catch((error: unknown) => {
+        setPostLoadError(error instanceof Error ? error.message : "文章加载失败");
+      }).finally(() => {
+        setPostLoading(false);
       });
     } else {
+      setPostLoading(false);
+      setPostLoadError("");
       // 新建时尝试恢复草稿
       const draft = loadDraft("new");
       if (draft && draft.content) {
@@ -276,15 +297,25 @@ export function AdminEditor() {
     setWordCount(chars);
   }, [form.content]);
 
-  // 自动保存草稿（每 10 秒）
+  useEffect(() => {
+    formRef.current = form;
+  }, [form]);
+
+  useEffect(() => {
+    draftSlugRef.current = params.slug;
+  }, [params.slug]);
+
+  // 自动保存草稿（每 10 秒）。用 ref 读取最新表单，避免每次击键重启计时器；
+  // 内容与最近一次成功保存一致时不再重建草稿。
   useEffect(() => {
     const timer = setInterval(() => {
-      if (form.content.trim()) {
-        saveDraft(params.slug || "", form);
-      }
+      const current = formRef.current;
+      if (!current.content.trim()) return;
+      if (current.content === lastSavedContentRef.current) return;
+      saveDraft(draftSlugRef.current || "", current);
     }, 10000);
     return () => clearInterval(timer);
-  }, [form, params.slug]);
+  }, []);
 
   // Ctrl+S 保存
   useEffect(() => {
@@ -303,10 +334,10 @@ export function AdminEditor() {
     setTimeout(() => setMessage({ text: "", type: "" }), 3000);
   }, []);
 
-  const handleSave = async () => {
+  const handleSave = async (): Promise<boolean> => {
     if (!form.slug || !form.title) {
       showMsg("请填写 Slug 和标题", "error");
-      return;
+      return false;
     }
 
     setSaving(true);
@@ -339,10 +370,11 @@ export function AdminEditor() {
         });
         if (passwordPayload !== undefined) {
           setHasPassword(Boolean(passwordPayload));
-          setPasswordValue("");
-          setPasswordChange(false);
-          setRemovePassword(false);
         }
+        setPasswordValue("");
+        setPasswordChange(false);
+        setRemovePassword(false);
+        lastSavedContentRef.current = payload.content;
         setLastSaved(new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }));
         showMsg("已保存" + (saveVersion ? "并创建了版本快照" : ""), "success");
         clearDraft(params.slug);
@@ -353,11 +385,14 @@ export function AdminEditor() {
           ...(passwordValue ? { password: passwordValue } : {}),
         });
         showMsg("已创建，即将跳转...", "success");
+        lastSavedContentRef.current = payload.content;
         clearDraft("new");
         setTimeout(() => setLocation("/admin"), 1200);
       }
+      return true;
     } catch (err: unknown) {
       showMsg(err instanceof Error ? err.message : "操作失败", "error");
+      return false;
     } finally {
       setSaving(false);
     }
@@ -563,9 +598,34 @@ export function AdminEditor() {
     { label: "红色状态", value: "from-red-500/12 to-zinc-500/12" },
   ];
 
+  if (postLoading) {
+    return (
+      <div className="mx-auto w-full max-w-[1280px] px-[12px] py-[16px] sm:px-[18px] sm:py-[20px]">
+        <div className="animate-pulse space-y-[12px]">
+          <div className="h-[36px] w-[240px] rounded-md bg-card/30" />
+          <div className="h-[52px] w-full rounded-md bg-card/20" />
+          <div className="h-[420px] w-full rounded-md bg-card/20" />
+        </div>
+      </div>
+    );
+  }
+
+  if (postLoadError) {
+    return (
+      <div className="mx-auto flex w-full max-w-[720px] flex-1 flex-col items-center justify-center gap-[12px] px-[20px] py-[80px] text-center">
+        <p className="text-[18px] font-medium text-foreground/80">文章加载失败</p>
+        <p className="max-w-[520px] text-[13px] leading-[1.7] text-muted-foreground/60">{postLoadError}</p>
+        <div className="flex gap-[10px]">
+          <button type="button" onClick={() => setLocation("/admin")} className="inline-flex min-h-[40px] items-center rounded-md border border-border/25 px-[14px] text-[13px] text-muted-foreground transition-colors hover:bg-accent/30 hover:text-foreground">返回后台</button>
+          <button type="button" onClick={() => window.location.reload()} className="inline-flex min-h-[40px] items-center rounded-md bg-foreground px-[14px] text-[13px] font-medium text-background transition-opacity hover:opacity-90">重试</button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
-      className="mx-auto flex h-[calc(100vh-56px)] w-full max-w-[1280px] flex-col px-[12px] py-[16px] sm:px-[18px] sm:py-[20px]"
+      className="mx-auto flex min-h-[calc(100vh-56px)] w-full max-w-[1280px] flex-col px-[12px] py-[16px] sm:px-[18px] sm:py-[20px] lg:h-[calc(100vh-56px)] lg:min-h-0"
       onDrop={handleDrop}
       onDragOver={(e) => e.preventDefault()}
       onPaste={handlePaste}
@@ -597,7 +657,7 @@ export function AdminEditor() {
         <div className="flex flex-wrap items-center gap-[6px]">
           {message.text && (
             <span className={`rounded-md px-[10px] py-[6px] text-[12px] transition-all ${
-              message.type === "success" ? "bg-emerald-500/10 text-emerald-400" : "bg-red-500/10 text-red-400"
+              message.type === "success" ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400" : "bg-red-500/10 text-red-600 dark:text-red-400"
             }`}>
               {message.type === "success" ? "✓" : "✕"} {message.text}
             </span>
@@ -609,7 +669,7 @@ export function AdminEditor() {
             <input type="checkbox" checked={form.published} onChange={(e) => updateField("published", e.target.checked)} className="rounded accent-foreground" />
             发布
           </label>
-          <label className="flex min-h-[36px] cursor-pointer select-none items-center gap-[6px] rounded-md px-[8px] text-[12px] text-amber-500/65 transition-colors hover:bg-amber-500/8 hover:text-amber-500/85">
+          <label className="flex min-h-[36px] cursor-pointer select-none items-center gap-[6px] rounded-md px-[8px] text-[12px] text-amber-700/70 dark:text-amber-400/70 transition-colors hover:bg-amber-500/8 hover:text-amber-800/85 dark:hover:text-amber-300/85">
             <input type="checkbox" checked={form.pinned} onChange={(e) => updateField("pinned", e.target.checked)} className="rounded accent-amber-500" />
             置顶
           </label>
@@ -636,7 +696,8 @@ export function AdminEditor() {
                 try {
                   // 先保存当前修改，确保后端基于最新内容操作
                   showMsg("正在保存并转换外链图片...", "success");
-                  await handleSave();
+                  const saved = await handleSave();
+                  if (!saved) return;
                   const result = await localizePostImages(params.slug);
                   if (result.replaced > 0) {
                     showMsg(`已转换 ${result.replaced} 张图片${result.failed ? `，${result.failed} 张失败` : ""}`, "success");
@@ -797,6 +858,11 @@ export function AdminEditor() {
                   )}
                   {removePassword && <p className="mt-[4px] text-[10px] text-destructive/80">保存后将移除访问密码</p>}
                   {hasPassword && !passwordChange && !removePassword && <p className="mt-[4px] text-[10px] text-muted-foreground/45">读者需要密码才能打开这篇文章</p>}
+                  {inheritedLocks.length > 0 && (
+                    <p className="mt-[4px] text-[10px] leading-[1.5] text-amber-700/80 dark:text-amber-400/80">
+                      另受 {inheritedLocks.map((lock) => `${lock.kind === "tag" ? "标签" : lock.kind === "category" ? "分类" : lock.kind === "series" ? "系列" : "文章"}「${lock.key}」`).join("、")} 锁保护；此处只管理单篇密码。
+                    </p>
+                  )}
                 </div>
                 {/* ─── SEO / GEO 检查面板（实时，防抖 500ms） ─── */}
                 <div className="sm:col-span-3 lg:col-span-5">
@@ -1036,7 +1102,7 @@ export function AdminEditor() {
       )}
 
       {/* ─── 编辑器 + 预览 ─── */}
-      <div className={`grid min-h-0 flex-1 ${showPreview ? "grid-cols-1 lg:grid-cols-2 lg:gap-[2px]" : "grid-cols-1"} overflow-hidden rounded-md border border-border/22 bg-background/35`}>
+      <div className={`grid min-h-[420px] flex-1 ${showPreview ? "grid-cols-1 lg:grid-cols-2 lg:gap-[2px]" : "grid-cols-1"} overflow-hidden rounded-md border border-border/22 bg-background/35 lg:min-h-0`}>
         {/* 左侧 Monaco 编辑器 */}
         <div className="flex flex-col min-h-0">
           {/* 工具栏 */}
@@ -1117,6 +1183,8 @@ export function AdminEditor() {
                   domNode.addEventListener("drop", (e: Event) => {
                     const de = e as DragEvent;
                     de.preventDefault();
+                    // 阻止冒泡到外层 onDrop，避免同一次拖拽触发两次上传。
+                    de.stopPropagation();
                     const file = de.dataTransfer?.files[0];
                     if (file?.type.startsWith("image/")) handleImageUpload(file);
                   });
@@ -1204,7 +1272,7 @@ export function AdminEditor() {
                       <div className="text-[14px] font-medium text-foreground/90 mb-[4px]">{formatSiteDate(v.createdAt, dateSettings)}</div>
                       <div className="text-[12px] text-muted-foreground/50">
                         {v.content.length} 字符
-                        {i === 0 && <span className="ml-[8px] text-[10px] bg-emerald-500/10 text-emerald-400 px-[6px] py-[2px] rounded-[4px]">最新快照</span>}
+                        {i === 0 && <span className="ml-[8px] text-[10px] bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 px-[6px] py-[2px] rounded-[4px]">最新快照</span>}
                       </div>
                     </div>
                     <button

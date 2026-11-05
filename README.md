@@ -247,6 +247,8 @@ set "CLOUDFLARE_ACCOUNT_ID=<32 位十六进制账户 ID>"
 
 `--skip-migrate` 只跳过远程数据库迁移；schema reconcile 仍会执行。需要完全跳过数据库操作时同时传 `--skip-migrate --skip-reconcile`。
 
+> 访问密码解锁使用 HttpOnly cookie（`Path=/api`），依赖同源 `/api` 代理。若把 `VITE_API_URL` 指向跨域 Worker，浏览器不会发送该 cookie，解锁会一直失败；请保持 Pages Functions 同源代理部署。
+
 ### 配置边界
 
 **必须保留为 Workers secret 的凭据：**

@@ -68,7 +68,7 @@ function quoteSqlString(value) {
   return `'${String(value).replace(/'/g, "''")}'`;
 }
 
-function parseAlterStatements(sql) {
+function parseMigrationStatements(sql) {
   const cleaned = sql
     .replace(/\/\*[\s\S]*?\*\//g, "")
     .replace(/--[^\n]*/g, "");
@@ -76,14 +76,26 @@ function parseAlterStatements(sql) {
   if (statements.length === 0) return null;
 
   const alters = [];
+  const idempotent = [];
   for (const statement of statements) {
     const match = statement.match(
       /^ALTER\s+TABLE\s+([A-Za-z_][A-Za-z0-9_]*)\s+ADD\s+COLUMN\s+([A-Za-z_][A-Za-z0-9_]*)\b/i
     );
-    if (!match) return null;
-    alters.push({ table: match[1], column: match[2] });
+    if (match) {
+      alters.push({ table: match[1], column: match[2] });
+      continue;
+    }
+    // 允许与 ALTER 同文件的幂等语句（如 0013 的 CREATE INDEX IF NOT EXISTS）；
+    // 补记前会先执行这些语句，保证索引等副作用不会因 stamp 被跳过。
+    if (/^CREATE\s+(?:UNIQUE\s+)?(?:TABLE|INDEX)\s+IF\s+NOT\s+EXISTS\b/i.test(statement)) {
+      idempotent.push(statement);
+      continue;
+    }
+    return null;
   }
-  return alters;
+
+  if (alters.length === 0) return null;
+  return { alters, idempotent };
 }
 
 const tables = new Set(
@@ -131,23 +143,29 @@ for (const file of files) {
 
   const sql = readFileSync(resolve(migrationsDir, file), "utf8");
 
-  // 0002 是种子数据：预建库里已经有文章时，不应再重放硬编码的 post_id/tag_id 关联。
+  // 0002 是种子数据：预建库（schema 已初始化）不应再重放硬编码的 post_id/tag_id 关联。
   if (file === "0002_seed.sql") {
     const rows = execute("SELECT COUNT(*) AS count FROM posts;");
-    if (Number(rows[0]?.count ?? 0) > 0) {
-      toStamp.push({ file, reason: "posts 已有数据，跳过种子重放" });
+    const schemaInitialized = tables.has("tags") && tables.has("post_tags");
+    if (schemaInitialized || Number(rows[0]?.count ?? 0) > 0) {
+      toStamp.push({ file, reason: "schema 已初始化，跳过种子重放" });
     }
     continue;
   }
 
-  const alters = parseAlterStatements(sql);
-  if (!alters) continue;
+  const migration = parseMigrationStatements(sql);
+  if (!migration) continue;
 
-  const missing = alters.filter(({ table, column }) => !tableColumns(table).has(column));
+  const missing = migration.alters.filter(({ table, column }) => !tableColumns(table).has(column));
   if (missing.length === 0) {
+    if (!options.dryRun) {
+      for (const statement of migration.idempotent) {
+        execute(`${statement};`, { json: false });
+      }
+    }
     toStamp.push({
       file,
-      reason: `目标列已存在：${alters.map(({ table, column }) => `${table}.${column}`).join(", ")}`,
+      reason: `目标列已存在：${migration.alters.map(({ table, column }) => `${table}.${column}`).join(", ")}${migration.idempotent.length ? `；${options.dryRun ? "将执行" : "已执行"} ${migration.idempotent.length} 条幂等语句` : ""}`,
     });
   } else {
     console.log(

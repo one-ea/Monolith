@@ -65,7 +65,8 @@ export class TursoAdapter implements IDatabase {
       : sql`(cl.kind = 'series' AND cl.name = ${posts.seriesSlug} AND ${posts.seriesSlug} IS NOT NULL)`;
     return sql`(
       ${posts.published} = 1
-      AND (${posts.publishAt} IS NULL OR ${posts.publishAt} <= datetime('now'))
+      AND ${posts.listed} = 1
+      AND (${posts.publishAt} IS NULL OR datetime(${posts.publishAt}) <= datetime('now'))
       AND NOT EXISTS (
         SELECT 1 FROM content_locks cl
         WHERE (cl.kind = 'post' AND cl.name = ${posts.slug})
@@ -165,12 +166,13 @@ export class TursoAdapter implements IDatabase {
 
     await this.db.run(sql`CREATE TABLE IF NOT EXISTS post_versions (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      post_slug TEXT NOT NULL REFERENCES posts(slug) ON DELETE CASCADE,
+      post_id INTEGER NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
       title TEXT NOT NULL,
       content TEXT NOT NULL,
       excerpt TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     )`);
+    await this.ensurePostVersionsPostId();
     await this.db.run(sql`CREATE TABLE IF NOT EXISTS reactions (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       post_slug TEXT NOT NULL REFERENCES posts(slug) ON DELETE CASCADE,
@@ -219,6 +221,33 @@ export class TursoAdapter implements IDatabase {
       PRIMARY KEY (key, window_start)
     )`);
     await this.db.run(sql`CREATE INDEX IF NOT EXISTS unlock_attempts_window_idx ON unlock_attempts(window_start)`);
+  }
+
+  private async ensurePostVersionsPostId(): Promise<void> {
+    const result = await this.db.run(sql`SELECT name FROM pragma_table_info('post_versions')`);
+    const columns = new Set(
+      ((result.rows ?? []) as { name?: string }[])
+        .map((row) => row.name)
+        .filter((name): name is string => Boolean(name))
+    );
+    if (!columns.has("post_slug")) return;
+
+    // 早期 Turso 启动代码误用 post_slug；代码与 D1/PG 都按 post_id 查询。
+    // 重建表并尽量保留历史版本（按 slug 关联回 posts.id）。
+    await this.db.run(sql`ALTER TABLE post_versions RENAME TO post_versions_legacy`);
+    await this.db.run(sql`CREATE TABLE post_versions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      post_id INTEGER NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+      title TEXT NOT NULL,
+      content TEXT NOT NULL,
+      excerpt TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )`);
+    await this.db.run(sql`INSERT INTO post_versions (id, post_id, title, content, excerpt, created_at)
+      SELECT v.id, p.id, v.title, v.content, v.excerpt, v.created_at
+      FROM post_versions_legacy v
+      INNER JOIN posts p ON p.slug = v.post_slug`);
+    await this.db.run(sql`DROP TABLE post_versions_legacy`);
   }
 
   private commentsTableEnsured = false;
@@ -423,9 +452,8 @@ export class TursoAdapter implements IDatabase {
     if (data.tags?.length) {
       await this.syncPostTags(newPost.id, data.tags);
     }
-    if (data.passwordHash) {
-      await this.setContentLock("post", newPost.slug, data.passwordHash);
-    }
+    // 新文章显式写入/清除单篇锁，避免复用已删除文章的 slug 时继承孤儿锁。
+    await this.setContentLock("post", newPost.slug, data.passwordHash || null);
 
     return {
       id: newPost.id,
@@ -527,18 +555,23 @@ export class TursoAdapter implements IDatabase {
   }
 
   async deletePost(slug: string): Promise<boolean> {
-    await this.setContentLock("post", slug, null);
+    // 先删文章，成功后再清锁；避免删除失败时把仍存在的文章意外解锁。
     const result = await this.db.delete(posts).where(eq(posts.slug, slug)).returning();
-    return result.length > 0;
+    if (result.length === 0) return false;
+    await this.setContentLock("post", slug, null);
+    return true;
   }
 
   async batchOperatePosts(slugs: string[], action: "publish" | "unpublish" | "delete"): Promise<number> {
     if (!slugs || slugs.length === 0) return 0;
     if (action === "delete") {
-      await this.db
-        .delete(contentLocks)
-        .where(and(eq(contentLocks.kind, "post"), inArray(contentLocks.name, slugs)));
       const result = await this.db.delete(posts).where(inArray(posts.slug, slugs)).returning();
+      const deletedSlugs = result.map((row) => row.slug);
+      if (deletedSlugs.length > 0) {
+        await this.db
+          .delete(contentLocks)
+          .where(and(eq(contentLocks.kind, "post"), inArray(contentLocks.name, deletedSlugs)));
+      }
       return result.length;
     } else {
       const published = action === "publish";
@@ -555,7 +588,7 @@ export class TursoAdapter implements IDatabase {
       .update(posts)
       .set({ published: true })
       .where(
-        sql`${posts.published} = 0 AND ${posts.publishAt} IS NOT NULL AND ${posts.publishAt} <= datetime('now')`
+        sql`${posts.published} = 0 AND ${posts.publishAt} IS NOT NULL AND datetime(${posts.publishAt}) <= datetime('now')`
       )
       .returning();
     return result.length;

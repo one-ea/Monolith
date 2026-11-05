@@ -37,15 +37,19 @@ export function PostPage() {
   const [lockedLocks, setLockedLocks] = useState<LockInfo[]>([]);
   const [readingMode, setReadingMode] = useState(false);
   const { preferences, updatePreference } = useReadingPreferences();
+  const requestIdRef = useRef(0);
 
   const loadPost = useCallback(async (slug: string) => {
+    const requestId = ++requestIdRef.current;
     setLoading(true);
     setError("");
     setLockedLocks([]);
     try {
       const data = await fetchPost(slug);
+      if (requestId !== requestIdRef.current) return;
       setPost(data);
     } catch (cause) {
+      if (requestId !== requestIdRef.current) return;
       setPost(null);
       if (cause instanceof LockedPostError) {
         setLockedLocks(cause.locks);
@@ -55,7 +59,7 @@ export function PostPage() {
         setError("文章加载失败，请稍后重试");
       }
     } finally {
-      setLoading(false);
+      if (requestId === requestIdRef.current) setLoading(false);
     }
   }, []);
 
@@ -196,9 +200,12 @@ export function PostPage() {
 
   if (error || !post) {
     return (
-      <div className="flex flex-1 items-center justify-center">
-        <h1 className="text-[20px] text-muted-foreground">{error || "文章未找到"}</h1>
-      </div>
+      <>
+        <SeoHead title={error || "文章未找到"} url={params.slug ? `/posts/${params.slug}` : undefined} noindex />
+        <div className="flex flex-1 items-center justify-center">
+          <h1 className="text-[20px] text-muted-foreground">{error || "文章未找到"}</h1>
+        </div>
+      </>
     );
   }
 
