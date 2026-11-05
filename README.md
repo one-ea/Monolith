@@ -6,7 +6,7 @@
 
 ### 一套真正属于你的边缘原生博客
 
-把写作、阅读、分析与运维，收进一个干净、快速、可控的系统。
+*GitHub Primer 设计语言 · 边缘计算 · 控制台全站管控 · 零运维成本*
 
 <p>
   <a href="https://monolith-client.pages.dev"><strong>访问在线演示 ↗</strong></a>
@@ -16,13 +16,15 @@
   <a href="https://github.com/one-ea/Monolith/issues">提交反馈</a>
 </p>
 
-<p>
-  <img src="https://img.shields.io/badge/version-2.7.0-0969da?style=flat-square" alt="Version 2.7.0" />
-  <img src="https://img.shields.io/badge/license-MIT-1a7f37?style=flat-square" alt="MIT License" />
-  <img src="https://img.shields.io/badge/Cloudflare-Workers-F38020?style=flat-square&logo=cloudflare&logoColor=white" alt="Cloudflare Workers" />
-  <img src="https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=111827" alt="React 19" />
-  <img src="https://img.shields.io/badge/TypeScript-5-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript" />
-</p>
+[![License: MIT](https://img.shields.io/badge/License-MIT-22c55e?style=flat-square)](LICENSE)
+[![Cloudflare Workers](https://img.shields.io/badge/Cloudflare-Workers-F38020?style=flat-square&logo=cloudflare&logoColor=white)](https://workers.cloudflare.com/)
+[![React](https://img.shields.io/badge/React_19-61DAFB?style=flat-square&logo=react&logoColor=black)](https://react.dev/)
+[![Hono](https://img.shields.io/badge/Hono-E36002?style=flat-square&logo=hono&logoColor=white)](https://hono.dev/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+
+<br/>
+
+[**📚 文档**](https://github.com/one-ea/Monolith/wiki) · [**☁️ 在线预览**](https://monolith-client.pages.dev) · [**🐛 反馈**](https://github.com/one-ea/Monolith/issues) · [**🛡️ 安全**](./SECURITY.md) · [**🔒 隐私**](./PRIVACY.md)
 
 </div>
 
@@ -32,39 +34,7 @@
 
 Monolith 是一个面向个人创作者的全栈博客系统：前端运行在 Cloudflare Pages，API 运行在 Cloudflare Workers，数据与媒体通过可替换的存储适配器连接。
 
-它不试图把你的内容锁进某个 SaaS，而是把博客最重要的部分交还给你：
-
-> **内容归你，配置归你，部署归你，数据也归你。**
-
-默认采用 GitHub Primer 风格的明暗主题，后台统一管理站点行为，日常修改无需重新部署。
-
-## 为什么选择 Monolith？
-
-<table>
-<tr>
-<td width="33%" valign="top">
-
-### ⚡ Edge-first
-
-基于 Hono、Cloudflare Workers 与 Pages 构建。前后端贴近用户运行，轻量交付，适合全球访问。
-
-</td>
-<td width="33%" valign="top">
-
-### 🎛️ Console-driven
-
-主题、安全、SEO、通知、注入片段与分析开关，都可以在控制台集中配置。
-
-</td>
-<td width="33%" valign="top">
-
-### 🔓 Portable
-
-数据库与对象存储采用适配器设计，可在 D1、Turso、PostgreSQL 与 R2/S3 之间切换。
-
-</td>
-</tr>
-</table>
+设计哲学：**内容优先 · 边缘原生 · 沉浸式阅读 · 一切皆可控制台配置**。
 
 ---
 
@@ -72,93 +42,84 @@ Monolith 是一个面向个人创作者的全栈博客系统：前端运行在 C
 
 ### 写作与内容
 
-- Markdown 编辑与实时预览
-- KaTeX 数学公式与代码高亮
-- 草稿、定时发布、置顶文章与系列合集
-- 独立页面与动态导航
-- WordPress、Ghost、Hexo、Hugo、Jekyll、Halo 内容导入
-- JSON、R2/S3、WebDAV 多端备份
+### 🎨 阅读体验（GitHub Primer 设计语言）
+- **日/夜双主题** — 亮暗两套完整 token 对齐 GitHub "浅色/深色 - 默认"（`@primer/primitives`），蓝色链接与 focus ring、官方语法高亮配色、六色 GitHub 风格标签
+- **站点级主题管控** — 明暗模式 × 视觉风格（classic / apple / pixel）由控制台统一设置，支持跟随系统，首屏 cookie 防闪烁
+- **文章导航** — 自动 TOC、阅读进度条、IntersectionObserver 章节追踪
+- **⌘K 全站搜索** — 防抖检索、键盘导航、关键词高亮
+- **Reaction 表情** — 文末轻互动，无需登录即可表态
 
-### 阅读与发现
+### 🎛️ 控制台全站管控
+行为配置全部进 D1 设置键值，控制台改完即生效（最长 15 秒），不再依赖重部署：
 
-- GitHub Primer「浅色 - 默认 / 深色 - 默认」视觉语言
-- 明暗模式与简洁 / 液态玻璃风格
-- 首屏主题预加载，避免闪烁
-- 自动目录、阅读进度与章节追踪
-- `⌘K` / `Ctrl+K` 全站搜索
-- Reaction 轻互动与彩色标签
-- PWA 离线能力与响应式布局
+| 配置面 | 能力 |
+|--------|------|
+| 安全防护 | 登录页 Cloudflare Turnstile 人机验证、JWT 会话时长（1/7/30 天）、登录/友链/留言速率限制 |
+| 通知与集成 | Webhook 目标（多地址 + 一键测试）、Resend 邮件收发件人 |
+| 主题外观 | 明暗模式、视觉风格（classic / apple / pixel），即时预览 |
+| 访问控制 | 文章 / 标签 / 分类 / 系列密码锁，服务端 PBKDF2 验密；列表 / 搜索 / RSS / sitemap 自动排除 |
+| 发现与注入 | 片段化代码注入：位置/作用域/同意策略独立控制，常用统计服务预设模板，旧数据一键迁移 |
+| 搜索优化 | robots.txt 追加规则（白名单校验）、sitemap 归档开关与额外 URL（自动去重）、站点域名 |
+| AE 采集 | 访客统计开关、站点白名单（主域自动匹配子域） |
 
-### 控制台与运营
+### ⚡ 性能架构
+- **边缘原生** — Hono + Cloudflare Workers，无冷启动，全球 < 50ms
+- **存储适配** — 数据库 D1 / Turso / PostgreSQL，对象存储 R2 / S3 兼容
+- **轻量交付** — Pages 上传 2.2MB / 97 个文件（旧格式字体经 `.assetsignore` 裁剪），PWA 离线可用
+- **访客分析** — 内置 D1 轻量统计；Cloudflare 部署额外解锁 Analytics Engine 增强仪表板（UV/停留时长/浏览器/系统/分辨率/语言）
 
-| 模块 | 控制能力 |
-| --- | --- |
-| **安全** | Turnstile 登录保护、JWT 会话时长、登录 / 友链 / 留言限流 |
-| **访问控制** | 文章 / 标签 / 分类 / 系列密码锁，服务端验密，列表 / 搜索 / RSS / sitemap 自动排除 |
-| **通知** | 多 Webhook、一键测试、Resend 发件人与管理员邮箱 |
-| **主题** | 亮色、暗色、跟随系统；简洁与液态玻璃风格 |
-| **发现与注入** | 外部脚本、统计服务预设、作用域、位置与 Cookie 同意策略 |
-| **SEO** | 站点域名、robots 追加规则、sitemap 归档开关与额外 URL |
-| **分析** | D1 轻量统计、Cloudflare Analytics Engine、站点白名单 |
+### 🛡️ 安全合规
+- **认证与防护** — JWT + Turnstile 人机验证 + 可调限流，CSP/HSTS 全套头，SSRF 拦截
+- **访问控制** — 文章 / 标签 / 分类 / 系列级密码锁，HttpOnly 解锁凭证，限流与改密失效
+- **平台安全线** — GitHub secret scanning + push protection、CodeQL extended 查询集、CI Gitleaks 全历史扫描（含 AI 密钥等非提供商模式自定义规则）
+- **隐私优先** — Cookie 同意横幅，第三方脚本按片段门控，GDPR 数据导出
+- **多端备份** — JSON / R2-S3 / WebDAV 自由切换
 
-### SEO 与隐私
-
-- `sitemap.xml`、`robots.txt`、RSS 2.0
-- JSON-LD、Open Graph、Twitter Card
-- Cookie 同意控制与第三方脚本门控
-- GDPR 数据导出
-- CSP、HSTS、SSRF 防护与参数化 SQL
+### 🔍 SEO 与洞察
+- **SEO 友好** — sitemap、RSS 2.0、JSON-LD、OG/Twitter Card
+- **数据洞察** — 浏览量、14 日趋势、热门 Top 10
 
 ---
 
 ## 架构概览
 
-```mermaid
-flowchart TB
-    edge["Cloudflare Edge"]
-
-    subgraph delivery[交付层]
-        pages["Cloudflare Pages<br/>React 19 · PWA"]
-        worker["Cloudflare Workers<br/>Hono · Auth · Admin · API"]
-    end
-
-    subgraph storage[存储层]
-        db["数据库适配器<br/>D1 · Turso · PostgreSQL"]
-        object["对象存储适配器<br/>R2 · S3"]
-    end
-
-    edge --> pages
-    pages -->|"同源 /api/* 转发"| worker
-    worker --> db
-    worker --> object
-
-    classDef edgeStyle fill:#0969da,stroke:#0969da,color:#fff
-    classDef deliveryStyle fill:#ddf4ff,stroke:#54aeff,color:#24292f
-    classDef storageStyle fill:#dafbe1,stroke:#2da44e,color:#24292f
-    class edge edgeStyle
-    class pages,worker deliveryStyle
-    class db,object storageStyle
+```
+        ┌──────────────────────────────────────────┐
+        │            Cloudflare Edge               │
+        │       (200+ PoPs · global anycast)       │
+        └──────────────────────────────────────────┘
+                                          │
+        ┌─────────────────────────────────┼──────────────────┐
+        ▼                                 ▼                  ▼
+┌──────────────────┐            ┌──────────────────┐  ┌──────────────┐
+│  Cloudflare      │  /api/*    │  Cloudflare      │  │ Cloudflare   │
+│  Pages           │ ─────────▶ │  Workers         │  │ R2 / S3      │
+│  React 19 SPA    │  反向代理  │  Hono Router     │  │ 媒体 / 备份  │
+│  + PWA           │            │  Auth · Admin    │  └──────────────┘
+│  Pages Functions │            │  Storage Factory │
+└──────────────────┘            │  D1/Turso/PG     │
+                                │  R2/S3           │
+                                └──────────────────┘
 ```
 
 ### 请求与数据流
 
-| 路径 | 作用 |
-| --- | --- |
-| **访问站点** | 用户 → Cloudflare Edge → Pages，加载 React 应用与 PWA 资源 |
-| **调用 API** | Pages Functions 将同源 `/api/*` 请求转发到 Workers，避免跨域配置 |
-| **读写数据** | Workers 通过 `IDatabase` 适配器访问 D1、Turso 或 PostgreSQL |
-| **处理媒体** | Workers 通过 `IObjectStorage` 适配器访问 R2 或 S3 兼容存储 |
-| **变更配置** | 控制台写入 D1 `settings`；凭据与基础设施配置保留在 Workers secret / vars |
+| 层级 | 模块 | 关键路径 |
+|------|------|---------|
+| 边缘网络 | Cloudflare 全球 anycast | 200+ PoPs · 自动 TLS · DDoS 防护 |
+| 前端 | React SPA + Pages Functions | `client/src` · `client/functions` |
+| 后端 | Hono Workers + Storage Factory | `server/src/index.ts` · `server/src/storage` |
+| 持久层 | D1 / Turso / PostgreSQL · R2 / S3 | `server/src/storage/db` · `server/src/storage/object` |
 
 ### 核心设计
 
-- **存储适配器**：`IDatabase` 与 `IObjectStorage` 统一接口，降低平台耦合。
-- **配置分层**：站点行为进入 D1 `settings`，凭据与基础设施配置保留在 Workers secret / vars。
-- **同源 API**：Pages Functions 将 `/api/*` 转发到 Workers，减少 CORS 与环境差异。
-- **边缘部署**：迁移、schema reconcile、Workers 与 Pages 由一个部署脚本串联完成。
-- **安全默认值**：敏感凭据不进入数据库、仓库、日志或前端响应。
+- **适配器模式** — `IDatabase` / `IObjectStorage` 统一接口，切换后端零侵入
+- **配置分层** — 行为配置进 D1 settings（控制台管理）；Workers secret 只放凭据与基础设施拓扑
+- **Pages Functions 反向代理** — 前端域名直连 `/api/*`，规避 CORS 复杂度
+- **Drizzle ORM** — 所有 SQL 参数化，Schema 一处定义、三端同步
+- **Monorepo 单脚本部署** — `npm run deploy:cloudflare` 串起迁移 → Workers → Pages 全链路
 
-> 详细设计请阅读 [Wiki · 架构概览](https://github.com/one-ea/Monolith/wiki/Architecture)。
+> 详细架构与设计决策参阅 [**Wiki · 架构概览**](https://github.com/one-ea/Monolith/wiki/Architecture)。
 
 ---
 
@@ -173,13 +134,9 @@ flowchart TB
 ### 本地运行
 
 ```bash
-git clone https://github.com/one-ea/Monolith.git
-cd Monolith
-
-# 使用项目指定的 Node 版本
+git clone https://github.com/one-ea/Monolith.git && cd Monolith
+source "$HOME/.nvm/nvm.sh"  # bash/zsh 按需加载 nvm
 nvm install && nvm use
-
-# 安装依赖并检查本地环境
 npm ci
 npm run doctor:local
 
@@ -187,7 +144,7 @@ npm run doctor:local
 npm run dev
 ```
 
-本地服务启动后，前端与 API 会分别使用开发环境端口。完整的环境变量、数据库初始化与本地存储说明请参阅 [Wiki · 快速开始](https://github.com/one-ea/Monolith/wiki/Quick-Start)。
+> 完整环境准备、密钥配置与本地数据库初始化参阅 [**Wiki · 快速开始**](https://github.com/one-ea/Monolith/wiki/Quick-Start)。
 
 ### 常用命令
 
@@ -212,81 +169,30 @@ npx wrangler login
 npm run deploy:cloudflare
 ```
 
-部署脚本会按顺序处理：
+> 生产 secret 已存在而本地无明文时，请改走[不覆盖 secret 的分步部署链路](https://github.com/one-ea/Monolith/wiki/Deployment)，业务密钥全程不被触碰。
 
-```text
-D1 schema reconcile（预补兼容列）
-        ↓
-D1 迁移记录修复（预建库按结构补记）
-        ↓
-远程 D1 migrations
-        ↓
-D1 schema reconcile（复核）
-        ↓
-Workers 部署
-        ↓
-Pages API_BASE 注入
-        ↓
-前端构建与 Pages 部署
-        ↓
-生产健康检查
-```
+`CLOUDFLARE_ACCOUNT_ID` 不再写死在仓库里：部署脚本按「环境变量 → `wrangler whoami --json` 单账户 → 明确报错」解析。`--skip-migrate` 只跳过远程迁移，schema reconcile 仍会执行；需要完全跳过数据库操作时同时传 `--skip-migrate --skip-reconcile`。
 
-`CLOUDFLARE_ACCOUNT_ID` 不再写死在仓库里。脚本解析顺序为：环境变量 → `npx wrangler whoami --json` 的单账户登录态 → 明确报错。OAuth 单账户用户无需配置；多账户或 API Token 模式下请显式设置：
+> 访问密码解锁使用 HttpOnly cookie（`Path=/api`），依赖同源 `/api` 代理。若把 `VITE_API_URL` 指向跨域 Worker，解锁 cookie 不会生效；请保持 Pages Functions 同源代理部署。
 
-```bash
-# macOS / Linux
-export CLOUDFLARE_ACCOUNT_ID="<32 位十六进制账户 ID>"
-
-# Windows PowerShell
-$env:CLOUDFLARE_ACCOUNT_ID = "<32 位十六进制账户 ID>"
-
-# Windows CMD
-set "CLOUDFLARE_ACCOUNT_ID=<32 位十六进制账户 ID>"
-```
-
-`--skip-migrate` 只跳过远程数据库迁移；schema reconcile 仍会执行。需要完全跳过数据库操作时同时传 `--skip-migrate --skip-reconcile`。
-
-> 访问密码解锁使用 HttpOnly cookie（`Path=/api`），依赖同源 `/api` 代理。若把 `VITE_API_URL` 指向跨域 Worker，浏览器不会发送该 cookie，解锁会一直失败；请保持 Pages Functions 同源代理部署。
-
-### 配置边界
-
-**必须保留为 Workers secret 的凭据：**
-
-- `ADMIN_PASSWORD`
-- `JWT_SECRET`
-- `REACTION_SALT`
-- `UNLOCK_SECRET`（可选；访问密码解锁 token 的独立签名密钥，未设置时从 `JWT_SECRET` 域分离派生）
-- `TURNSTILE_SECRET`
-- `RESEND_API_KEY`
-- `CLOUDFLARE_API_TOKEN`
-
-**可在控制台维护的站点行为配置：**
-
-- 站点来源、主题、SEO 与 robots / sitemap
-- Webhook、Resend 发件人与管理员邮箱
-- Turnstile Site Key、限流与 JWT 会话时长
-- 注入片段、Cookie 同意策略与 Analytics Engine 设置
-- Cloudflare Account ID 等非敏感平台配置
-
-生产环境已有 secret 且本地没有明文时，请遵循 [Wiki · 部署指南](https://github.com/one-ea/Monolith/wiki/Deployment) 中的“不覆盖 secret 分步部署”流程。不要为了部署重新写入或复制生产密钥。
-
-也可以从 GitHub Actions 手动触发 **Cloudflare Deploy** 工作流，工作流会执行相同的分步部署与健康检查。
+| 方案 | 状态 | 适用场景 |
+|------|------|---------|
+| 本机 CLI `npm run deploy:cloudflare` | ✅ 生产验证 | 首次部署推荐 |
+| 不覆盖 secret 分步链路 | ✅ 生产验证 | 已上线站点日常更新 |
+| GitHub Actions `Cloudflare Deploy` | ✅ 生产验证（含部署后自动健康检查） | 手动触发的一键 CI 部署 |
 
 ---
 
 ## 文档导航
 
-| 文档 | 内容 |
-| --- | --- |
-| [Wiki 首页](https://github.com/one-ea/Monolith/wiki) | 项目总览与全部文档 |
-| [架构概览](https://github.com/one-ea/Monolith/wiki/Architecture) | 系统边界、数据流与设计决策 |
-| [快速开始](https://github.com/one-ea/Monolith/wiki/Quick-Start) | 本地开发、环境与初始化 |
-| [部署指南](https://github.com/one-ea/Monolith/wiki/Deployment) | Cloudflare 部署、迁移与排错 |
-| [控制台配置](https://github.com/one-ea/Monolith/wiki/Console-Settings) | 设置键、配置优先级与 secret 边界 |
-| [前端指南](https://github.com/one-ea/Monolith/wiki/Frontend-Guide) | 主题、组件与页面开发 |
-| [安全策略](./SECURITY.md) | 漏洞披露与安全响应 |
-| [隐私政策](./PRIVACY.md) | 数据处理与用户权利 |
+| 入口 | 内容 |
+|------|------|
+| [Wiki · 部署指南](https://github.com/one-ea/Monolith/wiki/Deployment) | 部署完整指南（速通 + 密钥清单 + 分步链路 + 排错） |
+| [Wiki · 控制台配置](https://github.com/one-ea/Monolith/wiki/Console-Settings) | 控制台可配置项与 secret 边界总览 |
+| [Wiki](https://github.com/one-ea/Monolith/wiki) | 架构、API、二次开发 |
+| [SECURITY.md](./SECURITY.md) | 安全策略与漏洞披露 |
+| [PRIVACY.md](./PRIVACY.md) | 隐私政策 |
+| [LICENSE](./LICENSE) | MIT 开源协议 |
 
 ---
 

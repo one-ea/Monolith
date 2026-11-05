@@ -1180,6 +1180,149 @@ export function AdminSettings() {
             </div>
           )}
 
+          {/* TAB: 通知与集成 */}
+          {activeTab === "notify" && (
+            <div className="space-y-[20px] animate-fade-in" role="tabpanel" id="settings-panel-notify" aria-labelledby="settings-tab-notify">
+              <div>
+                <h2 className="text-[16px] font-semibold mb-[4px]">Webhook 通知</h2>
+                <p className="text-[12px] text-muted-foreground/50 mb-[16px]">文章发布 / 更新 / 批量操作、友链申请、留言提交时向目标地址推送 JSON 事件。</p>
+                <div className="rounded-md border border-border/20 bg-card/5 p-[16px] sm:p-[20px] space-y-[14px]">
+                  <SettingField label="Webhook 目标地址" value={settings.webhook_urls} onChange={(v) => updateSetting("webhook_urls", v)} placeholder={"https://hooks.example.com/primary\nhttps://hooks.example.com/backup"} multiline mono hint="每行一个（也支持逗号分隔）；留空回退部署变量 WEBHOOK_URLS，两者皆空则不推送。" />
+                  <div className="flex flex-wrap items-center gap-[10px]">
+                    <button type="button" onClick={testWebhook} disabled={webhookTesting} className="inline-flex min-h-[36px] items-center gap-[6px] rounded-md border border-border/25 bg-background/40 px-[12px] text-[12px] font-medium text-foreground transition-colors hover:bg-accent/45 disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
+                      <Send className="h-[13px] w-[13px]" />
+                      {webhookTesting ? "发送中..." : "发送测试请求"}
+                    </button>
+                    <span className="text-[11px] text-muted-foreground/35">测试读取已保存的目标地址，修改后请先保存。</span>
+                  </div>
+                  {webhookResults && (
+                    <div className="rounded-md border border-border/14 bg-background/20 px-[12px] py-[10px] space-y-[6px]">
+                      {webhookResults.map((item) => (
+                        <div key={item.url} className="flex items-center justify-between gap-[12px] text-[12px]">
+                          <span className="min-w-0 flex-1 truncate font-mono text-muted-foreground/60">{item.url}</span>
+                          <span className={`inline-flex shrink-0 items-center gap-[6px] font-mono ${item.ok ? "text-foreground/80" : "text-red-400"}`}>
+                            {item.ok ? <CheckCircle2 className="h-[13px] w-[13px]" /> : <AlertTriangle className="h-[13px] w-[13px]" />}
+                            {item.status > 0 ? `HTTP ${item.status}` : "连接失败"}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <h2 className="text-[16px] font-semibold mb-[4px]">邮件通知（Resend）</h2>
+                <p className="text-[12px] text-muted-foreground/50 mb-[16px]">新评论、友链申请与审核结果通过 Resend 发送邮件提醒。</p>
+                <div className="rounded-md border border-border/20 bg-card/5 p-[16px] sm:p-[20px] space-y-[14px]">
+                  <ConfigStatusCard
+                    icon={integrationStatus?.resendKeyConfigured === false ? AlertTriangle : CheckCircle2}
+                    label="RESEND_API_KEY"
+                    value={integrationStatus === null ? "检测中" : integrationStatus.resendKeyConfigured ? "已配置" : "未配置"}
+                    detail={integrationStatus?.resendKeyConfigured ? "Workers secret 就绪，填写收发件人即可发送。" : "在仓库根目录执行 npx wrangler secret put RESEND_API_KEY --name monolith-server 完成配置。"}
+                  />
+                  <SettingField label="发件人地址" value={settings.resend_from} onChange={(v) => updateSetting("resend_from", v)} placeholder="Monolith Bot <blog@example.com>" mono hint="回退部署变量 RESEND_FROM；须为 Resend 已验证域名的地址。" />
+                  <SettingField label="管理员收件邮箱" value={settings.admin_email} onChange={(v) => updateSetting("admin_email", v)} placeholder="admin@example.com" mono hint="接收新评论与友链申请提醒；回退部署变量 ADMIN_EMAIL。" />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB: 安全防护 */}
+          {activeTab === "security" && (
+            <div className="space-y-[20px] animate-fade-in" role="tabpanel" id="settings-panel-security" aria-labelledby="settings-tab-security">
+              <div>
+                <h2 className="text-[16px] font-semibold mb-[4px]">登录防护</h2>
+                <p className="text-[12px] text-muted-foreground/50 mb-[16px]">在管理登录页启用 Cloudflare Turnstile 人机验证（五秒盾），拦截自动化密码爆破。</p>
+                <div className="rounded-md border border-border/20 bg-card/5 p-[16px] sm:p-[20px] space-y-[16px]">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-[14px] font-medium text-foreground flex items-center gap-[6px]">
+                        <Shield className="h-[14px] w-[14px] text-foreground/60" /> 登录页人机验证
+                      </p>
+                      <p className="text-[12px] text-muted-foreground/40 mt-[4px]">
+                        {turnstileEnabled ? "开启状态，登录前必须通过 Cloudflare 挑战" : "已关闭，仅保留基础速率限制（每 IP 15 分钟 5 次）"}
+                      </p>
+                    </div>
+                    <button onClick={() => updateSetting("turnstile_enabled", turnstileEnabled ? "false" : "true")}
+                      className="inline-flex items-center transition-opacity hover:opacity-80"
+                      aria-label={turnstileEnabled ? "关闭登录人机验证" : "开启登录人机验证"}
+                    >
+                      {turnstileEnabled ? (
+                        <ToggleRight className="h-[32px] w-[32px] text-foreground/75" />
+                      ) : (
+                        <ToggleLeft className="h-[32px] w-[32px] text-muted-foreground/20" />
+                      )}
+                    </button>
+                  </div>
+
+                  {turnstileEnabled && (
+                    <>
+                      <SettingField
+                        label="Turnstile Site Key"
+                        value={settings.turnstile_sitekey}
+                        onChange={(v) => updateSetting("turnstile_sitekey", v)}
+                        placeholder="0x4AAAAAAA..."
+                        mono
+                        hint="在 Cloudflare Dashboard → Turnstile 创建站点后获取，属于公开密钥，可安全保存在站点设置中。"
+                      />
+                      <div className="grid gap-[12px] sm:grid-cols-2">
+                        <ConfigStatusCard
+                          icon={turnstileSecretOk === false ? AlertTriangle : CheckCircle2}
+                          label="服务端密钥 TURNSTILE_SECRET"
+                          value={turnstileSecretOk === null ? "检测中" : turnstileSecretOk ? "已配置" : "未配置"}
+                          detail={turnstileSecretOk ? "Workers 已持有服务端校验密钥，令牌验证可用。" : "在仓库根目录执行 npx wrangler secret put TURNSTILE_SECRET --name monolith-server 完成配置。"}
+                        />
+                        <ConfigStatusCard
+                          icon={settings.turnstile_sitekey.trim() ? CheckCircle2 : AlertTriangle}
+                          label="Turnstile Site Key"
+                          value={settings.turnstile_sitekey.trim() ? "已填写" : "未填写"}
+                          detail={settings.turnstile_sitekey.trim() ? "保存后登录页将渲染人机验证组件。" : "缺少 Site Key 时人机验证不会生效。"}
+                        />
+                      </div>
+                      {(!settings.turnstile_sitekey.trim() || turnstileSecretOk === false) && (
+                        <div className="flex gap-[8px] rounded-md border border-amber-500/20 bg-amber-500/5 px-[12px] py-[10px] text-[11px] leading-[1.6] text-amber-400/80">
+                          <AlertTriangle className="mt-[1px] h-[13px] w-[13px] shrink-0" />
+                          <span>
+                            开启前需完成两项配置：在 Cloudflare Dashboard → Turnstile 创建站点拿到 Site Key 与 Secret Key；Site Key 填写在上方输入框，Secret Key 通过
+                            <code className="mx-[4px] rounded bg-amber-500/10 px-[4px] py-[1px] font-mono">npx wrangler secret put TURNSTILE_SECRET --name monolith-server</code>
+                            写入 Workers。任一项缺失时，登录页不会强制人机验证。
+                          </span>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+
+                <div className="rounded-md border border-border/20 bg-card/5 p-[16px] sm:p-[20px] space-y-[16px]">
+                  <div>
+                    <p className="text-[14px] font-medium text-foreground flex items-center gap-[6px]">
+                      <Clock3 className="h-[14px] w-[14px] text-foreground/60" /> 会话与防护策略
+                    </p>
+                    <p className="text-[12px] text-muted-foreground/40 mt-[4px]">调整管理会话时长与公开接口速率限制，保存后约 15 秒生效。</p>
+                  </div>
+                  <label className="block">
+                    <span className="mb-[6px] block text-[11px] font-medium uppercase tracking-normal text-muted-foreground/45">管理会话时长</span>
+                    <select value={settings.jwt_session_days} onChange={(e) => updateSetting("jwt_session_days", e.target.value)} className="settings-input h-[40px] w-full">
+                      <option value="1">1 天（高安全）</option>
+                      <option value="7">7 天（默认）</option>
+                      <option value="30">30 天（长会话）</option>
+                    </select>
+                    <span className="mt-[6px] block text-[11px] leading-[1.5] text-muted-foreground/40">重新登录后按新时长签发令牌，已签发的令牌不受影响。</span>
+                  </label>
+                  <div className="grid gap-[12px] sm:grid-cols-2">
+                    <NumberSettingField label="登录失败上限" value={settings.login_rate_limit} onChange={(v) => updateSetting("login_rate_limit", v)} min={1} max={100} suffix="次" hint={`窗口 ${settings.login_rate_window_minutes} 分钟`} />
+                    <NumberSettingField label="登录窗口时长" value={settings.login_rate_window_minutes} onChange={(v) => updateSetting("login_rate_window_minutes", v)} min={1} max={1440} suffix="分钟" hint="超过上限后锁定该 IP 的时长" />
+                    <NumberSettingField label="友链申请上限" value={settings.friendlink_rate_limit} onChange={(v) => updateSetting("friendlink_rate_limit", v)} min={1} max={100} suffix="次" hint={`窗口 ${settings.friendlink_rate_window_hours} 小时`} />
+                    <NumberSettingField label="友链申请窗口" value={settings.friendlink_rate_window_hours} onChange={(v) => updateSetting("friendlink_rate_window_hours", v)} min={1} max={720} suffix="小时" hint="默认 1 小时 3 次" />
+                    <NumberSettingField label="留言板上限" value={settings.guestbook_rate_limit} onChange={(v) => updateSetting("guestbook_rate_limit", v)} min={1} max={100} suffix="次" hint={`窗口 ${settings.guestbook_rate_window_hours} 小时`} />
+                    <NumberSettingField label="留言板窗口" value={settings.guestbook_rate_window_hours} onChange={(v) => updateSetting("guestbook_rate_window_hours", v)} min={1} max={720} suffix="小时" hint="默认 1 小时 5 次" />
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* TAB: 扩展与注入 */}
           {activeTab === "advanced" && (
             <div className="space-y-[20px] animate-fade-in" role="tabpanel" id="settings-panel-advanced" aria-labelledby="settings-tab-advanced">
