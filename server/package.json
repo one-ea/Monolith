@@ -6,11 +6,13 @@
   "scripts": {
     "dev": "wrangler dev --port 8787",
     "deploy": "wrangler deploy",
-    "db:migrate:local": "wrangler d1 migrations apply monolith-db --local",
-    "db:migrate:remote": "wrangler d1 migrations apply monolith-db --remote",
+    "db:migrate:local": "node ../scripts/repair-d1-migrations.mjs --local && wrangler d1 migrations apply monolith-db --local",
+    "db:migrate:remote": "node ../scripts/repair-d1-migrations.mjs --remote && wrangler d1 migrations apply monolith-db --remote",
     "db:reconcile": "npm run db:reconcile:local",
     "db:reconcile:local": "node ../scripts/reconcile-d1-schema.mjs --local",
     "db:reconcile:remote": "node ../scripts/reconcile-d1-schema.mjs --remote",
+    "db:repair:local": "node ../scripts/repair-d1-migrations.mjs --local",
+    "db:repair:remote": "node ../scripts/repair-d1-migrations.mjs --remote",
     "db:seed:local": "wrangler d1 execute monolith-db --local --file=src/migrations/0002_seed.sql",
     "db:seed:test-posts:local": "wrangler d1 execute monolith-db --local --file=src/seeds/seed_test_posts.sql",
     "check": "tsc --noEmit",
@@ -19,6 +21,7 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1141.0",
     "@libsql/client": "^0.18.0",
+    "@monolith/seo-core": "2.7.0",
     "drizzle-orm": "^0.45.3",
     "hono": "^4.13.13",
     "postgres": "^3.4.9"

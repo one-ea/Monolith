@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 256" role="img" aria-labelledby="title desc">
+  <title id="title">Monolith</title>
+  <desc id="desc">Monolith geometric M mark and wordmark.</desc>
+  <rect width="256" height="256" rx="56" fill="#0d1117"/>
+  <path fill="#f0f6fc" d="M56 64h36l36 46 36-46h36v128h-36v-71l-36 46-36-46v71H56z"/>
+  <rect x="124" y="88" width="8" height="80" rx="4" fill="#4493f8"/>
+  <text x="304" y="164" fill="#f0f6fc" font-family="Space Grotesk, Work Sans, sans-serif" font-size="100" font-weight="600" letter-spacing="-4">MONOLITH</text>
+</svg>

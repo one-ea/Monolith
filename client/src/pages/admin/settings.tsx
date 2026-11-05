@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, type ComponentType, type ReactNode } from "react";
 import { getToken } from "@/lib/api";
-import { applySiteTheme, normalizeSiteThemeMode, normalizeSiteThemeStyle, type SiteThemeMode, type SiteThemeStyle } from "@/lib/site-theme";
+import { applySiteTheme, normalizeTheme, normalizeSiteThemeMode, type SiteThemeMode, type Theme } from "@/lib/site-theme";
 import {
   parseCustomSnippets,
   serializeCustomSnippets,
@@ -8,7 +8,7 @@ import {
   SNIPPET_PRESETS,
   type CustomSnippet,
 } from "@/lib/custom-injection";
-import { Save, Globe, User, Link2, ToggleLeft, ToggleRight, Code, Rss, Plus, Trash2, GripVertical, Home, Eye, Search, CheckCircle2, AlertTriangle, Clock3, Shield, Moon, Sun, Monitor, Palette, Droplets, ChevronDown, ChevronRight, Bell, Send } from "lucide-react";
+import { Save, Globe, User, Link2, ToggleLeft, ToggleRight, Code, Rss, Plus, Trash2, GripVertical, Home, Eye, Search, CheckCircle2, AlertTriangle, Clock3, Shield, Moon, Sun, Monitor, Palette, ChevronDown, ChevronRight, Bell, Send, Wand2, Apple, Smartphone, Shapes } from "lucide-react";
 
 type Settings = {
   site_title: string;
@@ -31,6 +31,7 @@ type Settings = {
   social_links: string;
   footer_text: string;
   rss_enabled: string;
+  llms_enabled: string;
   custom_header: string;
   custom_footer: string;
   site_timezone: string;
@@ -38,12 +39,15 @@ type Settings = {
   turnstile_enabled: string;
   turnstile_sitekey: string;
   site_theme_mode: string;
-  site_theme_style: string;
+  site_theme_design: string;
   custom_snippets: string;
   site_origin: string;
   webhook_urls: string;
+  indexnow_enabled: string;
+  indexnow_key: string;
   resend_from: string;
   admin_email: string;
+  cloudflare_account_id: string;
   jwt_session_days: string;
   login_rate_limit: string;
   login_rate_window_minutes: string;
@@ -82,6 +86,7 @@ const defaultSettings: Settings = {
   social_links: "",
   footer_text: "© 2026 Monolith. 使用 Hono + Vite 构建，部署于 Cloudflare 边缘。",
   rss_enabled: "true",
+  llms_enabled: "true",
   custom_header: "",
   custom_footer: "",
   site_timezone: "Asia/Shanghai",
@@ -89,12 +94,15 @@ const defaultSettings: Settings = {
   turnstile_enabled: "false",
   turnstile_sitekey: "",
   site_theme_mode: "dark",
-  site_theme_style: "default",
+  site_theme_design: "classic",
   custom_snippets: "",
   site_origin: "",
   webhook_urls: "",
+  indexnow_enabled: "true",
+  indexnow_key: "",
   resend_from: "",
   admin_email: "",
+  cloudflare_account_id: "",
   jwt_session_days: "7",
   login_rate_limit: "5",
   login_rate_window_minutes: "15",
@@ -149,14 +157,15 @@ const THEME_MODE_OPTIONS: {
   { id: "system", name: "跟随系统", icon: Monitor },
 ];
 
-const THEME_STYLE_OPTIONS: {
-  id: SiteThemeStyle;
+const THEME_DESIGN_OPTIONS: {
+  id: Theme;
   name: string;
   desc: string;
   icon: ComponentType<{ className?: string }>;
 }[] = [
-  { id: "default", name: "简洁", desc: "当前默认主题", icon: Palette },
-  { id: "fluid", name: "液态玻璃", desc: "流体光斑 · 玻璃质感", icon: Droplets },
+  { id: "classic", name: "Classic Primer", desc: "GitHub Primer 基线 · 站点默认观感", icon: Shapes },
+  { id: "apple", name: "Apple Theme", desc: "HIG · Liquid Glass 玻璃材质（接替原液态玻璃）", icon: Apple },
+  { id: "pixel", name: "Pixel Theme", desc: "Material 3 Expressive · Container 层级 · 弹簧动效", icon: Smartphone },
 ];
 
 function createSocialLink(link: Partial<SocialLinkConfig> = {}): SocialLinkConfig {
@@ -171,6 +180,13 @@ function createSocialLink(link: Partial<SocialLinkConfig> = {}): SocialLinkConfi
 
 function createStableId(prefix: string) {
   return typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${prefix}-${Date.now()}`;
+}
+
+// IndexNow 密钥规范：8-128 位 a-z A-Z 0-9 -，这里生成 32 位十六进制
+function generateIndexNowKey() {
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
 function isSocialIcon(value: unknown): value is SocialIcon {
@@ -408,9 +424,11 @@ export function AdminSettings() {
   }, [settings.author_avatar]);
 
   const rssEnabled = settings.rss_enabled !== "false";
+  const llmsEnabled = settings.llms_enabled !== "false";
+  const indexNowEnabled = settings.indexnow_enabled !== "false";
   const turnstileEnabled = settings.turnstile_enabled === "true";
   const themeMode = normalizeSiteThemeMode(settings.site_theme_mode);
-  const themeStyle = normalizeSiteThemeStyle(settings.site_theme_style);
+  const themeDesign = normalizeTheme(settings.site_theme_design);
   const customSnippets = parseCustomSnippets(settings.custom_snippets);
   const socialLinks = getSocialLinks(settings);
   const heroActions = parseHeroActions(settings.hero_actions);
@@ -464,10 +482,10 @@ export function AdminSettings() {
     updateHeroTopics([...heroTopics, { id: createStableId("hero-topic"), title: "新主题", desc: "描述这个主题对读者的价值" }]);
   };
 
-  const previewSiteTheme = (mode: SiteThemeMode, style: SiteThemeStyle) => {
+  const previewSiteTheme = (mode: SiteThemeMode, design: Theme) => {
     updateSetting("site_theme_mode", mode);
-    updateSetting("site_theme_style", style);
-    applySiteTheme(mode, style);
+    updateSetting("site_theme_design", design);
+    applySiteTheme(mode, design);
   };
 
   const updateSnippet = (id: string, patch: Partial<CustomSnippet>) => {
@@ -655,8 +673,34 @@ export function AdminSettings() {
             <div className="space-y-[20px] animate-fade-in" role="tabpanel" id="settings-panel-theme" aria-labelledby="settings-tab-theme">
               <div>
                 <h2 className="text-[16px] font-semibold mb-[4px]">主题外观</h2>
-                <p className="text-[12px] text-muted-foreground/50 mb-[16px]">全站明暗模式与视觉风格，对前台所有访客统一生效；前台不再提供主题切换入口。</p>
+                <p className="text-[12px] text-muted-foreground/50 mb-[16px]">全站设计语言与明暗模式，对前台所有访客统一生效；前台不再提供主题切换入口。</p>
                 <div className="rounded-md border border-border/20 bg-card/5 p-[16px] sm:p-[20px] space-y-[20px]">
+                  <div>
+                    <label className="mb-[6px] block text-[11px] font-medium text-muted-foreground/45 uppercase tracking-normal">设计语言</label>
+                    <div className="grid grid-cols-1 gap-[8px] sm:grid-cols-3">
+                      {THEME_DESIGN_OPTIONS.map((option) => (
+                        <button
+                          key={option.id}
+                          type="button"
+                          onClick={() => previewSiteTheme(themeMode, option.id)}
+                          aria-pressed={themeDesign === option.id}
+                          className={`flex min-h-[44px] items-center gap-[10px] rounded-md border px-[12px] text-left transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${
+                            themeDesign === option.id
+                              ? "border-border bg-accent/40"
+                              : "border-border/50 hover:bg-accent/20"
+                          }`}
+                        >
+                          <option.icon className="h-[15px] w-[15px] shrink-0 text-muted-foreground" />
+                          <span className="min-w-0 flex-1">
+                            <span className="block text-[13px] font-medium leading-tight text-foreground">{option.name}</span>
+                            <span className="block truncate text-[11px] text-muted-foreground">{option.desc}</span>
+                          </span>
+                          {themeDesign === option.id && <CheckCircle2 className="h-[14px] w-[14px] shrink-0 text-foreground" />}
+                        </button>
+                      ))}
+                    </div>
+                    <p className="mt-[6px] text-[11px] leading-[1.55] text-muted-foreground/35">同一套组件与语义 Token，多套设计语言即时换肤；Liquid Glass 仅用于 Apple 主题的导航与浮层。</p>
+                  </div>
                   <div>
                     <label className="mb-[6px] block text-[11px] font-medium text-muted-foreground/45 uppercase tracking-normal">明暗模式</label>
                     <div className="grid grid-cols-3 gap-[8px]">
@@ -664,7 +708,7 @@ export function AdminSettings() {
                         <button
                           key={option.id}
                           type="button"
-                          onClick={() => previewSiteTheme(option.id, themeStyle)}
+                          onClick={() => previewSiteTheme(option.id, themeDesign)}
                           aria-pressed={themeMode === option.id}
                           className={`flex min-h-[44px] items-center justify-center gap-[6px] rounded-md border px-[8px] text-[13px] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${
                             themeMode === option.id
@@ -678,31 +722,6 @@ export function AdminSettings() {
                       ))}
                     </div>
                     <p className="mt-[6px] text-[11px] leading-[1.55] text-muted-foreground/35">选择「跟随系统」时，按每位访客设备的系统偏好自动切换明暗。</p>
-                  </div>
-                  <div>
-                    <label className="mb-[6px] block text-[11px] font-medium text-muted-foreground/45 uppercase tracking-normal">视觉风格</label>
-                    <div className="grid grid-cols-1 gap-[8px] sm:grid-cols-2">
-                      {THEME_STYLE_OPTIONS.map((option) => (
-                        <button
-                          key={option.id}
-                          type="button"
-                          onClick={() => previewSiteTheme(themeMode, option.id)}
-                          aria-pressed={themeStyle === option.id}
-                          className={`flex min-h-[44px] items-center gap-[10px] rounded-md border px-[12px] text-left transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${
-                            themeStyle === option.id
-                              ? "border-border bg-accent/40"
-                              : "border-border/50 hover:bg-accent/20"
-                          }`}
-                        >
-                          <option.icon className="h-[15px] w-[15px] shrink-0 text-muted-foreground" />
-                          <span className="min-w-0 flex-1">
-                            <span className="block text-[13px] font-medium leading-tight text-foreground">{option.name}</span>
-                            <span className="block truncate text-[11px] text-muted-foreground">{option.desc}</span>
-                          </span>
-                          {themeStyle === option.id && <CheckCircle2 className="h-[14px] w-[14px] shrink-0 text-foreground" />}
-                        </button>
-                      ))}
-                    </div>
                   </div>
                   <p className="text-[11px] leading-[1.55] text-muted-foreground/35">点击即在本页即时预览；保存后对全站生效，未保存的改动刷新后会还原。</p>
                 </div>
@@ -927,6 +946,235 @@ export function AdminSettings() {
                       </span>
                     </div>
                   )}
+                </div>
+              </div>
+
+              <div>
+                <h2 className="text-[16px] font-semibold mb-[4px]">AI 内容接口</h2>
+                <div className="rounded-md border border-border/20 bg-card/5 p-[16px] sm:p-[20px]">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-[14px] font-medium text-foreground flex items-center gap-[6px]">
+                        <Code className="h-[14px] w-[14px] text-foreground/60" /> llms.txt / Markdown 输出
+                      </p>
+                      <p className="text-[12px] text-muted-foreground/40 mt-[4px]">
+                        {llmsEnabled ? "开启状态，向 AI 搜索引擎与 Agent 提供结构化站点索引与全文" : "已关闭，/llms.txt 与 /llms-full.txt 返回 404"}
+                      </p>
+                    </div>
+                    <button onClick={() => updateSetting("llms_enabled", llmsEnabled ? "false" : "true")}
+                      className="inline-flex items-center transition-opacity hover:opacity-80"
+                      aria-label={llmsEnabled ? "关闭 AI 内容接口" : "开启 AI 内容接口"}
+                    >
+                      {llmsEnabled ? (
+                        <ToggleRight className="h-[32px] w-[32px] text-foreground/75" />
+                      ) : (
+                        <ToggleLeft className="h-[32px] w-[32px] text-muted-foreground/20" />
+                      )}
+                    </button>
+                  </div>
+                  {llmsEnabled && (
+                    <div className="mt-[16px] space-y-[8px] rounded-lg border border-border/10 bg-background/20 px-[14px] py-[10px]">
+                      <span className="block text-[12px] text-muted-foreground/50 font-mono tracking-tight truncate">
+                        {typeof window !== "undefined" ? window.location.origin : ""}/llms.txt
+                      </span>
+                      <span className="block text-[12px] text-muted-foreground/50 font-mono tracking-tight truncate">
+                        {typeof window !== "undefined" ? window.location.origin : ""}/llms-full.txt
+                      </span>
+                    </div>
+                  )}
+                  <p className="mt-[10px] text-[11px] leading-[1.55] text-muted-foreground/35">单篇 Markdown 始终可通过 /posts/文章slug.md 获取（可见性与文章本身一致，不受此开关影响）。</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB: 通知与集成 */}
+          {activeTab === "notify" && (
+            <div className="space-y-[20px] animate-fade-in" role="tabpanel" id="settings-panel-notify" aria-labelledby="settings-tab-notify">
+              <div>
+                <h2 className="text-[16px] font-semibold mb-[4px]">Webhook 通知</h2>
+                <p className="text-[12px] text-muted-foreground/50 mb-[16px]">文章发布 / 更新 / 批量操作、友链申请、留言提交时向目标地址推送 JSON 事件。</p>
+                <div className="rounded-md border border-border/20 bg-card/5 p-[16px] sm:p-[20px] space-y-[14px]">
+                  <SettingField label="Webhook 目标地址" value={settings.webhook_urls} onChange={(v) => updateSetting("webhook_urls", v)} placeholder={"https://hooks.example.com/primary\nhttps://hooks.example.com/backup"} multiline mono hint="每行一个（也支持逗号分隔）；留空回退部署变量 WEBHOOK_URLS，两者皆空则不推送。" />
+                  <div className="flex flex-wrap items-center gap-[10px]">
+                    <button type="button" onClick={testWebhook} disabled={webhookTesting} className="inline-flex min-h-[36px] items-center gap-[6px] rounded-md border border-border/25 bg-background/40 px-[12px] text-[12px] font-medium text-foreground transition-colors hover:bg-accent/45 disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
+                      <Send className="h-[13px] w-[13px]" />
+                      {webhookTesting ? "发送中..." : "发送测试请求"}
+                    </button>
+                    <span className="text-[11px] text-muted-foreground/35">测试读取已保存的目标地址，修改后请先保存。</span>
+                  </div>
+                  {webhookResults && (
+                    <div className="rounded-md border border-border/14 bg-background/20 px-[12px] py-[10px] space-y-[6px]">
+                      {webhookResults.map((item) => (
+                        <div key={item.url} className="flex items-center justify-between gap-[12px] text-[12px]">
+                          <span className="min-w-0 flex-1 truncate font-mono text-muted-foreground/60">{item.url}</span>
+                          <span className={`inline-flex shrink-0 items-center gap-[6px] font-mono ${item.ok ? "text-foreground/80" : "text-red-400"}`}>
+                            {item.ok ? <CheckCircle2 className="h-[13px] w-[13px]" /> : <AlertTriangle className="h-[13px] w-[13px]" />}
+                            {item.status > 0 ? `HTTP ${item.status}` : "连接失败"}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <h2 className="text-[16px] font-semibold mb-[4px]">搜索引擎即时收录</h2>
+                <p className="text-[12px] text-muted-foreground/50 mb-[16px]">文章发布、更新或批量发布时，通过 IndexNow 协议主动通知 Bing、Yandex 等搜索引擎抓取最新 URL。</p>
+                <div className="rounded-md border border-border/20 bg-card/5 p-[16px] sm:p-[20px] space-y-[14px]">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-[14px] font-medium text-foreground flex items-center gap-[6px]">
+                        <Search className="h-[14px] w-[14px] text-foreground/60" /> IndexNow 推送
+                      </p>
+                      <p className="text-[12px] text-muted-foreground/40 mt-[4px]">
+                        {indexNowEnabled ? "开启状态，已发布文章的变更会即时提交给搜索引擎" : "已关闭，搜索引擎仅靠自然抓取发现更新"}
+                      </p>
+                    </div>
+                    <button onClick={() => updateSetting("indexnow_enabled", indexNowEnabled ? "false" : "true")}
+                      className="inline-flex items-center transition-opacity hover:opacity-80"
+                      aria-label={indexNowEnabled ? "关闭 IndexNow 推送" : "开启 IndexNow 推送"}
+                    >
+                      {indexNowEnabled ? (
+                        <ToggleRight className="h-[32px] w-[32px] text-foreground/75" />
+                      ) : (
+                        <ToggleLeft className="h-[32px] w-[32px] text-muted-foreground/20" />
+                      )}
+                    </button>
+                  </div>
+
+                  {indexNowEnabled && (
+                    <>
+                      <SettingField label="IndexNow Key" value={settings.indexnow_key} onChange={(v) => updateSetting("indexnow_key", v)} placeholder="8-128 位字母 / 数字 / 连字符" mono hint="非机密信息，留空则不推送；密钥文件会自动托管在站点根目录供搜索引擎校验。" />
+                      <div className="flex flex-wrap items-center gap-[10px]">
+                        <button type="button" onClick={() => updateSetting("indexnow_key", generateIndexNowKey())} className="inline-flex min-h-[36px] items-center gap-[6px] rounded-md border border-border/25 bg-background/40 px-[12px] text-[12px] font-medium text-foreground transition-colors hover:bg-accent/45 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
+                          <Wand2 className="h-[13px] w-[13px]" />
+                          生成随机密钥
+                        </button>
+                        <span className="text-[11px] text-muted-foreground/35">生成后需点击保存才会生效，保存前旧密钥继续使用。</span>
+                      </div>
+                      {settings.indexnow_key.trim() && (
+                        <div className="rounded-lg border border-border/10 bg-background/20 px-[14px] py-[10px] flex justify-between items-center">
+                          <span className="text-[12px] text-muted-foreground/50 font-mono tracking-tight truncate">
+                            {integrationStatus?.effectiveSiteOrigin || (typeof window !== "undefined" ? window.location.origin : "")}/indexnow-key.txt
+                          </span>
+                        </div>
+                      )}
+                      <p className="text-[11px] leading-[1.55] text-muted-foreground/35">定时发布到期上线时暂不自动推送，可在编辑器重新保存以补推；站点域名（site_origin）留空时回退部署变量或当前请求域名。</p>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <h2 className="text-[16px] font-semibold mb-[4px]">邮件通知（Resend）</h2>
+                <p className="text-[12px] text-muted-foreground/50 mb-[16px]">新评论、友链申请与审核结果通过 Resend 发送邮件提醒。</p>
+                <div className="rounded-md border border-border/20 bg-card/5 p-[16px] sm:p-[20px] space-y-[14px]">
+                  <ConfigStatusCard
+                    icon={integrationStatus?.resendKeyConfigured === false ? AlertTriangle : CheckCircle2}
+                    label="RESEND_API_KEY"
+                    value={integrationStatus === null ? "检测中" : integrationStatus.resendKeyConfigured ? "已配置" : "未配置"}
+                    detail={integrationStatus?.resendKeyConfigured ? "Workers secret 就绪，填写收发件人即可发送。" : "在仓库根目录执行 npx wrangler secret put RESEND_API_KEY --name monolith-server 完成配置。"}
+                  />
+                  <SettingField label="发件人地址" value={settings.resend_from} onChange={(v) => updateSetting("resend_from", v)} placeholder="Monolith Bot <blog@example.com>" mono hint="回退部署变量 RESEND_FROM；须为 Resend 已验证域名的地址。" />
+                  <SettingField label="管理员收件邮箱" value={settings.admin_email} onChange={(v) => updateSetting("admin_email", v)} placeholder="admin@example.com" mono hint="接收新评论与友链申请提醒；回退部署变量 ADMIN_EMAIL。" />
+                  <SettingField label="Cloudflare Account ID（AE 查询）" value={settings.cloudflare_account_id} onChange={(v) => updateSetting("cloudflare_account_id", v)} placeholder="32 位账户 ID" mono hint="非敏感配置，可从 Cloudflare Dashboard 账户概览复制；留空回退 Workers 变量 CLOUDFLARE_ACCOUNT_ID。" />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB: 安全防护 */}
+          {activeTab === "security" && (
+            <div className="space-y-[20px] animate-fade-in" role="tabpanel" id="settings-panel-security" aria-labelledby="settings-tab-security">
+              <div>
+                <h2 className="text-[16px] font-semibold mb-[4px]">登录防护</h2>
+                <p className="text-[12px] text-muted-foreground/50 mb-[16px]">在管理登录页启用 Cloudflare Turnstile 人机验证（五秒盾），拦截自动化密码爆破。</p>
+                <div className="rounded-md border border-border/20 bg-card/5 p-[16px] sm:p-[20px] space-y-[16px]">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-[14px] font-medium text-foreground flex items-center gap-[6px]">
+                        <Shield className="h-[14px] w-[14px] text-foreground/60" /> 登录页人机验证
+                      </p>
+                      <p className="text-[12px] text-muted-foreground/40 mt-[4px]">
+                        {turnstileEnabled ? "开启状态，登录前必须通过 Cloudflare 挑战" : "已关闭，仅保留基础速率限制（每 IP 15 分钟 5 次）"}
+                      </p>
+                    </div>
+                    <button onClick={() => updateSetting("turnstile_enabled", turnstileEnabled ? "false" : "true")}
+                      className="inline-flex items-center transition-opacity hover:opacity-80"
+                      aria-label={turnstileEnabled ? "关闭登录人机验证" : "开启登录人机验证"}
+                    >
+                      {turnstileEnabled ? (
+                        <ToggleRight className="h-[32px] w-[32px] text-foreground/75" />
+                      ) : (
+                        <ToggleLeft className="h-[32px] w-[32px] text-muted-foreground/20" />
+                      )}
+                    </button>
+                  </div>
+
+                  {turnstileEnabled && (
+                    <>
+                      <SettingField
+                        label="Turnstile Site Key"
+                        value={settings.turnstile_sitekey}
+                        onChange={(v) => updateSetting("turnstile_sitekey", v)}
+                        placeholder="0x4AAAAAAA..."
+                        mono
+                        hint="在 Cloudflare Dashboard → Turnstile 创建站点后获取，属于公开密钥，可安全保存在站点设置中。"
+                      />
+                      <div className="grid gap-[12px] sm:grid-cols-2">
+                        <ConfigStatusCard
+                          icon={turnstileSecretOk === false ? AlertTriangle : CheckCircle2}
+                          label="服务端密钥 TURNSTILE_SECRET"
+                          value={turnstileSecretOk === null ? "检测中" : turnstileSecretOk ? "已配置" : "未配置"}
+                          detail={turnstileSecretOk ? "Workers 已持有服务端校验密钥，令牌验证可用。" : "在仓库根目录执行 npx wrangler secret put TURNSTILE_SECRET --name monolith-server 完成配置。"}
+                        />
+                        <ConfigStatusCard
+                          icon={settings.turnstile_sitekey.trim() ? CheckCircle2 : AlertTriangle}
+                          label="Turnstile Site Key"
+                          value={settings.turnstile_sitekey.trim() ? "已填写" : "未填写"}
+                          detail={settings.turnstile_sitekey.trim() ? "保存后登录页将渲染人机验证组件。" : "缺少 Site Key 时人机验证不会生效。"}
+                        />
+                      </div>
+                      {(!settings.turnstile_sitekey.trim() || turnstileSecretOk === false) && (
+                        <div className="flex gap-[8px] rounded-md border border-amber-500/20 bg-amber-500/5 px-[12px] py-[10px] text-[11px] leading-[1.6] text-amber-400/80">
+                          <AlertTriangle className="mt-[1px] h-[13px] w-[13px] shrink-0" />
+                          <span>
+                            开启前需完成两项配置：在 Cloudflare Dashboard → Turnstile 创建站点拿到 Site Key 与 Secret Key；Site Key 填写在上方输入框，Secret Key 通过
+                            <code className="mx-[4px] rounded bg-amber-500/10 px-[4px] py-[1px] font-mono">npx wrangler secret put TURNSTILE_SECRET --name monolith-server</code>
+                            写入 Workers。任一项缺失时，登录页不会强制人机验证。
+                          </span>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+
+                <div className="rounded-md border border-border/20 bg-card/5 p-[16px] sm:p-[20px] space-y-[16px]">
+                  <div>
+                    <p className="text-[14px] font-medium text-foreground flex items-center gap-[6px]">
+                      <Clock3 className="h-[14px] w-[14px] text-foreground/60" /> 会话与防护策略
+                    </p>
+                    <p className="text-[12px] text-muted-foreground/40 mt-[4px]">调整管理会话时长与公开接口速率限制，保存后约 15 秒生效。</p>
+                  </div>
+                  <label className="block">
+                    <span className="mb-[6px] block text-[11px] font-medium uppercase tracking-normal text-muted-foreground/45">管理会话时长</span>
+                    <select value={settings.jwt_session_days} onChange={(e) => updateSetting("jwt_session_days", e.target.value)} className="settings-input h-[40px] w-full">
+                      <option value="1">1 天（高安全）</option>
+                      <option value="7">7 天（默认）</option>
+                      <option value="30">30 天（长会话）</option>
+                    </select>
+                    <span className="mt-[6px] block text-[11px] leading-[1.5] text-muted-foreground/40">重新登录后按新时长签发令牌，已签发的令牌不受影响。</span>
+                  </label>
+                  <div className="grid gap-[12px] sm:grid-cols-2">
+                    <NumberSettingField label="登录失败上限" value={settings.login_rate_limit} onChange={(v) => updateSetting("login_rate_limit", v)} min={1} max={100} suffix="次" hint={`窗口 ${settings.login_rate_window_minutes} 分钟`} />
+                    <NumberSettingField label="登录窗口时长" value={settings.login_rate_window_minutes} onChange={(v) => updateSetting("login_rate_window_minutes", v)} min={1} max={1440} suffix="分钟" hint="超过上限后锁定该 IP 的时长" />
+                    <NumberSettingField label="友链申请上限" value={settings.friendlink_rate_limit} onChange={(v) => updateSetting("friendlink_rate_limit", v)} min={1} max={100} suffix="次" hint={`窗口 ${settings.friendlink_rate_window_hours} 小时`} />
+                    <NumberSettingField label="友链申请窗口" value={settings.friendlink_rate_window_hours} onChange={(v) => updateSetting("friendlink_rate_window_hours", v)} min={1} max={720} suffix="小时" hint="默认 1 小时 3 次" />
+                    <NumberSettingField label="留言板上限" value={settings.guestbook_rate_limit} onChange={(v) => updateSetting("guestbook_rate_limit", v)} min={1} max={100} suffix="次" hint={`窗口 ${settings.guestbook_rate_window_hours} 小时`} />
+                    <NumberSettingField label="留言板窗口" value={settings.guestbook_rate_window_hours} onChange={(v) => updateSetting("guestbook_rate_window_hours", v)} min={1} max={720} suffix="小时" hint="默认 1 小时 5 次" />
+                  </div>
                 </div>
               </div>
             </div>

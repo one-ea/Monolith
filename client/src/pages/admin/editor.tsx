@@ -1,14 +1,23 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useParams, useLocation } from "wouter";
-import { fetchPost, createPost, updatePost, uploadImage, localizePostImages, fetchPostVersions, restorePostVersion, type PostVersion } from "@/lib/api";
+import { fetchAdminPost, createPost, updatePost, uploadImage, localizePostImages, fetchPostVersions, restorePostVersion, type LockInfo, type PostVersion } from "@/lib/api";
 import { CARD_GRID_SIZE_LABEL, CARD_IMAGE_MODE_LABEL, clampCardHeight, clampCardWidth, getArticleCardImageMode, getCardGridSize } from "@/lib/card-layout";
 import { renderMarkdown } from "@/lib/markdown";
-import { Save, Eye, EyeOff, Upload, Image, ChevronDown, ChevronUp, Bold, Italic, Heading2, Heading3, Link2, Code, Quote, List, ListOrdered, Minus, Maximize2, Minimize2, Table, CheckSquare, FileCode, ImageDown, History, Check, X, ArrowDownUp, PanelRightClose, PanelRight, ArrowLeft, RotateCcw, SlidersHorizontal } from "lucide-react";
+import { analyzePost } from "@/lib/seo-analyzer";
+import { buildPageDocument, runAudit, summarizeAudit, type SiteContext } from "@monolith/seo-core";
+import { Save, Eye, EyeOff, Upload, Image, ChevronDown, ChevronUp, Bold, Italic, Heading2, Heading3, Link2, Code, Quote, List, ListOrdered, Minus, Maximize2, Minimize2, Table, CheckSquare, FileCode, ImageDown, History, Check, X, ArrowDownUp, PanelRightClose, PanelRight, ArrowLeft, RotateCcw, SlidersHorizontal, CheckCircle2, AlertTriangle, XCircle, LockKeyhole } from "lucide-react";
 import { Link } from "wouter";
 import Editor, { type Monaco } from "@monaco-editor/react";
 import type * as MonacoTypes from "monaco-editor";
 import { useSiteSettings } from "@/lib/site-settings";
 import { formatSiteDate } from "@/lib/date-format";
+
+/** 检查面板状态图标（SEO / GEO 共用） */
+function AuditStatusIcon({ status }: { status: "pass" | "warn" | "fail" }) {
+  if (status === "pass") return <CheckCircle2 className="h-[11px] w-[11px] shrink-0 text-foreground/70" />;
+  if (status === "warn") return <AlertTriangle className="h-[11px] w-[11px] shrink-0 text-amber-600 dark:text-amber-400" />;
+  return <XCircle className="h-[11px] w-[11px] shrink-0 text-red-600 dark:text-red-400" />;
+}
 
 /** 注册 Monolith 暗色主题 — 暗夜琥珀：黑 + 金点缀 */
 function handleEditorWillMount(monaco: Monaco) {
@@ -112,7 +121,7 @@ const CARD_LAYOUT_PRESETS = [
 ];
 
 export function AdminEditor() {
-  const { dateSettings } = useSiteSettings();
+  const { dateSettings, settings: siteSettings } = useSiteSettings();
   const params = useParams<{ slug?: string }>();
   const [, setLocation] = useLocation();
   const isEdit = !!params.slug;
@@ -138,6 +147,13 @@ export function AdminEditor() {
   });
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState({ text: "", type: "" as "" | "success" | "error" });
+  const [postLoading, setPostLoading] = useState(isEdit);
+  const [postLoadError, setPostLoadError] = useState("");
+  const [hasPassword, setHasPassword] = useState(false);
+  const [inheritedLocks, setInheritedLocks] = useState<LockInfo[]>([]);
+  const [passwordValue, setPasswordValue] = useState("");
+  const [passwordChange, setPasswordChange] = useState(false);
+  const [removePassword, setRemovePassword] = useState(false);
   const [showPreview, setShowPreview] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [wordCount, setWordCount] = useState(0);
@@ -145,6 +161,9 @@ export function AdminEditor() {
   const [zenMode, setZenMode] = useState(false);
   const [autoSlug, setAutoSlug] = useState(!isEdit);
   const [lastSaved, setLastSaved] = useState<string>("");
+  const formRef = useRef(form);
+  const draftSlugRef = useRef<string | undefined>(params.slug);
+  const lastSavedContentRef = useRef("");
 
   const [saveVersion, setSaveVersion] = useState(false);
   const [versions, setVersions] = useState<PostVersion[]>([]);
@@ -160,6 +179,57 @@ export function AdminEditor() {
   const previewCardWidth = Math.min(228, Math.max(112, Math.round(form.cardWidth * 2.2)));
   const previewCardHeight = Math.min(154, Math.max(72, Math.round(form.cardHeight / 2.35)));
 
+  // ─── SEO / GEO 检查（500ms 防抖跟随表单，避免 Monaco 每击键重算） ───
+  const [auditForm, setAuditForm] = useState(form);
+  useEffect(() => {
+    const timer = setTimeout(() => setAuditForm(form), 500);
+    return () => clearTimeout(timer);
+  }, [form]);
+
+  const auditChecks = useMemo(() => {
+    const tags = auditForm.tags.split(",").map((t) => t.trim()).filter(Boolean);
+    const now = new Date().toISOString();
+    const seoReport = analyzePost({
+      slug: auditForm.slug,
+      title: auditForm.title,
+      excerpt: auditForm.excerpt || null,
+      content: auditForm.content,
+      tags,
+      coverImage: auditForm.coverImage || null,
+      published: auditForm.published,
+      createdAt: now,
+      updatedAt: now,
+    });
+    const siteTitle = siteSettings.site_title.trim() || "Monolith";
+    const siteContext: SiteContext = {
+      origin: window.location.origin,
+      title: siteTitle,
+      description: siteSettings.site_description,
+      author: {
+        name: siteSettings.author_name.trim() || siteTitle,
+        ...(siteSettings.author_avatar.trim() ? { avatar: siteSettings.author_avatar.trim() } : {}),
+      },
+      locale: "zh-CN",
+    };
+    const findings = runAudit(buildPageDocument({
+      path: `/posts/${auditForm.slug || "draft"}`,
+      title: auditForm.title,
+      type: "article",
+      description: auditForm.excerpt || null,
+      contentMarkdown: auditForm.content,
+      coverImage: auditForm.coverImage || null,
+      publishedAt: now,
+      tags,
+      site: siteContext,
+    }));
+    return {
+      seoReport,
+      seoFailed: seoReport.checks.filter((check) => check.status !== "pass"),
+      geoFailed: findings.filter((finding) => finding.status !== "pass"),
+      geoScore: summarizeAudit(findings).score,
+    };
+  }, [auditForm, siteSettings]);
+
   // 保持 ref 与 state 同步（避免 onMount 闭包陷阱）
   useEffect(() => { syncScrollRef.current = syncScroll; }, [syncScroll]);
 
@@ -173,7 +243,9 @@ export function AdminEditor() {
     document.title = isEdit ? "编辑文章 | Monolith" : "新建文章 | Monolith";
 
     if (isEdit && params.slug) {
-      fetchPost(params.slug).then((post) => {
+      setPostLoading(true);
+      setPostLoadError("");
+      fetchAdminPost(params.slug).then((post) => {
         setForm({
           slug: post.slug,
           title: post.title,
@@ -191,9 +263,26 @@ export function AdminEditor() {
           seriesOrder: post.seriesOrder ?? 0,
           category: post.category || "",
         });
+        setHasPassword(Boolean(post.hasPassword));
+        setInheritedLocks(post.inheritedLocks ?? []);
+        setPasswordValue("");
+        setPasswordChange(false);
+        setRemovePassword(false);
         setAutoSlug(false);
+        lastSavedContentRef.current = post.content;
+        const draft = loadDraft(post.slug);
+        if (draft && typeof draft.content === "string" && draft.content.trim()) {
+          setForm((prev) => ({ ...prev, ...draft }));
+          showMsg("已恢复本地草稿", "success");
+        }
+      }).catch((error: unknown) => {
+        setPostLoadError(error instanceof Error ? error.message : "文章加载失败");
+      }).finally(() => {
+        setPostLoading(false);
       });
     } else {
+      setPostLoading(false);
+      setPostLoadError("");
       // 新建时尝试恢复草稿
       const draft = loadDraft("new");
       if (draft && draft.content) {
@@ -208,15 +297,25 @@ export function AdminEditor() {
     setWordCount(chars);
   }, [form.content]);
 
-  // 自动保存草稿（每 10 秒）
+  useEffect(() => {
+    formRef.current = form;
+  }, [form]);
+
+  useEffect(() => {
+    draftSlugRef.current = params.slug;
+  }, [params.slug]);
+
+  // 自动保存草稿（每 10 秒）。用 ref 读取最新表单，避免每次击键重启计时器；
+  // 内容与最近一次成功保存一致时不再重建草稿。
   useEffect(() => {
     const timer = setInterval(() => {
-      if (form.content.trim()) {
-        saveDraft(params.slug || "", form);
-      }
+      const current = formRef.current;
+      if (!current.content.trim()) return;
+      if (current.content === lastSavedContentRef.current) return;
+      saveDraft(draftSlugRef.current || "", current);
     }, 10000);
     return () => clearInterval(timer);
-  }, [form, params.slug]);
+  }, []);
 
   // Ctrl+S 保存
   useEffect(() => {
@@ -235,10 +334,10 @@ export function AdminEditor() {
     setTimeout(() => setMessage({ text: "", type: "" }), 3000);
   }, []);
 
-  const handleSave = async () => {
+  const handleSave = async (): Promise<boolean> => {
     if (!form.slug || !form.title) {
       showMsg("请填写 Slug 和标题", "error");
-      return;
+      return false;
     }
 
     setSaving(true);
@@ -263,19 +362,37 @@ export function AdminEditor() {
       };
 
       if (isEdit && params.slug) {
-        await updatePost(params.slug, { ...payload, saveVersion });
+        const passwordPayload = removePassword ? null : passwordValue ? passwordValue : undefined;
+        await updatePost(params.slug, {
+          ...payload,
+          saveVersion,
+          ...(passwordPayload !== undefined ? { password: passwordPayload } : {}),
+        });
+        if (passwordPayload !== undefined) {
+          setHasPassword(Boolean(passwordPayload));
+        }
+        setPasswordValue("");
+        setPasswordChange(false);
+        setRemovePassword(false);
+        lastSavedContentRef.current = payload.content;
         setLastSaved(new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }));
         showMsg("已保存" + (saveVersion ? "并创建了版本快照" : ""), "success");
         clearDraft(params.slug);
         if (saveVersion) setSaveVersion(false);
       } else {
-        await createPost(payload);
+        await createPost({
+          ...payload,
+          ...(passwordValue ? { password: passwordValue } : {}),
+        });
         showMsg("已创建，即将跳转...", "success");
+        lastSavedContentRef.current = payload.content;
         clearDraft("new");
         setTimeout(() => setLocation("/admin"), 1200);
       }
+      return true;
     } catch (err: unknown) {
       showMsg(err instanceof Error ? err.message : "操作失败", "error");
+      return false;
     } finally {
       setSaving(false);
     }
@@ -481,9 +598,34 @@ export function AdminEditor() {
     { label: "红色状态", value: "from-red-500/12 to-zinc-500/12" },
   ];
 
+  if (postLoading) {
+    return (
+      <div className="mx-auto w-full max-w-[1280px] px-[12px] py-[16px] sm:px-[18px] sm:py-[20px]">
+        <div className="animate-pulse space-y-[12px]">
+          <div className="h-[36px] w-[240px] rounded-md bg-card/30" />
+          <div className="h-[52px] w-full rounded-md bg-card/20" />
+          <div className="h-[420px] w-full rounded-md bg-card/20" />
+        </div>
+      </div>
+    );
+  }
+
+  if (postLoadError) {
+    return (
+      <div className="mx-auto flex w-full max-w-[720px] flex-1 flex-col items-center justify-center gap-[12px] px-[20px] py-[80px] text-center">
+        <p className="text-[18px] font-medium text-foreground/80">文章加载失败</p>
+        <p className="max-w-[520px] text-[13px] leading-[1.7] text-muted-foreground/60">{postLoadError}</p>
+        <div className="flex gap-[10px]">
+          <button type="button" onClick={() => setLocation("/admin")} className="inline-flex min-h-[40px] items-center rounded-md border border-border/25 px-[14px] text-[13px] text-muted-foreground transition-colors hover:bg-accent/30 hover:text-foreground">返回后台</button>
+          <button type="button" onClick={() => window.location.reload()} className="inline-flex min-h-[40px] items-center rounded-md bg-foreground px-[14px] text-[13px] font-medium text-background transition-opacity hover:opacity-90">重试</button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
-      className="mx-auto flex h-[calc(100vh-56px)] w-full max-w-[1280px] flex-col px-[12px] py-[16px] sm:px-[18px] sm:py-[20px]"
+      className="mx-auto flex min-h-[calc(100vh-56px)] w-full max-w-[1280px] flex-col px-[12px] py-[16px] sm:px-[18px] sm:py-[20px] lg:h-[calc(100vh-56px)] lg:min-h-0"
       onDrop={handleDrop}
       onDragOver={(e) => e.preventDefault()}
       onPaste={handlePaste}
@@ -515,7 +657,7 @@ export function AdminEditor() {
         <div className="flex flex-wrap items-center gap-[6px]">
           {message.text && (
             <span className={`rounded-md px-[10px] py-[6px] text-[12px] transition-all ${
-              message.type === "success" ? "bg-emerald-500/10 text-emerald-400" : "bg-red-500/10 text-red-400"
+              message.type === "success" ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400" : "bg-red-500/10 text-red-600 dark:text-red-400"
             }`}>
               {message.type === "success" ? "✓" : "✕"} {message.text}
             </span>
@@ -527,7 +669,7 @@ export function AdminEditor() {
             <input type="checkbox" checked={form.published} onChange={(e) => updateField("published", e.target.checked)} className="rounded accent-foreground" />
             发布
           </label>
-          <label className="flex min-h-[36px] cursor-pointer select-none items-center gap-[6px] rounded-md px-[8px] text-[12px] text-amber-500/65 transition-colors hover:bg-amber-500/8 hover:text-amber-500/85">
+          <label className="flex min-h-[36px] cursor-pointer select-none items-center gap-[6px] rounded-md px-[8px] text-[12px] text-amber-700/70 dark:text-amber-400/70 transition-colors hover:bg-amber-500/8 hover:text-amber-800/85 dark:hover:text-amber-300/85">
             <input type="checkbox" checked={form.pinned} onChange={(e) => updateField("pinned", e.target.checked)} className="rounded accent-amber-500" />
             置顶
           </label>
@@ -554,12 +696,13 @@ export function AdminEditor() {
                 try {
                   // 先保存当前修改，确保后端基于最新内容操作
                   showMsg("正在保存并转换外链图片...", "success");
-                  await handleSave();
+                  const saved = await handleSave();
+                  if (!saved) return;
                   const result = await localizePostImages(params.slug);
                   if (result.replaced > 0) {
                     showMsg(`已转换 ${result.replaced} 张图片${result.failed ? `，${result.failed} 张失败` : ""}`, "success");
                     // 重新加载文章内容到编辑器
-                    const fresh = await fetchPost(params.slug);
+                    const fresh = await fetchAdminPost(params.slug);
                     if (fresh) updateField("content", fresh.content);
                   } else {
                     showMsg(result.message || "未发现外链图片", "success");
@@ -687,6 +830,83 @@ export function AdminEditor() {
                     className="h-[34px] w-full rounded-md border border-border/25 bg-background/28 px-[10px] text-[12px] text-foreground outline-none transition-colors placeholder:text-muted-foreground/50 focus:border-foreground/25"
                   />
                 </div>
+                <div className="sm:col-span-2 lg:col-span-2">
+                  <label className="mb-[4px] block text-[10px] uppercase tracking-normal text-muted-foreground/68">访问密码</label>
+                  {hasPassword && !passwordChange && !removePassword ? (
+                    <div className="flex h-[34px] items-center gap-[8px]">
+                      <span className="inline-flex items-center gap-[4px] rounded-[4px] border border-border/20 bg-card/30 px-[6px] py-[3px] text-[11px] text-foreground/70">
+                        <LockKeyhole className="h-[11px] w-[11px]" />已设置
+                      </span>
+                      <button type="button" onClick={() => setPasswordChange(true)} className="text-[11px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline">更换</button>
+                      <button type="button" onClick={() => setRemovePassword(true)} className="text-[11px] text-destructive/80 underline-offset-2 hover:text-destructive hover:underline">移除</button>
+                    </div>
+                  ) : (
+                    <div className="flex h-[34px] items-center gap-[6px]">
+                      <input
+                        type="password"
+                        value={passwordValue}
+                        onChange={(e) => setPasswordValue(e.target.value)}
+                        disabled={removePassword}
+                        placeholder={removePassword ? "保存后移除密码" : hasPassword ? "输入新密码（留空保持不变）" : "留空则不设密码"}
+                        autoComplete="new-password"
+                        className="h-[34px] min-w-0 flex-1 rounded-md border border-border/25 bg-background/28 px-[10px] text-[12px] text-foreground outline-none transition-colors placeholder:text-muted-foreground/50 focus:border-foreground/25 disabled:opacity-50"
+                      />
+                      {(passwordChange || removePassword) && (
+                        <button type="button" onClick={() => { setPasswordChange(false); setPasswordValue(""); setRemovePassword(false); }} className="shrink-0 text-[11px] text-muted-foreground hover:text-foreground">取消</button>
+                      )}
+                    </div>
+                  )}
+                  {removePassword && <p className="mt-[4px] text-[10px] text-destructive/80">保存后将移除访问密码</p>}
+                  {hasPassword && !passwordChange && !removePassword && <p className="mt-[4px] text-[10px] text-muted-foreground/45">读者需要密码才能打开这篇文章</p>}
+                  {inheritedLocks.length > 0 && (
+                    <p className="mt-[4px] text-[10px] leading-[1.5] text-amber-700/80 dark:text-amber-400/80">
+                      另受 {inheritedLocks.map((lock) => `${lock.kind === "tag" ? "标签" : lock.kind === "category" ? "分类" : lock.kind === "series" ? "系列" : "文章"}「${lock.key}」`).join("、")} 锁保护；此处只管理单篇密码。
+                    </p>
+                  )}
+                </div>
+                {/* ─── SEO / GEO 检查面板（实时，防抖 500ms） ─── */}
+                <div className="sm:col-span-3 lg:col-span-5">
+                  <div className="rounded-md border border-border/18 bg-card/8 p-[12px]">
+                    <div className="mb-[8px] flex flex-wrap items-center justify-between gap-[8px]">
+                      <span className="flex items-center gap-[6px] text-[12px] font-medium text-foreground/82">
+                        <SlidersHorizontal className="h-[13px] w-[13px] text-muted-foreground/70" />
+                        SEO / GEO 检查
+                      </span>
+                      <span className="font-mono text-[10px] text-muted-foreground/55">
+                        SEO {auditChecks.seoReport.totalScore} · GEO {auditChecks.geoScore}（Monolith 自定义健康度）
+                      </span>
+                    </div>
+                    {auditChecks.seoFailed.length === 0 && auditChecks.geoFailed.length === 0 ? (
+                      <p className="rounded-md border border-border/14 bg-background/25 px-[10px] py-[10px] text-[11px] text-muted-foreground/55">
+                        当前草稿的 SEO 与 GEO 检查全部通过；Markdown 输出（/posts/slug.md）与 JSON-LD @graph 将随发布自动生效。
+                      </p>
+                    ) : (
+                      <div className="flex flex-wrap gap-[5px]">
+                        {auditChecks.seoFailed.map((check) => (
+                          <span
+                            key={`seo-${check.id}`}
+                            className="inline-flex items-center gap-[4px] rounded-md bg-card/35 px-[6px] py-[3px] text-[10px] text-muted-foreground/75"
+                            title={check.detail}
+                          >
+                            <AuditStatusIcon status={check.status} />
+                            SEO · {check.label}
+                          </span>
+                        ))}
+                        {auditChecks.geoFailed.map((finding) => (
+                          <span
+                            key={`geo-${finding.id}`}
+                            className="inline-flex items-center gap-[4px] rounded-md bg-card/35 px-[6px] py-[3px] text-[10px] text-muted-foreground/75"
+                            title={finding.recommendation ? `${finding.detail} → ${finding.recommendation}` : finding.detail}
+                          >
+                            <AuditStatusIcon status={finding.status} />
+                            GEO · {finding.title}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
                 <div className="sm:col-span-3 lg:col-span-5">
                   <div className="grid gap-[12px] rounded-md border border-border/18 bg-card/8 p-[12px] lg:grid-cols-[minmax(0,1fr)_280px]">
                     <div className="min-w-0 space-y-[12px]">
@@ -882,7 +1102,7 @@ export function AdminEditor() {
       )}
 
       {/* ─── 编辑器 + 预览 ─── */}
-      <div className={`grid min-h-0 flex-1 ${showPreview ? "grid-cols-1 lg:grid-cols-2 lg:gap-[2px]" : "grid-cols-1"} overflow-hidden rounded-md border border-border/22 bg-background/35`}>
+      <div className={`grid min-h-[420px] flex-1 ${showPreview ? "grid-cols-1 lg:grid-cols-2 lg:gap-[2px]" : "grid-cols-1"} overflow-hidden rounded-md border border-border/22 bg-background/35 lg:min-h-0`}>
         {/* 左侧 Monaco 编辑器 */}
         <div className="flex flex-col min-h-0">
           {/* 工具栏 */}
@@ -963,6 +1183,8 @@ export function AdminEditor() {
                   domNode.addEventListener("drop", (e: Event) => {
                     const de = e as DragEvent;
                     de.preventDefault();
+                    // 阻止冒泡到外层 onDrop，避免同一次拖拽触发两次上传。
+                    de.stopPropagation();
                     const file = de.dataTransfer?.files[0];
                     if (file?.type.startsWith("image/")) handleImageUpload(file);
                   });
@@ -1050,7 +1272,7 @@ export function AdminEditor() {
                       <div className="text-[14px] font-medium text-foreground/90 mb-[4px]">{formatSiteDate(v.createdAt, dateSettings)}</div>
                       <div className="text-[12px] text-muted-foreground/50">
                         {v.content.length} 字符
-                        {i === 0 && <span className="ml-[8px] text-[10px] bg-emerald-500/10 text-emerald-400 px-[6px] py-[2px] rounded-[4px]">最新快照</span>}
+                        {i === 0 && <span className="ml-[8px] text-[10px] bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 px-[6px] py-[2px] rounded-[4px]">最新快照</span>}
                       </div>
                     </div>
                     <button

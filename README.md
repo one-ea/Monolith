@@ -1,14 +1,20 @@
 <div align="center">
 
-<img src="https://raw.githubusercontent.com/lucide-icons/lucide/main/icons/box.svg" width="96" height="96" alt="Monolith" />
+<img src="client/public/icon-512.png" width="88" height="88" alt="Monolith logo" />
 
 # Monolith
 
-**高质感无服务器边缘博客系统**
+### 一套真正属于你的边缘原生博客
 
 *GitHub Primer 设计语言 · 边缘计算 · 控制台全站管控 · 零运维成本*
 
-<br/>
+<p>
+  <a href="https://monolith-client.pages.dev"><strong>访问在线演示 ↗</strong></a>
+  ·
+  <a href="https://github.com/one-ea/Monolith/wiki">阅读文档</a>
+  ·
+  <a href="https://github.com/one-ea/Monolith/issues">提交反馈</a>
+</p>
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-22c55e?style=flat-square)](LICENSE)
 [![Cloudflare Workers](https://img.shields.io/badge/Cloudflare-Workers-F38020?style=flat-square&logo=cloudflare&logoColor=white)](https://workers.cloudflare.com/)
@@ -24,24 +30,21 @@
 
 ---
 
-## ✨ 简介
+## Monolith 是什么？
 
-**Monolith** 是一套运行在 Cloudflare 全球边缘网络上的现代化博客系统，前后端通过适配器模式解耦，零运维即可获得全球 < 50ms 的访问延迟。
+Monolith 是一个面向个人创作者的全栈博客系统：前端运行在 Cloudflare Pages，API 运行在 Cloudflare Workers，数据与媒体通过可替换的存储适配器连接。
 
 设计哲学：**内容优先 · 边缘原生 · 沉浸式阅读 · 一切皆可控制台配置**。
 
 ---
 
-## 🌟 核心特性
+## 能做什么
 
-### ✍️ 创作体验
-- **沉浸式编辑器** — Markdown + 实时预览，KaTeX 数学公式，代码高亮一键复制
-- **多平台导入** — 一键迁移 WordPress / Ghost / Hexo / Hugo / Jekyll / Halo
-- **内容编排** — 草稿、定时发布、置顶、系列合集、独立页动态导航
+### 写作与内容
 
 ### 🎨 阅读体验（GitHub Primer 设计语言）
 - **日/夜双主题** — 亮暗两套完整 token 对齐 GitHub "浅色/深色 - 默认"（`@primer/primitives`），蓝色链接与 focus ring、官方语法高亮配色、六色 GitHub 风格标签
-- **站点级主题管控** — 明暗模式 × 视觉风格（简洁 / 液态玻璃）由控制台统一设置，支持跟随系统，首屏 cookie 防闪烁
+- **站点级主题管控** — 明暗模式 × 视觉风格（classic / apple / pixel）由控制台统一设置，支持跟随系统，首屏 cookie 防闪烁
 - **文章导航** — 自动 TOC、阅读进度条、IntersectionObserver 章节追踪
 - **⌘K 全站搜索** — 防抖检索、键盘导航、关键词高亮
 - **Reaction 表情** — 文末轻互动，无需登录即可表态
@@ -53,7 +56,8 @@
 |--------|------|
 | 安全防护 | 登录页 Cloudflare Turnstile 人机验证、JWT 会话时长（1/7/30 天）、登录/友链/留言速率限制 |
 | 通知与集成 | Webhook 目标（多地址 + 一键测试）、Resend 邮件收发件人 |
-| 主题外观 | 明暗模式、视觉风格，即时预览 |
+| 主题外观 | 明暗模式、视觉风格（classic / apple / pixel），即时预览 |
+| 访问控制 | 文章 / 标签 / 分类 / 系列密码锁，服务端 PBKDF2 验密；列表 / 搜索 / RSS / sitemap 自动排除 |
 | 发现与注入 | 片段化代码注入：位置/作用域/同意策略独立控制，常用统计服务预设模板，旧数据一键迁移 |
 | 搜索优化 | robots.txt 追加规则（白名单校验）、sitemap 归档开关与额外 URL（自动去重）、站点域名 |
 | AE 采集 | 访客统计开关、站点白名单（主域自动匹配子域） |
@@ -66,6 +70,7 @@
 
 ### 🛡️ 安全合规
 - **认证与防护** — JWT + Turnstile 人机验证 + 可调限流，CSP/HSTS 全套头，SSRF 拦截
+- **访问控制** — 文章 / 标签 / 分类 / 系列级密码锁，HttpOnly 解锁凭证，限流与改密失效
 - **平台安全线** — GitHub secret scanning + push protection、CodeQL extended 查询集、CI Gitleaks 全历史扫描（含 AI 密钥等非提供商模式自定义规则）
 - **隐私优先** — Cookie 同意横幅，第三方脚本按片段门控，GDPR 数据导出
 - **多端备份** — JSON / R2-S3 / WebDAV 自由切换
@@ -76,7 +81,7 @@
 
 ---
 
-## 🏗️ 架构
+## 架构概览
 
 ```
         ┌──────────────────────────────────────────┐
@@ -97,7 +102,7 @@
                                 └──────────────────┘
 ```
 
-**分层职责**
+### 请求与数据流
 
 | 层级 | 模块 | 关键路径 |
 |------|------|---------|
@@ -106,7 +111,7 @@
 | 后端 | Hono Workers + Storage Factory | `server/src/index.ts` · `server/src/storage` |
 | 持久层 | D1 / Turso / PostgreSQL · R2 / S3 | `server/src/storage/db` · `server/src/storage/object` |
 
-**关键设计决策**
+### 核心设计
 
 - **适配器模式** — `IDatabase` / `IObjectStorage` 统一接口，切换后端零侵入
 - **配置分层** — 行为配置进 D1 settings（控制台管理）；Workers secret 只放凭据与基础设施拓扑
@@ -118,7 +123,15 @@
 
 ---
 
-## 🚀 快速开始
+## 快速开始
+
+### 环境要求
+
+- Node.js `>= 22`
+- npm
+- Cloudflare 账户（部署到 Cloudflare 时需要）
+
+### 本地运行
 
 ```bash
 git clone https://github.com/one-ea/Monolith.git && cd Monolith
@@ -126,19 +139,41 @@ source "$HOME/.nvm/nvm.sh"  # bash/zsh 按需加载 nvm
 nvm install && nvm use
 npm ci
 npm run doctor:local
+
+# 启动前后端开发服务器
 npm run dev
 ```
 
 > 完整环境准备、密钥配置与本地数据库初始化参阅 [**Wiki · 快速开始**](https://github.com/one-ea/Monolith/wiki/Quick-Start)。
 
-## ☁️ 部署
+### 常用命令
+
+| 命令 | 用途 |
+| --- | --- |
+| `npm run dev` | 同时启动前端与 Workers 开发服务器 |
+| `npm run check` | 执行工作区类型检查 |
+| `npm run lint` | 执行工作区 ESLint |
+| `npm run build` | 构建前端产物 |
+| `npm run db:migrate:local` | 执行本地 D1 迁移 |
+| `npm run db:reconcile:local` | 对齐本地 D1 schema |
+| `npm run deploy:cloudflare` | 执行完整 Cloudflare 部署链路 |
+
+---
+
+## 部署到 Cloudflare
+
+首次部署前登录 Wrangler：
 
 ```bash
-npx wrangler login          # 首次部署一次即可
-npm run deploy:cloudflare   # 远程迁移 → Workers → API_BASE 注入 → Pages
+npx wrangler login
+npm run deploy:cloudflare
 ```
 
 > 生产 secret 已存在而本地无明文时，请改走[不覆盖 secret 的分步部署链路](https://github.com/one-ea/Monolith/wiki/Deployment)，业务密钥全程不被触碰。
+
+`CLOUDFLARE_ACCOUNT_ID` 不再写死在仓库里：部署脚本按「环境变量 → `wrangler whoami --json` 单账户 → 明确报错」解析。`--skip-migrate` 只跳过远程迁移，schema reconcile 仍会执行；需要完全跳过数据库操作时同时传 `--skip-migrate --skip-reconcile`。
+
+> 访问密码解锁使用 HttpOnly cookie（`Path=/api`），依赖同源 `/api` 代理。若把 `VITE_API_URL` 指向跨域 Worker，解锁 cookie 不会生效；请保持 Pages Functions 同源代理部署。
 
 | 方案 | 状态 | 适用场景 |
 |------|------|---------|
@@ -148,7 +183,7 @@ npm run deploy:cloudflare   # 远程迁移 → Workers → API_BASE 注入 → P
 
 ---
 
-## 📚 文档导航
+## 文档导航
 
 | 入口 | 内容 |
 |------|------|
@@ -161,16 +196,26 @@ npm run deploy:cloudflare   # 远程迁移 → Workers → API_BASE 注入 → P
 
 ---
 
-## 🤝 贡献
+## 贡献
 
-欢迎通过 [Issue](https://github.com/one-ea/Monolith/issues) 反馈问题，或通过 Pull Request 贡献代码。提交前请阅读 [Wiki · 贡献指南](https://github.com/one-ea/Monolith/wiki/Contributing)。
+欢迎提交 Issue、改进文档或发起 Pull Request。
 
-## 📄 License
+在提交代码前，请先：
 
-基于 [MIT License](./LICENSE) 开源发布。
+1. 阅读 [贡献指南](https://github.com/one-ea/Monolith/wiki/Contributing)。
+2. 运行 `npm run check`、`npm run lint` 与 `npm run build`。
+3. 确认没有将 secret、`.env`、本地上下文或生成文件提交到仓库。
+
+Bug、功能建议与体验反馈请前往 [GitHub Issues](https://github.com/one-ea/Monolith/issues)。
+
+## License
+
+Monolith 基于 [MIT License](./LICENSE) 开源。
 
 <div align="center">
 
-<sub>Crafted with ♡ on the edge.</sub>
+<br />
+
+<sub>Built for writers. Tuned for the edge. ✦</sub>
 
 </div>

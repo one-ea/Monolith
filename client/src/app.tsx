@@ -36,6 +36,7 @@ const AdminGuestbook = lazy(() => import("@/pages/admin/guestbook").then((m) => 
 const AdminMedia = lazy(() => import("@/pages/admin/media").then((m) => ({ default: m.AdminMedia })));
 const AdminAnalytics = lazy(() => import("@/pages/admin/analytics").then((m) => ({ default: m.AdminAnalytics })));
 const AdminSeo = lazy(() => import("@/pages/admin/seo").then((m) => ({ default: m.AdminSeo })));
+const AdminAccess = lazy(() => import("@/pages/admin/access").then((m) => ({ default: m.AdminAccess })));
 const PrivacyPage = lazy(() => import("@/pages/privacy").then((m) => ({ default: m.PrivacyPage })));
 const DynamicPage = lazy(() => import("@/pages/dynamic-page").then((m) => ({ default: m.DynamicPage })));
 const NotFoundPage = lazy(() => import("@/pages/not-found").then((m) => ({ default: m.NotFoundPage })));
@@ -50,15 +51,12 @@ function syncDocumentBrand(settings: { site_title?: string; site_description?: s
     document.title = description ? `${siteTitle} — ${description}` : siteTitle;
   }
 
-  if (icon) {
-    let link = document.querySelector('link[rel="icon"]') as HTMLLinkElement | null;
-    if (!link) {
-      link = document.createElement("link");
-      link.rel = "icon";
-      document.head.appendChild(link);
-    }
-    link.href = icon;
-  }
+  const iconHref = icon || "/monolith-logo.svg";
+  const iconLink = document.querySelector('link[rel="icon"]') as HTMLLinkElement | null;
+  if (iconLink) iconLink.href = iconHref;
+
+  const appleLink = document.querySelector('link[rel="apple-touch-icon"]') as HTMLLinkElement | null;
+  if (appleLink) appleLink.href = icon || "/icon-192.png";
 }
 
 function matchesPathPrefix(pathname: string, prefix: string) {
@@ -109,7 +107,7 @@ export function App() {
         <>
           <Navbar />
           <main className="mx-auto w-full max-w-[1440px] px-[20px] lg:px-[40px] flex-1 flex flex-col">
-            <Suspense fallback={<div className="p-8 flex justify-center text-zinc-500">Loading...</div>}>
+            <Suspense fallback={<div className="p-8 flex justify-center text-muted-foreground">Loading...</div>}>
               <Switch>
                 <Route path="/" component={HomePage} />
                 <Route path="/docs/:seriesSlug/:slug?" component={DocsPage} />
@@ -141,7 +139,7 @@ export function App() {
       {isEditorPage && (
         <ProtectedRoute>
           <main className="mx-auto w-full px-[16px] flex-1 flex flex-col">
-            <Suspense fallback={<div className="p-8 flex justify-center text-zinc-500">Loading...</div>}>
+            <Suspense fallback={<div className="p-8 flex justify-center text-muted-foreground">Loading...</div>}>
               <Switch>
                 <Route path="/admin/editor/:slug?">
                   <AdminEditor />
@@ -155,7 +153,7 @@ export function App() {
       {/* ======== 3. 后台登录页 (无外壳独立渲染) ======== */}
       {isLoginPage && (
         <main className="mx-auto w-full max-w-[1440px] px-[20px] lg:px-[40px] flex-1 flex flex-col">
-           <Suspense fallback={<div className="p-8 flex justify-center text-zinc-500">Loading...</div>}>
+           <Suspense fallback={<div className="p-8 flex justify-center text-muted-foreground">Loading...</div>}>
             <Switch>
               <Route path="/admin/login" component={AdminLogin} />
             </Switch>
@@ -167,7 +165,7 @@ export function App() {
       {isAdminArea && (
         <ProtectedRoute>
           <AdminLayout>
-            <Suspense fallback={<div className="p-8 flex justify-center text-zinc-500">Loading...</div>}>
+            <Suspense fallback={<div className="p-8 flex justify-center text-muted-foreground">Loading...</div>}>
               <Switch>
                 <Route path="/admin/settings"><AdminSettings /></Route>
                 <Route path="/admin/backup"><AdminBackup /></Route>
@@ -178,6 +176,7 @@ export function App() {
                 <Route path="/admin/media"><AdminMedia /></Route>
                 <Route path="/admin/analytics"><AdminAnalytics /></Route>
                 <Route path="/admin/seo"><AdminSeo /></Route>
+                <Route path="/admin/access"><AdminAccess /></Route>
                 <Route path="/admin"><AdminDashboard /></Route>
                 <Route><NotFoundPage /></Route>
               </Switch>

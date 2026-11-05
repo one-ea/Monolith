@@ -1,4 +1,15 @@
 // SEO 分析器：四维评分算法
+// 文本解析纯函数已迁移到 @monolith/seo-core（packages/seo-core），本文件只保留评分与聚合逻辑；
+// 对外导出接口不变（下方 re-export 保持原公共面）
+import {
+  countImagesWithoutAlt,
+  estimateReadingMinutes,
+  extractHeadingLevels,
+  extractKeywords,
+  stripMarkdown,
+} from "@monolith/seo-core";
+
+export { countImagesWithoutAlt, estimateReadingMinutes, extractHeadingLevels, extractKeywords, stripMarkdown };
 
 export interface SeoCheckResult {
   id: string;
@@ -39,78 +50,6 @@ export interface AnalyzeInput {
   published: boolean;
   createdAt: string;
   updatedAt: string;
-}
-
-const CN_STOPWORDS = new Set([
-  "的", "了", "和", "是", "在", "我", "有", "也", "就", "都", "而", "及", "与", "或", "一个", "没有",
-  "这", "那", "你", "他", "她", "它", "我们", "你们", "他们", "自己", "什么", "怎么", "可以", "因为",
-  "所以", "但是", "如果", "虽然", "然后", "因此", "已经", "正在", "可能", "应该", "需要", "对于",
-  "通过", "进行", "使用", "包括", "其他", "这个", "那个", "这样", "那样", "一些", "比如", "例如",
-  "this", "that", "with", "from", "have", "been", "were", "will", "would", "could", "should",
-  "the", "and", "for", "are", "but", "not", "you", "all", "can", "had", "her", "was", "one",
-  "our", "out", "day", "get", "has", "him", "his", "how", "man", "new", "now", "old", "see",
-  "two", "way", "who", "boy", "did", "its", "let", "put", "say", "she", "too", "use",
-]);
-
-/** 去除 Markdown 标记，仅保留可读文本 */
-export function stripMarkdown(md: string): string {
-  return md
-    .replace(/```[\s\S]*?```/g, " ")
-    .replace(/`[^`]*`/g, " ")
-    .replace(/!\[[^\]]*\]\([^)]*\)/g, " ")
-    .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
-    .replace(/^#{1,6}\s+/gm, "")
-    .replace(/[*_~>]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-/** 中英混合分词 + 停用词过滤 */
-export function extractKeywords(text: string): Map<string, number> {
-  const counter = new Map<string, number>();
-  const cleaned = stripMarkdown(text).toLowerCase();
-  const englishWords = cleaned.match(/[a-z]{3,}/g) || [];
-  for (const w of englishWords) {
-    if (CN_STOPWORDS.has(w)) continue;
-    counter.set(w, (counter.get(w) || 0) + 1);
-  }
-  const cnText = cleaned.replace(/[a-z0-9\s\p{P}]/gu, "");
-  for (let i = 0; i < cnText.length - 1; i++) {
-    const bigram = cnText.slice(i, i + 2);
-    if (CN_STOPWORDS.has(bigram)) continue;
-    counter.set(bigram, (counter.get(bigram) || 0) + 1);
-  }
-  return counter;
-}
-
-/** 估算阅读时间（分钟） */
-export function estimateReadingMinutes(text: string): number {
-  const cn = (text.match(/[\u4e00-\u9fa5]/g) || []).length;
-  const en = (text.match(/[a-zA-Z]+/g) || []).length;
-  return Math.max(1, Math.round((cn / 400) + (en / 250)));
-}
-
-/** H1/H2/H3 标题层级抽取 */
-export function extractHeadingLevels(md: string): { h1: number; h2: number; h3: number } {
-  const lines = md.split(/\r?\n/);
-  let h1 = 0, h2 = 0, h3 = 0;
-  for (const line of lines) {
-    if (/^#\s+/.test(line)) h1++;
-    else if (/^##\s+/.test(line)) h2++;
-    else if (/^###\s+/.test(line)) h3++;
-  }
-  return { h1, h2, h3 };
-}
-
-/** 检测图片 alt 缺失 */
-export function countImagesWithoutAlt(md: string): { total: number; missing: number } {
-  const imgs = md.match(/!\[([^\]]*)\]\([^)]+\)/g) || [];
-  let missing = 0;
-  for (const img of imgs) {
-    const m = img.match(/!\[([^\]]*)\]/);
-    if (!m || !m[1].trim()) missing++;
-  }
-  return { total: imgs.length, missing };
 }
 
 /** 评估单篇文章的 SEO 健康度，返回 13 项检查结果 */

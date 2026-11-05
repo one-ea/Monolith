@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, primaryKey, uniqueIndex, index } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, primaryKey, uniqueIndex, index, type AnySQLiteColumn } from "drizzle-orm/sqlite-core";
 import { sql } from "drizzle-orm";
 
 /* ── 文章表 ────────────────────────────────── */
@@ -50,6 +50,43 @@ export const postTags = sqliteTable(
   })
 );
 
+/* ── 访问控制 ─────────────────────────────── */
+// 统一存放文章、标签、分类、系列的访问密码哈希。
+// kind = post/tag/category/series；name 为 slug / 标签名 / 分类名 / 系列 slug。
+export const contentLocks = sqliteTable(
+  "content_locks",
+  {
+    kind: text("kind").notNull(),
+    name: text("name").notNull(),
+    passwordHash: text("password_hash").notNull(),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`(datetime('now'))`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`(datetime('now'))`),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.kind, table.name] }),
+    kindIdx: index("content_locks_kind_idx").on(table.kind),
+  })
+);
+
+/* ── 解锁失败计数（跨 isolate 的限流兜底） ── */
+export const unlockAttempts = sqliteTable(
+  "unlock_attempts",
+  {
+    key: text("key").notNull(),
+    windowStart: integer("window_start").notNull(),
+    count: integer("count").notNull().default(0),
+    updatedAt: integer("updated_at").notNull(),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.key, table.windowStart] }),
+    windowIdx: index("unlock_attempts_window_idx").on(table.windowStart),
+  })
+);
+
 /* ── 独立页表 ──────────────────────────────── */
 export const pages = sqliteTable("pages", {
   id: integer("id").primaryKey({ autoIncrement: true }),
@@ -79,12 +116,15 @@ export const comments = sqliteTable(
     authorEmail: text("author_email").notNull().default(""),
     content: text("content").notNull(),
     approved: integer("approved", { mode: "boolean" }).notNull().default(false),
+    parentId: integer("parent_id").references((): AnySQLiteColumn => comments.id, { onDelete: "cascade" }),
+    isAdmin: integer("is_admin", { mode: "boolean" }).notNull().default(false),
     createdAt: text("created_at")
       .notNull()
       .default(sql`(datetime('now'))`),
   },
   (table) => ({
     postIdIdx: index("comments_post_id_idx").on(table.postId),
+    parentIdIdx: index("comments_parent_id_idx").on(table.parentId),
   })
 );
 

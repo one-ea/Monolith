@@ -4,7 +4,8 @@
   "private": true,
   "workspaces": [
     "client",
-    "server"
+    "server",
+    "packages/*"
   ],
   "scripts": {
     "setup:local": "npm ci",
@@ -20,12 +21,15 @@
     "db:reconcile:local": "npm run db:reconcile:d1:local",
     "db:reconcile:d1:local": "node scripts/reconcile-d1-schema.mjs --local",
     "db:reconcile:d1:remote": "node scripts/reconcile-d1-schema.mjs --remote",
+    "db:repair:d1:local": "node scripts/repair-d1-migrations.mjs --local",
+    "db:repair:d1:remote": "node scripts/repair-d1-migrations.mjs --remote",
     "db:migrate:local": "npm -w monolith-server run db:migrate:local",
     "db:migrate:remote": "npm -w monolith-server run db:migrate:remote",
     "db:seed:local": "npm -w monolith-server run db:seed:local",
     "db:seed:test-posts:local": "npm -w monolith-server run db:seed:test-posts:local",
     "check": "npm --workspaces run check",
-    "lint": "npm --workspaces run lint"
+    "lint": "npm --workspaces run lint",
+    "test": "vitest run"
   },
   "engines": {
     "node": ">=22"
@@ -33,25 +37,27 @@
   "devDependencies": {
     "brace-expansion": "5.0.12",
     "concurrently": "^9.2.4",
-    "undici": "7.30.1"
+    "serialize-javascript": "7.1.4",
+    "undici": "7.30.1",
+    "vitest": "^5.0.2"
   },
   "overrides": {
     "@babel/core": "^7.29.6",
     "@babel/plugin-transform-modules-systemjs": "7.29.4",
     "body-parser": "2.3.0",
     "brace-expansion": "5.0.12",
-    "dompurify": "3.4.14",
+    "dompurify": "3.4.17",
     "esbuild": "0.28.1",
     "express-rate-limit": "8.5.2",
     "fast-uri": "3.1.9",
     "fast-xml-builder": "1.1.7",
     "ip-address": "10.7.2",
     "monaco-editor": {
-      "dompurify": "3.4.14"
+      "dompurify": "3.4.17"
     },
     "serialize-javascript": "7.1.4",
     "qs": "6.17.1",
-    "shell-quote": "1.9.0",
+    "shell-quote": "1.12.0",
     "undici": "7.30.1",
     "ws": "8.21.0"
   }

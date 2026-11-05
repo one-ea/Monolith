@@ -65,7 +65,7 @@ export function AdminLogin() {
     let cancelled = false;
 
     const siteTheme = (): "light" | "dark" =>
-      document.documentElement.getAttribute("data-theme") === "light" ? "light" : "dark";
+      document.documentElement.getAttribute("data-mode") === "light" ? "light" : "dark";
 
     const renderWidget = () => {
       if (cancelled || !widgetRef.current || !window.turnstile) return;
@@ -87,7 +87,7 @@ export function AdminLogin() {
       if (cancelled) return;
       renderWidget();
       observer = new MutationObserver(renderWidget);
-      observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+      observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-mode"] });
     };
 
     if (window.turnstile) {
@@ -137,7 +137,7 @@ export function AdminLogin() {
     <div className="flex flex-1 items-center justify-center px-[16px] py-[64px] sm:py-[80px]">
       <div className="w-full max-w-[280px] rounded-md border border-border/30 bg-background/35 p-[24px] sm:max-w-[360px] sm:p-[32px]">
         <div className="mb-[24px] text-center">
-          <div className="mx-auto mb-[16px] h-[40px] w-[20px] rounded-[3px] bg-gradient-to-b from-foreground/80 to-foreground/40" />
+          <img src="/monolith-logo.svg" alt="" aria-hidden="true" className="mx-auto mb-[16px] h-[48px] w-[48px] object-contain" />
           <h1 className="text-[20px] font-semibold tracking-[-0.01em]">管理后台</h1>
           <p className="mt-[8px] text-[13px] text-muted-foreground">输入密码以进入管理界面</p>
         </div>

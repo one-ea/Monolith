@@ -181,16 +181,19 @@ renderer.code = ({ text, lang }: { text: string; lang?: string }) => {
   }
 };
 
+function normalizeImageHref(href: string): string {
+  const trimmed = href.trim();
+  if (/^\/\//.test(trimmed) || /^[a-z][a-z\d+.-]*:/i.test(trimmed)) return trimmed;
+  if (trimmed.startsWith("/uploads/")) return `/cdn${trimmed}`;
+  if (trimmed.startsWith("uploads/")) return `/cdn/${trimmed}`;
+  return trimmed;
+}
+
 // 图片/视频：懒加载 + 圆角 + 视频解析
 renderer.image = ({ href, title, text }: { href: string; title?: string | null; text: string }) => {
   const titleAttr = title ? ` title="${escapeHtml(title)}"` : "";
 
-  let normalizedHref = href;
-  try {
-    normalizedHref = new URL(href, "https://monolith.local").toString();
-  } catch {
-    normalizedHref = href;
-  }
+  const normalizedHref = normalizeImageHref(href);
 
   let mediaExtension = "";
   try {

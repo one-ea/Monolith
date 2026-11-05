@@ -5,7 +5,8 @@ import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { SeoHead } from "@/components/seo-head";
 import { TableOfContents, ReadingProgressBar } from "@/components/toc";
-import { fetchPost, fetchSeriesPosts, type Post, type SeriesPost } from "@/lib/api";
+import { fetchPost, fetchSeriesPosts, LockedPostError, ApiError, type LockInfo, type Post, type SeriesPost } from "@/lib/api";
+import { UnlockGate } from "@/components/unlock-gate";
 import { extractHeadings, renderMarkdown, type TocHeading } from "@/lib/markdown";
 import { formatSiteDate } from "@/lib/date-format";
 import { useSiteSettings } from "@/lib/site-settings";
@@ -55,6 +56,9 @@ export function DocsPage() {
   const [htmlContent, setHtmlContent] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [seriesLocked, setSeriesLocked] = useState(false);
+  const [lockedLocks, setLockedLocks] = useState<LockInfo[]>([]);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     if (!params.seriesSlug) return;
@@ -62,6 +66,8 @@ export function DocsPage() {
     setLoading(true);
     setError("");
     setPost(null);
+    setSeriesLocked(false);
+    setLockedLocks([]);
 
     fetchSeriesPosts(params.seriesSlug)
       .then(async (items) => {
@@ -69,14 +75,24 @@ export function DocsPage() {
         setSeriesPosts(items);
         const currentSlug = params.slug ?? items[0]?.slug;
         if (!currentSlug) throw new Error("文档系列不存在");
-        if (params.slug && !items.some((item) => item.slug === params.slug)) {
+        // 系列列表会过滤掉单篇 / 标签 / 分类锁定的文章；不能因为不在列表里就判定 404，
+        // 否则已解锁的受保护文章无法在 docs 模式打开。文章归属由 seriesSlug 校验。
+        const currentPost = await fetchPost(currentSlug);
+        if ((currentPost.seriesSlug || "") !== params.seriesSlug) {
           throw new Error("文章不存在");
         }
-        const currentPost = await fetchPost(currentSlug);
         if (!cancelled) setPost(currentPost);
       })
       .catch((cause: unknown) => {
         if (cancelled) return;
+        if (cause instanceof ApiError && cause.code === "series_locked") {
+          setSeriesLocked(true);
+          return;
+        }
+        if (cause instanceof LockedPostError) {
+          setLockedLocks(cause.locks);
+          return;
+        }
         if (
           cause instanceof Error
           && (cause.message === "文档系列不存在" || cause.message === "文章不存在")
@@ -93,7 +109,7 @@ export function DocsPage() {
     return () => {
       cancelled = true;
     };
-  }, [params.seriesSlug, params.slug]);
+  }, [params.seriesSlug, params.slug, reloadKey]);
 
   useEffect(() => {
     if (!post) {
@@ -127,14 +143,51 @@ export function DocsPage() {
     );
   }
 
+  if (!loading && seriesLocked && params.seriesSlug) {
+    return (
+      <>
+        <SeoHead title="受保护的文档系列" description="这个文档系列需要密码才能阅读。" url={`/docs/${params.seriesSlug}`} noindex />
+        <UnlockGate
+          seriesSlug={params.seriesSlug}
+          locks={[{ kind: "series", key: params.seriesSlug }]}
+          title="受保护的文档系列"
+          onUnlocked={() => setReloadKey((value) => value + 1)}
+        />
+      </>
+    );
+  }
+
+  if (!loading && lockedLocks.length > 0) {
+    const lockedSlug = params.slug ?? seriesPosts[0]?.slug;
+    if (lockedSlug) {
+      return (
+        <>
+          <SeoHead title="受保护的文章" description="这篇文章需要密码才能阅读。" url={`/docs/${params.seriesSlug}/${lockedSlug}`} noindex />
+          <UnlockGate
+            slug={lockedSlug}
+            locks={lockedLocks}
+            onUnlocked={() => setReloadKey((value) => value + 1)}
+          />
+        </>
+      );
+    }
+  }
+
   if (error || !post) {
     return (
-      <div className="mx-auto flex w-full max-w-[720px] flex-1 items-center justify-center px-[20px] py-[80px] text-center">
-        <div>
-          <p className="text-[18px] font-medium text-foreground/80">{error || "文档未找到"}</p>
-          <Link href="/" className="mt-[14px] inline-flex min-h-[44px] items-center rounded-md border border-border/25 px-[14px] text-[13px] text-muted-foreground transition-colors hover:bg-accent/30 hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">返回首页</Link>
+      <>
+        <SeoHead
+          title={error || "文档未找到"}
+          url={params.seriesSlug ? `/docs/${params.seriesSlug}` : undefined}
+          noindex
+        />
+        <div className="mx-auto flex w-full max-w-[720px] flex-1 items-center justify-center px-[20px] py-[80px] text-center">
+          <div>
+            <p className="text-[18px] font-medium text-foreground/80">{error || "文档未找到"}</p>
+            <Link href="/" className="mt-[14px] inline-flex min-h-[44px] items-center rounded-md border border-border/25 px-[14px] text-[13px] text-muted-foreground transition-colors hover:bg-accent/30 hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">返回首页</Link>
+          </div>
         </div>
-      </div>
+      </>
     );
   }
 

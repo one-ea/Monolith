@@ -1,0 +1,250 @@
+/* ═══════════════════════════════════════════════════════════════════
+   Monolith Apple Theme（Phase 5）
+   设计方向：Apple HIG · 现代 Apple UI / Liquid Glass（克制材质）
+   基调：近黑分层灰阶（暗）/ systemGray6 白卡（亮）· iOS 蓝 primary ·
+   系统字体栈 · 连续平滑动效 · 玻璃只用于 header / sheet / overlay 层。
+   本主题于 2026-09-28 接替已下线的 data-style="fluid" 液态玻璃风格轴，
+   承担站点的玻璃质感角色。
+   特异性说明：块内使用 [data-mode] 成对选择器（0,3,0），压过 globals.css
+   中 Primer 明暗块（0,2,0）。
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* ── Apple · Dark（默认）────────────────────────────────────────── */
+:root[data-theme="apple"],
+:root[data-theme="apple"][data-mode="dark"] {
+  /* 基底/表面层级：background → surface → elevated → floating */
+  --background: oklch(0.16 0.004 285);
+  --background-secondary: oklch(0.19 0.004 285);
+  --surface: oklch(0.22 0.005 285);
+  --surface-secondary: oklch(0.19 0.005 285);
+  --surface-elevated: oklch(0.26 0.005 285);
+  --surface-container-lowest: oklch(0.14 0.004 285);
+  --surface-container-low: oklch(0.195 0.005 285);
+  --surface-container: oklch(0.22 0.005 285);
+  --surface-container-high: oklch(0.25 0.005 285);
+  --surface-container-highest: oklch(0.285 0.005 285);
+
+  /* 前景 */
+  --foreground: oklch(0.97 0.003 285);
+  --foreground-secondary: oklch(0.74 0.008 285);
+  --foreground-tertiary: oklch(0.58 0.008 285);
+  --foreground-disabled: oklch(0.42 0.006 285);
+
+  /* 品牌 */
+  --primary: oklch(0.69 0.15 255);
+  --primary-foreground: oklch(0.99 0.002 285);
+  --primary-container: oklch(0.69 0.15 255 / 16%);
+  --primary-container-foreground: oklch(0.80 0.12 255);
+  --secondary: oklch(0.30 0.008 285);
+  --secondary-foreground: oklch(0.96 0.003 285);
+  --secondary-container: oklch(0.28 0.008 285);
+  --secondary-container-foreground: oklch(0.94 0.003 285);
+  --accent: oklch(0.31 0.008 285);
+  --accent-foreground: oklch(0.96 0.003 285);
+  --tertiary: oklch(0.80 0.11 300);
+  --tertiary-container: oklch(0.80 0.11 300 / 14%);
+  --tertiary-container-foreground: oklch(0.84 0.09 300);
+
+  /* 状态语义 */
+  --success: oklch(0.74 0.16 150);
+  --success-foreground: oklch(0.16 0.03 150);
+  --success-container: oklch(0.74 0.16 150 / 14%);
+  --warning: oklch(0.82 0.14 85);
+  --warning-foreground: oklch(0.2 0.04 85);
+  --warning-container: oklch(0.82 0.14 85 / 14%);
+  --error: oklch(0.67 0.19 25);
+  --error-foreground: oklch(0.99 0.005 25);
+  --error-container: oklch(0.67 0.19 25 / 14%);
+  --info: oklch(0.70 0.14 250);
+  --info-foreground: oklch(0.16 0.03 250);
+  --info-container: oklch(0.70 0.14 250 / 14%);
+
+  /* 边框/焦点 */
+  --border: oklch(1 0 0 / 13%);
+  --border-subtle: oklch(1 0 0 / 7%);
+  --border-strong: oklch(1 0 0 / 26%);
+  --focus-ring: var(--primary);
+
+  /* 字体：Apple 优先系统栈（SF Pro / 苹方），不新增运行时字体下载 */
+  --font-ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", "Work Sans", "Inter", "Segoe UI", Roboto, "Noto Sans SC", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  --font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", "Work Sans", "Inter", "Segoe UI", Roboto, "Noto Sans SC", "PingFang SC", sans-serif;
+  --font-code: ui-monospace, "SF Mono", "SFMono-Regular", "Cascadia Code", "Fira Code", Consolas, monospace;
+
+  /* 排版角色：紧凑精致层级，避免过度粗体 */
+  --type-display-weight: 680;
+  --type-headline-weight: 680;
+  --type-title-lg-weight: 620;
+
+  /* 动效：平滑连续、无 bounce */
+  --motion-normal: 300ms;
+  --ease-standard: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-emphasized: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-decelerate: cubic-bezier(0.33, 1, 0.68, 1);
+  --ease-accelerate: cubic-bezier(0.32, 0, 0.67, 0);
+  --spring-soft: cubic-bezier(0.25, 1, 0.5, 1);
+  --spring-medium: cubic-bezier(0.22, 1, 0.36, 1);
+  --spring-bouncy: cubic-bezier(0.34, 1.12, 0.64, 1);
+
+  /* 状态层：克制反馈 */
+  --state-hover: 0.05;
+  --state-pressed: 0.09;
+
+  /* 结构 */
+  --radius: 0.625rem;
+  --focus-ring-width: 2px;
+  --chart-1: oklch(0.69 0.15 255);
+  --chart-2: oklch(0.75 0.17 145);
+  --chart-3: oklch(0.72 0.12 300);
+  --chart-4: oklch(0.80 0.14 70);
+  --chart-5: oklch(0.74 0.13 350);
+
+  /* ── shadcn 存量变量桥接（全部现有组件/页面零改动换肤）── */
+  --card: var(--surface);
+  --card-foreground: var(--foreground);
+  --popover: var(--surface-elevated);
+  --popover-foreground: var(--foreground);
+  --muted: var(--surface-container);
+  --muted-foreground: var(--foreground-secondary);
+  --destructive: var(--error);
+  --input: var(--border-strong);
+  --ring: var(--focus-ring);
+  --sidebar: var(--background-secondary);
+  --sidebar-foreground: var(--foreground);
+  --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: var(--primary-foreground);
+  --sidebar-accent: var(--surface-container);
+  --sidebar-accent-foreground: var(--foreground);
+  --sidebar-border: var(--border-subtle);
+  --sidebar-ring: var(--focus-ring);
+  --glass-border: oklch(1 0 0 / 16%);
+
+  /* ── 领域色彩主题化（iOS 中性灰 + 蓝）── */
+  --prose-link: var(--primary);
+  --prose-link-hover: oklch(0.78 0.13 255);
+  --prose-link-underline: oklch(0.69 0.15 255 / 36%);
+  --prose-link-underline-hover: oklch(0.78 0.13 255 / 60%);
+  --prose-quote-border: oklch(0.69 0.15 255 / 45%);
+  --code-bg: oklch(0.18 0.004 285);
+  --code-header-bg: oklch(0.16 0.004 285);
+  --code-title-bg: oklch(0.165 0.004 285);
+  --toc-active-border: var(--primary);
+  --toc-active-text: oklch(0.86 0.05 255);
+  --series-title: oklch(0.80 0.10 255);
+  --series-current-text: oklch(0.80 0.10 255);
+  --series-current-border: oklch(0.69 0.15 255);
+  --reaction-active-text: oklch(0.80 0.10 255);
+
+  color-scheme: dark;
+}
+
+/* ── Apple · Light ───────────────────────────────────────────────── */
+:root[data-theme="apple"][data-mode="light"] {
+  --background: oklch(0.972 0.003 285);
+  --background-secondary: oklch(0.95 0.003 285);
+  --surface: oklch(1 0 0);
+  --surface-secondary: oklch(0.962 0.003 285);
+  --surface-elevated: oklch(1 0 0);
+  --surface-container-lowest: oklch(0.995 0.002 285);
+  --surface-container-low: oklch(0.985 0.002 285);
+  --surface-container: oklch(0.965 0.003 285);
+  --surface-container-high: oklch(0.945 0.003 285);
+  --surface-container-highest: oklch(0.918 0.004 285);
+
+  --foreground: oklch(0.23 0.01 285);
+  --foreground-secondary: oklch(0.52 0.012 285);
+  --foreground-tertiary: oklch(0.63 0.01 285);
+  --foreground-disabled: oklch(0.74 0.008 285);
+
+  --primary: oklch(0.58 0.176 255);
+  --primary-foreground: oklch(0.99 0.002 285);
+  --primary-container: oklch(0.58 0.176 255 / 12%);
+  --primary-container-foreground: oklch(0.48 0.16 255);
+  --secondary: oklch(0.94 0.004 285);
+  --secondary-foreground: oklch(0.23 0.01 285);
+  --secondary-container: oklch(0.93 0.004 285);
+  --secondary-container-foreground: oklch(0.30 0.01 285);
+  --accent: oklch(0.93 0.004 285);
+  --accent-foreground: oklch(0.23 0.01 285);
+  --tertiary: oklch(0.52 0.14 300);
+  --tertiary-container: oklch(0.52 0.14 300 / 10%);
+  --tertiary-container-foreground: oklch(0.44 0.13 300);
+
+  --success: oklch(0.55 0.16 150);
+  --success-foreground: oklch(0.99 0.005 150);
+  --success-container: oklch(0.55 0.16 150 / 12%);
+  --warning: oklch(0.72 0.15 75);
+  --warning-foreground: oklch(0.2 0.04 75);
+  --warning-container: oklch(0.72 0.15 75 / 12%);
+  --error: oklch(0.58 0.21 25);
+  --error-foreground: oklch(0.99 0.005 25);
+  --error-container: oklch(0.58 0.21 25 / 12%);
+  --info: oklch(0.55 0.15 250);
+  --info-foreground: oklch(0.99 0.005 250);
+  --info-container: oklch(0.55 0.15 250 / 12%);
+
+  --border: oklch(0 0 0 / 12%);
+  --border-subtle: oklch(0 0 0 / 7%);
+  --border-strong: oklch(0 0 0 / 26%);
+  --focus-ring: var(--primary);
+
+  --chart-1: oklch(0.62 0.17 255);
+  --chart-2: oklch(0.58 0.15 150);
+  --chart-3: oklch(0.52 0.14 300);
+  --chart-4: oklch(0.70 0.14 70);
+  --chart-5: oklch(0.62 0.15 350);
+
+  --glass-border: oklch(0 0 0 / 10%);
+
+  --prose-link: var(--primary);
+  --prose-link-hover: oklch(0.50 0.17 255);
+  --prose-link-underline: oklch(0.62 0.17 255 / 40%);
+  --prose-link-underline-hover: oklch(0.50 0.17 255 / 65%);
+  --prose-quote-border: oklch(0.62 0.17 255 / 42%);
+  --code-bg: oklch(0.97 0.003 285);
+  --code-header-bg: oklch(0.95 0.003 285);
+  --code-title-bg: oklch(0.955 0.003 285);
+  --toc-active-border: oklch(0 0 0 / 40%);
+  --toc-active-text: oklch(0.15 0.01 285);
+  --series-title: oklch(0.50 0.16 255);
+  --series-current-text: oklch(0.50 0.16 255);
+  --series-current-border: oklch(0.62 0.17 255);
+  --reaction-active-text: oklch(0.50 0.16 255);
+
+  color-scheme: light;
+}
+
+/* ── Apple 组件层 polish（无组件复制，纯属性选择器换肤）────────── */
+
+/* Header：Liquid Glass 材质（唯一允许的常驻玻璃层之一）+ 发丝分割线 */
+[data-theme="apple"] .app-header {
+  background: var(--material-tint);
+  backdrop-filter: blur(var(--material-blur)) saturate(var(--material-saturate));
+  -webkit-backdrop-filter: blur(var(--material-blur)) saturate(var(--material-saturate));
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+/* 导航选中态：内容优先，仅细下划线指示（沿用现有结构） */
+[data-theme="apple"] .app-header nav a {
+  transition: color var(--motion-fast) var(--ease-standard);
+}
+
+/* Button 按压：iOS 式整体轻微缩放 + 平滑阻尼（覆盖 active:translate-y-px） */
+[data-theme="apple"] [data-slot="button"] {
+  transition-property: color, background-color, border-color, opacity, transform, box-shadow;
+  transition-duration: var(--motion-fast);
+  transition-timing-function: var(--ease-standard);
+}
+[data-theme="apple"] [data-slot="button"]:active:not(:disabled) {
+  transform: scale(0.97);
+  transition-duration: 80ms;
+}
+
+/* Sheet / Dialog：大圆角容器 + 顶部玻璃，内容面不透明 */
+[data-theme="apple"] [data-slot="sheet-content"][data-side="right"] { border-radius: 20px 0 0 20px; }
+[data-theme="apple"] [data-slot="sheet-content"][data-side="left"] { border-radius: 0 20px 20px 0; }
+[data-theme="apple"] [data-slot="sheet-content"][data-side="bottom"],
+[data-theme="apple"] [data-slot="dialog-content"] { border-radius: 20px 20px 0 0; }
+[data-theme="apple"] [data-slot="dialog-content"] { border-radius: 20px; }
+
+/* 管理侧栏：Apple 侧栏与内容面同层，激活项保持细指示 */
+[data-theme="apple"] aside { background: var(--material-tint); }
