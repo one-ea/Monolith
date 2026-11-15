@@ -77,3 +77,6 @@ tests/output/
 # ✅ SECURITY.md          — 安全政策
 # ✅ PRIVACY.md           — 隐私政策
 # ✅ README.md / LICENSE  — 项目门面
+
+# Claude Code 本机技能与运行时数据
+.claude/
