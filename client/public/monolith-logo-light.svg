@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">Monolith</title>
+  <desc id="desc">A geometric M formed by monolithic pillars with a blue edge core.</desc>
+  <rect width="512" height="512" rx="112" fill="#f6f8fa"/>
+  <path fill="#24292f" d="M112 128h72l72 92 72-92h72v256h-72V242l-72 92-72-92v142h-72z"/>
+  <rect x="248" y="176" width="16" height="160" rx="8" fill="#0969da"/>
+</svg>

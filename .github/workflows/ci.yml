@@ -55,6 +55,19 @@ jobs:
         working-directory: client
         run: npx tsc --noEmit
 
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Vitest
+        run: npm test
+
   build:
     name: Build
     runs-on: ubuntu-latest

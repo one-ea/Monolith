@@ -1,0 +1,137 @@
+/* ═══════════════════════════════════════════════════════════════════
+   Monolith Design System · Base Tokens（Phase 2）
+   职责：主题不变量（排版刻度、动效、海拔、材质、状态层）+ 无主题兜底值。
+   语义色的明暗取值由 apple.css / pixel.css（data-theme）与 data-mode 控制。
+   消费方式：CSS 变量直接引用，或经 globals.css `@theme inline` 暴露为
+   Tailwind 工具类（bg-surface / text-title-lg / shadow-e2 / ease-standard…）。
+   ═══════════════════════════════════════════════════════════════════ */
+
+:root {
+  /* ── 字体族（主题可覆盖：--font-ui / --font-display / --font-mono）── */
+  --font-ui: "Work Sans", -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, "Noto Sans SC", sans-serif;
+  --font-display: "Space Grotesk", var(--font-ui);
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Code", "Fira Code", Consolas, monospace;
+  /* font-mono 工具类消费：基准保留 Space Grotesk（指标/数据字体既定规则），
+     设计语言主题将其换为 SF Mono / Roboto Mono */
+  --font-code: "Space Grotesk", ui-monospace, "SF Mono", "Cascadia Code", Consolas, monospace;
+
+  /* ── Typography Scale（13 角色；size/lh/tracking/weight 分变量，主题可整体改写）──
+     中文字间距恒为 0；负向 tracking 仅用于 display / headline 英文大标题角色。 */
+  --type-display-size: 48px;   --type-display-lh: 1.08; --type-display-tracking: -0.02em;  --type-display-weight: 700;
+  --type-headline-size: 30px;  --type-headline-lh: 1.2; --type-headline-tracking: -0.015em; --type-headline-weight: 700;
+  --type-title-lg-size: 20px;  --type-title-lg-lh: 1.35; --type-title-lg-tracking: 0;  --type-title-lg-weight: 600;
+  --type-title-md-size: 17px;  --type-title-md-lh: 1.4;  --type-title-md-tracking: 0;  --type-title-md-weight: 600;
+  --type-title-sm-size: 15px;  --type-title-sm-lh: 1.45; --type-title-sm-tracking: 0;  --type-title-sm-weight: 600;
+  --type-body-lg-size: 16px;   --type-body-lg-lh: 1.75;  --type-body-lg-tracking: 0;  --type-body-lg-weight: 400;
+  --type-body-md-size: 14px;   --type-body-md-lh: 1.65;  --type-body-md-tracking: 0;  --type-body-md-weight: 400;
+  --type-body-sm-size: 13px;   --type-body-sm-lh: 1.6;   --type-body-sm-tracking: 0;  --type-body-sm-weight: 400;
+  --type-label-lg-size: 14px;  --type-label-lg-lh: 1.4;  --type-label-lg-tracking: 0;  --type-label-lg-weight: 500;
+  --type-label-md-size: 12px;  --type-label-md-lh: 1.4;  --type-label-md-tracking: 0;  --type-label-md-weight: 500;
+  --type-label-sm-size: 11px;  --type-label-sm-lh: 1.4;  --type-label-sm-tracking: 0;  --type-label-sm-weight: 500;
+  --type-caption-size: 12px;   --type-caption-lh: 1.5;   --type-caption-tracking: 0;  --type-caption-weight: 400;
+  --type-code-size: 13px;      --type-code-lh: 1.7;      --type-code-tracking: 0;     --type-code-weight: 400;
+
+  /* ── Motion（duration / easing / spring 曲线族；主题覆盖见 apple/pixel）── */
+  --motion-fast: 150ms;
+  --motion-normal: 250ms;
+  --motion-slow: 400ms;
+  --motion-slower: 600ms;
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-emphasized: cubic-bezier(0.2, 0, 0, 1);
+  --ease-decelerate: cubic-bezier(0.05, 0.7, 0.1, 1);
+  --ease-accelerate: cubic-bezier(0.3, 0, 0.8, 0.15);
+  --spring-soft: cubic-bezier(0.3, 1.2, 0.5, 1);
+  --spring-medium: cubic-bezier(0.34, 1.4, 0.64, 1);
+  --spring-bouncy: cubic-bezier(0.5, 1.7, 0.5, 1);
+
+  /* ── Elevation（暗色基准；亮色主题覆盖）── */
+  --shadow-e1: 0 1px 2px oklch(0 0 0 / 32%), 0 1px 3px oklch(0 0 0 / 20%);
+  --shadow-e2: 0 4px 12px -4px oklch(0 0 0 / 38%), 0 2px 4px -2px oklch(0 0 0 / 24%);
+  --shadow-e3: 0 16px 40px -12px oklch(0 0 0 / 48%), 0 4px 12px -4px oklch(0 0 0 / 30%);
+  --shadow-glass: 0 8px 32px -8px oklch(0 0 0 / 36%);
+
+  /* ── Material / Blur（Liquid Glass 仅限 header / sheet / overlay / floating 层）── */
+  --material-blur: 24px;
+  --material-saturate: 1.5;
+  --material-tint: color-mix(in oklch, var(--surface-elevated, var(--card)) 72%, transparent);
+  --material-tint-strong: color-mix(in oklch, var(--surface-elevated, var(--card)) 88%, transparent);
+
+  /* ── State Layer（交互态叠加透明度；Pixel 反馈更强，Apple 更克制）── */
+  --state-hover: 0.06;
+  --state-pressed: 0.10;
+  --state-dragged: 0.16;
+
+  /* ── 组件结构（主题可覆盖）── */
+  --focus-ring-width: 2px;
+  --radius-pill: 999px;
+
+  /* ── 语义色兜底（无 data-theme 时按现网 GitHub Primer 暗色呈现；apple/pixel 全量覆盖）── */
+  --background-secondary: oklch(0.19 0.014 258);
+  --surface: oklch(0.21 0.016 258);
+  --surface-secondary: oklch(0.19 0.014 258);
+  --surface-elevated: oklch(0.235 0.016 258);
+  --surface-container-lowest: oklch(0.17 0.014 258);
+  --surface-container-low: oklch(0.195 0.015 258);
+  --surface-container: oklch(0.215 0.016 258);
+  --surface-container-high: oklch(0.245 0.016 258);
+  --surface-container-highest: oklch(0.28 0.016 258);
+  --foreground-secondary: oklch(0.72 0.01 250);
+  --foreground-tertiary: oklch(0.58 0.01 250);
+  --foreground-disabled: oklch(0.45 0.008 250);
+  --primary-container: oklch(0.62 0.15 250 / 18%);
+  --primary-container-foreground: oklch(0.78 0.12 250);
+  --secondary-container: oklch(0.215 0.016 258);
+  --secondary-container-foreground: oklch(0.92 0.008 250);
+  --tertiary: oklch(0.78 0.11 300);
+  --tertiary-container: oklch(0.65 0.13 300 / 16%);
+  --tertiary-container-foreground: oklch(0.82 0.09 300);
+  --success: oklch(0.72 0.15 150);
+  --success-foreground: oklch(0.16 0.03 150);
+  --success-container: oklch(0.68 0.15 150 / 14%);
+  --warning: oklch(0.80 0.14 85);
+  --warning-foreground: oklch(0.2 0.04 85);
+  --warning-container: oklch(0.76 0.14 85 / 14%);
+  --error: oklch(0.63 0.19 25);
+  --error-foreground: oklch(0.98 0.005 25);
+  --error-container: oklch(0.62 0.19 25 / 14%);
+  --info: oklch(0.68 0.14 250);
+  --info-foreground: oklch(0.16 0.03 250);
+  --info-container: oklch(0.62 0.15 250 / 14%);
+  --border-subtle: oklch(1 0 0 / 8%);
+  --border-strong: oklch(1 0 0 / 24%);
+  --focus-ring: oklch(0.67 0.14 250);
+  --glass-border: oklch(1 0 0 / 14%);
+
+  /* ── 领域变量主题化钩子（未覆盖时回退 Primer 基线，见 globals.css 各块）── */
+  --prose-link-accent: var(--ring);
+}
+
+/* 亮色兜底（data-mode=light 且无设计语言主题时的状态层/阴影/材质修正） */
+:root[data-mode="light"] {
+  --shadow-e1: 0 1px 2px oklch(0 0 0 / 8%), 0 1px 3px oklch(0 0 0 / 6%);
+  --shadow-e2: 0 4px 12px -4px oklch(0 0 0 / 14%), 0 2px 4px -2px oklch(0 0 0 / 8%);
+  --shadow-e3: 0 16px 40px -12px oklch(0 0 0 / 22%), 0 4px 12px -4px oklch(0 0 0 / 10%);
+  --shadow-glass: 0 8px 32px -8px oklch(0 0 0 / 16%);
+  --border-subtle: oklch(0 0 0 / 8%);
+  --border-strong: oklch(0 0 0 / 28%);
+  --glass-border: oklch(0 0 0 / 12%);
+}
+
+/* ── Liquid Glass 降级：无 backdrop-filter 环境退回不透明表面 ── */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .app-header,
+  [data-slot="sheet-content"],
+  [data-slot="dialog-content"],
+  [data-slot="popover-content"],
+  .glass-surface {
+    background: var(--surface-elevated, var(--card)) !important;
+  }
+}
+
+/* ── 主题切换过渡抑制：切主题瞬间不做颜色过渡，避免大面积重绘卡顿 ── */
+html.theme-transitioning *,
+html.theme-transitioning *::before,
+html.theme-transitioning *::after {
+  transition: none !important;
+  animation: none !important;
+}

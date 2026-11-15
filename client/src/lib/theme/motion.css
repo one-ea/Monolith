@@ -1,0 +1,51 @@
+/* ═══════════════════════════════════════════════════════════════════
+   Monolith Design System · Motion Utilities
+   基于 Motion Token 的过渡工具类；主题通过覆盖 --motion-* / --ease-* /
+   --spring-* 改变整体手感（Apple 平滑连续 / Pixel 弹簧表达）。
+   prefers-reduced-motion 的全局降级见 globals.css。
+   ═══════════════════════════════════════════════════════════════════ */
+
+.motion-transition {
+  transition-property: color, background-color, border-color, opacity, transform, box-shadow;
+  transition-duration: var(--motion-fast);
+  transition-timing-function: var(--ease-standard);
+}
+
+.motion-transition-normal {
+  transition-duration: var(--motion-normal);
+  transition-timing-function: var(--ease-emphasized);
+}
+
+.motion-transition-spring {
+  transition-duration: var(--motion-normal);
+  transition-timing-function: var(--spring-medium);
+}
+
+.motion-ease-spring {
+  transition-timing-function: var(--spring-medium);
+}
+
+.motion-ease-bouncy {
+  transition-timing-function: var(--spring-bouncy);
+}
+
+/* 状态层悬浮/按压（配合 --state-* token，Pixel 反馈更强） */
+.motion-state {
+  position: relative;
+}
+.motion-state::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: currentColor;
+  opacity: 0;
+  transition: opacity var(--motion-fast) var(--ease-standard);
+  pointer-events: none;
+}
+.motion-state:hover::after {
+  opacity: var(--state-hover);
+}
+.motion-state:active::after {
+  opacity: var(--state-pressed);
+}

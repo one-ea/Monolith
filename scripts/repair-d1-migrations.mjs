@@ -1,0 +1,211 @@
+import { readFileSync, readdirSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import process from "node:process";
+import { parseWranglerJson, runWrangler } from "./lib/wrangler-cli.mjs";
+
+const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const serverRoot = resolve(projectRoot, "server");
+const migrationsDir = resolve(serverRoot, "src", "migrations");
+
+function parseArgs(argv) {
+  const options = {
+    mode: "local",
+    database: "monolith-db",
+    dryRun: false,
+  };
+
+  for (let i = 0; i < argv.length; i += 1) {
+    const arg = argv[i];
+    if (arg === "--remote") {
+      options.mode = "remote";
+      continue;
+    }
+    if (arg === "--local") {
+      options.mode = "local";
+      continue;
+    }
+    if (arg === "--database") {
+      options.database = argv[i + 1] || options.database;
+      i += 1;
+      continue;
+    }
+    if (arg === "--dry-run") {
+      options.dryRun = true;
+    }
+  }
+
+  return options;
+}
+
+const options = parseArgs(process.argv.slice(2));
+const scope = options.mode === "remote" ? "--remote" : "--local";
+
+function execute(sql, { json = true } = {}) {
+  const args = [
+    "d1",
+    "execute",
+    options.database,
+    scope,
+    "--yes",
+    ...(json ? ["--json"] : []),
+    "--command",
+    sql,
+  ];
+  const result = runWrangler(args, { cwd: serverRoot, stdio: "pipe" });
+  if (!json) return result;
+
+  const parsed = parseWranglerJson(`${result.stdout || ""}\n${result.stderr || ""}`);
+  if (!parsed) {
+    throw new Error(`wrangler 未返回可解析的 JSON：${sql}`);
+  }
+  const entries = Array.isArray(parsed) ? parsed : [parsed];
+  const first = entries.find((entry) => entry && Array.isArray(entry.results)) || entries[0];
+  return Array.isArray(first?.results) ? first.results : [];
+}
+
+function quoteSqlString(value) {
+  return `'${String(value).replace(/'/g, "''")}'`;
+}
+
+function parseMigrationStatements(sql) {
+  const cleaned = sql
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/--[^\n]*/g, "");
+  const statements = cleaned.split(";").map((statement) => statement.trim()).filter(Boolean);
+  if (statements.length === 0) return null;
+
+  const alters = [];
+  const idempotent = [];
+  for (const statement of statements) {
+    const match = statement.match(
+      /^ALTER\s+TABLE\s+([A-Za-z_][A-Za-z0-9_]*)\s+ADD\s+COLUMN\s+([A-Za-z_][A-Za-z0-9_]*)\b/i
+    );
+    if (match) {
+      alters.push({ table: match[1], column: match[2] });
+      continue;
+    }
+    // 允许与 ALTER 同文件的幂等语句（如 0013 的 CREATE INDEX IF NOT EXISTS）；
+    // 补记前会先执行这些语句，保证索引等副作用不会因 stamp 被跳过。
+    if (/^CREATE\s+(?:UNIQUE\s+)?(?:TABLE|INDEX)\s+IF\s+NOT\s+EXISTS\b/i.test(statement)) {
+      idempotent.push(statement);
+      continue;
+    }
+    return null;
+  }
+
+  if (alters.length === 0) return null;
+  return { alters, idempotent };
+}
+
+const tables = new Set(
+  execute("SELECT name FROM sqlite_master WHERE type = 'table';").map((row) => row.name)
+);
+
+if (!tables.has("posts")) {
+  console.log("[skip] posts 表不存在，交给 wrangler 从 0001 开始正常迁移。");
+  process.exit(0);
+}
+
+let applied = new Set();
+if (tables.has("d1_migrations")) {
+  applied = new Set(
+    execute("SELECT name FROM d1_migrations;").map((row) => row.name)
+  );
+}
+
+const files = readdirSync(migrationsDir)
+  .filter((file) => /^[0-9]{4}_[A-Za-z0-9_-]+\.sql$/.test(file))
+  .sort();
+
+if (files.length === 0) {
+  console.log("[skip] 未找到迁移文件。");
+  process.exit(0);
+}
+
+const toStamp = [];
+const columnCache = new Map();
+
+function tableColumns(table) {
+  if (!columnCache.has(table)) {
+    columnCache.set(
+      table,
+      new Set(
+        execute(`SELECT name FROM pragma_table_info('${table}');`).map((row) => row.name)
+      )
+    );
+  }
+  return columnCache.get(table);
+}
+
+for (const file of files) {
+  if (applied.has(file)) continue;
+
+  const sql = readFileSync(resolve(migrationsDir, file), "utf8");
+
+  // 0002 是种子数据：预建库（schema 已初始化）不应再重放硬编码的 post_id/tag_id 关联。
+  if (file === "0002_seed.sql") {
+    const rows = execute("SELECT COUNT(*) AS count FROM posts;");
+    const schemaInitialized = tables.has("tags") && tables.has("post_tags");
+    if (schemaInitialized || Number(rows[0]?.count ?? 0) > 0) {
+      toStamp.push({ file, reason: "schema 已初始化，跳过种子重放" });
+    }
+    continue;
+  }
+
+  const migration = parseMigrationStatements(sql);
+  if (!migration) continue;
+
+  const missing = migration.alters.filter(({ table, column }) => !tableColumns(table).has(column));
+  if (missing.length === 0) {
+    if (!options.dryRun) {
+      for (const statement of migration.idempotent) {
+        execute(`${statement};`, { json: false });
+      }
+    }
+    toStamp.push({
+      file,
+      reason: `目标列已存在：${migration.alters.map(({ table, column }) => `${table}.${column}`).join(", ")}${migration.idempotent.length ? `；${options.dryRun ? "将执行" : "已执行"} ${migration.idempotent.length} 条幂等语句` : ""}`,
+    });
+  } else {
+    console.log(
+      `[skip] ${file}: 目标列尚未齐全（缺 ${missing.map(({ table, column }) => `${table}.${column}`).join(", ")}），保留给 migrations apply / reconcile 处理。`
+    );
+  }
+}
+
+if (toStamp.length === 0) {
+  console.log("[ok] 没有需要补记的迁移记录。");
+  process.exit(0);
+}
+
+console.log(
+  `[info] D1 迁移补记：${options.database} (${options.mode})${options.dryRun ? " [dry-run]" : ""}`
+);
+for (const item of toStamp) {
+  console.log(`  + ${item.file} — ${item.reason}`);
+}
+
+if (options.dryRun) {
+  process.exit(0);
+}
+
+if (!tables.has("d1_migrations")) {
+  execute(
+    `CREATE TABLE IF NOT EXISTS d1_migrations (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT UNIQUE,
+      applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
+    );`,
+    { json: false }
+  );
+}
+
+for (const item of toStamp) {
+  execute(
+    `INSERT OR IGNORE INTO d1_migrations (name) VALUES (${quoteSqlString(item.file)});`,
+    { json: false }
+  );
+}
+
+console.log(`[ok] 已补记 ${toStamp.length} 条迁移记录。`);

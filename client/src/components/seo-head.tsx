@@ -1,4 +1,12 @@
 import { useEffect } from "react";
+import {
+  buildJsonLdGraph,
+  buildPageDocument,
+  renderTitle,
+  resolveOgImage,
+  type SiteContext,
+} from "@monolith/seo-core";
+import { useSiteSettings } from "@/lib/site-settings";
 
 type BreadcrumbItem = {
   name: string;
@@ -21,11 +29,12 @@ type SeoProps = {
 
 const DEFAULT_SITE_NAME = "Monolith";
 const DEFAULT_DESCRIPTION = "书写代码、设计与边缘计算的个人博客。";
+const SITE_LOCALE = "zh-CN";
 
 /**
- * SEO 头部组件
- * 动态注入 <title>、<meta>、Open Graph、Twitter Card、Canonical URL
- * 和 JSON-LD 结构化数据（文章页）
+ * SEO 头部组件（DOM 注入壳）
+ * head 数据全部由 @monolith/seo-core 生成 —— 与爬虫预渲染中间件同一数据源、同一生成器，
+ * 本组件只负责把生成结果同步进 document.head（Phase 1c 统一改造）。
  *
  * 使用方式：
  *   <SeoHead title="文章标题" description="..." url="/posts/slug" type="article" />
@@ -39,14 +48,52 @@ export function SeoHead({
   publishedTime,
   modifiedTime,
   tags,
-  siteName = DEFAULT_SITE_NAME,
+  siteName: siteNameOverride,
   breadcrumbs,
   noindex = false,
 }: SeoProps) {
-  const metaDescription = description || DEFAULT_DESCRIPTION;
-  const fullTitle = title ? `${title} | ${siteName}` : `${siteName} — ${metaDescription}`;
-  const canonicalUrl = url ? `${window.location.origin}${url}` : window.location.href;
-  const ogImage = image || `${window.location.origin}/og-default.png`;
+  const { settings } = useSiteSettings();
+
+  // 站点名 / 描述 / 作者 / 默认分享图取自控制台设置，缺失时回退内置默认值
+  const siteName = siteNameOverride || settings.site_title.trim() || DEFAULT_SITE_NAME;
+  const siteDescription = settings.site_description.trim() || DEFAULT_DESCRIPTION;
+  const authorName = settings.author_name.trim() || siteName;
+  const authorAvatar = settings.author_avatar.trim();
+  const siteOgImage = settings.site_og_image.trim();
+
+  const site: SiteContext = {
+    origin: window.location.origin,
+    title: siteName,
+    description: siteDescription,
+    author: {
+      name: authorName,
+      ...(authorAvatar ? { avatar: authorAvatar } : {}),
+    },
+    ...(siteOgImage ? { ogImageDefault: siteOgImage } : {}),
+    locale: SITE_LOCALE,
+  };
+
+  const doc = buildPageDocument({
+    path: url || window.location.pathname,
+    title: title ?? "",
+    type,
+    description: description || null,
+    coverImage: image || null,
+    publishedAt: publishedTime ?? null,
+    modifiedAt: modifiedTime ?? null,
+    tags,
+    breadcrumbs,
+    noindex,
+    site,
+  });
+
+  const fullTitle = renderTitle(doc);
+  const metaDescription = doc.description || siteDescription;
+  const canonicalUrl = doc.canonical;
+  const ogImage = resolveOgImage(doc);
+  const imageAlt = doc.title ? `${doc.title} | ${siteName}` : siteName;
+  // 序列化结果作为原始值依赖，避免 doc 对象身份导致 effect 每次渲染重跑
+  const jsonLdText = JSON.stringify(buildJsonLdGraph(doc));
 
   useEffect(() => {
     // 设置标题
@@ -91,20 +138,23 @@ export function SeoHead({
     // Canonical URL
     setLink("canonical", canonicalUrl);
 
-    // Open Graph
+    // Open Graph（键集合与 renderSeoHead 保持一致；不声明静态 og:image:width/height ——
+    // 对任意封面是错误数据，等有真实尺寸来源再补）
     setMeta("property", "og:title", title || siteName);
     setMeta("property", "og:description", metaDescription);
     setMeta("property", "og:type", type === "article" ? "article" : "website");
     setMeta("property", "og:url", canonicalUrl);
     setMeta("property", "og:site_name", siteName);
     setMeta("property", "og:image", ogImage);
-    setMeta("property", "og:locale", "zh_CN");
+    setMeta("property", "og:image:alt", imageAlt);
+    setMeta("property", "og:locale", SITE_LOCALE.replace("-", "_"));
 
     // Twitter Card
     setMeta("name", "twitter:card", "summary_large_image");
     setMeta("name", "twitter:title", title || siteName);
     setMeta("name", "twitter:description", metaDescription);
     setMeta("name", "twitter:image", ogImage);
+    setMeta("name", "twitter:image:alt", imageAlt);
 
     // Article 专属
     // 先清理旧的 article 相关 meta（防止页面切换残留）
@@ -126,74 +176,16 @@ export function SeoHead({
       });
     }
 
-    // JSON-LD 结构化数据
+    // JSON-LD：统一 @graph（buildJsonLdGraph 与爬虫预渲染同源；
+    // 基础实体 WebSite/Person/Organization 始终存在，article 页追加 WebPage/BlogPosting）
     let ldScript = document.querySelector('script[data-seo="json-ld"]') as HTMLScriptElement | null;
-    const jsonLdArray: object[] = [];
-
-    if (type === "article") {
-      // 文章页：BlogPosting
-      jsonLdArray.push({
-        "@context": "https://schema.org",
-        "@type": "BlogPosting",
-        headline: title,
-        description: metaDescription,
-        url: canonicalUrl,
-        image: ogImage,
-        datePublished: publishedTime,
-        ...(modifiedTime ? { dateModified: modifiedTime } : {}),
-        author: {
-          "@type": "Person",
-          name: siteName,
-        },
-        publisher: {
-          "@type": "Organization",
-          name: siteName,
-        },
-        ...(tags?.length ? { keywords: tags.join(", ") } : {}),
-      });
-    } else if (url === "/") {
-      // 首页：WebSite + SearchAction
-      jsonLdArray.push({
-        "@context": "https://schema.org",
-        "@type": "WebSite",
-        name: siteName,
-        url: window.location.origin,
-        description: metaDescription,
-        potentialAction: {
-          "@type": "SearchAction",
-          target: `${window.location.origin}/?q={search_term_string}`,
-          "query-input": "required name=search_term_string",
-        },
-      });
+    if (!ldScript) {
+      ldScript = document.createElement("script");
+      ldScript.setAttribute("type", "application/ld+json");
+      ldScript.setAttribute("data-seo", "json-ld");
+      document.head.appendChild(ldScript);
     }
-
-    // 面包屑导航
-    if (breadcrumbs?.length) {
-      jsonLdArray.push({
-        "@context": "https://schema.org",
-        "@type": "BreadcrumbList",
-        itemListElement: breadcrumbs.map((item, index) => ({
-          "@type": "ListItem",
-          position: index + 1,
-          name: item.name,
-          item: `${window.location.origin}${item.url}`,
-        })),
-      });
-    }
-
-    if (jsonLdArray.length > 0) {
-      if (!ldScript) {
-        ldScript = document.createElement("script");
-        ldScript.setAttribute("type", "application/ld+json");
-        ldScript.setAttribute("data-seo", "json-ld");
-        document.head.appendChild(ldScript);
-      }
-      ldScript.textContent = jsonLdArray.length === 1
-        ? JSON.stringify(jsonLdArray[0])
-        : JSON.stringify(jsonLdArray);
-    } else if (ldScript) {
-      ldScript.remove();
-    }
+    ldScript.textContent = jsonLdText;
 
     // 组件卸载时清理动态注入的标签
     return () => {
@@ -202,7 +194,7 @@ export function SeoHead({
       // 清理 article 相关 meta（防止页面切换残留）
       document.querySelectorAll('meta[property^="article:"]').forEach((el) => el.remove());
     };
-  }, [fullTitle, metaDescription, canonicalUrl, ogImage, type, publishedTime, modifiedTime, title, siteName, tags, breadcrumbs, noindex]);
+  }, [fullTitle, metaDescription, canonicalUrl, ogImage, imageAlt, type, publishedTime, modifiedTime, title, siteName, tags, breadcrumbs, noindex, jsonLdText]);
 
   return null; // 纯副作用组件，不渲染 DOM
 }

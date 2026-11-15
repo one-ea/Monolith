@@ -12,9 +12,10 @@ export const onRequest: PagesFunction<{ API_BASE: string }> = async (context) =>
   }
 
   const target = buildTargetUrl(backend, context.request);
+  // RSS 永远匿名：不透传 Cookie / Authorization，避免解锁内容进入 public 缓存。
   const res = await fetch(target, {
     method: context.request.method,
-    headers: context.request.headers,
+    headers: { Accept: "application/rss+xml, application/xml, text/xml" },
   });
   return new Response(res.body, {
     status: res.status,

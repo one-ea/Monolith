@@ -13,7 +13,9 @@ export function SeriesNav({ seriesSlug, currentSlug }: SeriesNavProps) {
   const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
-    fetchSeriesPosts(seriesSlug).then(setPosts);
+    fetchSeriesPosts(seriesSlug)
+      .then(setPosts)
+      .catch(() => setPosts([]));
   }, [seriesSlug]);
 
   if (posts.length < 2) return null;

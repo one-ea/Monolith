@@ -3,6 +3,7 @@ import { Link } from "wouter";
 import { fetchAdminPosts, updatePost, getToken, type Post } from "@/lib/api";
 import { AlertTriangle, CheckCircle2, ClipboardList, Edit, ExternalLink, FileText, Globe, Image, RefreshCw, Save, Search, Sparkles, Wand2, XCircle } from "lucide-react";
 import { buildOverview, extractKeywords, stripMarkdown, type PostSeoReport, type SeoCheckResult, type SeoOverview, type SiteInfraSignal } from "@/lib/seo-analyzer";
+import { buildPageDocument, runAudit, summarizeAudit, type SiteContext } from "@monolith/seo-core";
 
 type FilterTab = "all" | "warn" | "poor" | "drafts";
 
@@ -18,6 +19,8 @@ type SeoSettings = {
   robots_default_block: string;
   sitemap_include_archive: string;
   sitemap_extra_urls: string;
+  author_name: string;
+  author_avatar: string;
 };
 
 type QuickDraft = {
@@ -40,6 +43,8 @@ const defaultSeoSettings: SeoSettings = {
   robots_default_block: "true",
   sitemap_include_archive: "true",
   sitemap_extra_urls: "",
+  author_name: "Monolith",
+  author_avatar: "",
 };
 
 function scoreTone(score: number) {
@@ -48,6 +53,15 @@ function scoreTone(score: number) {
   if (score >= 60) return "text-amber-400 bg-amber-400/10 border-amber-400/20";
   return "text-red-400 bg-red-400/10 border-red-400/20";
 }
+
+// GEO 审计维度中文名（seo-core rules.ts 的 dimension 字段）
+const GEO_DIMENSION_LABELS: Record<string, string> = {
+  structure: "结构",
+  citability: "可引用性",
+  trust: "可信度",
+  freshness: "新鲜度",
+  accessibility: "可达性",
+};
 
 function ScoreRing({ score, size = 136, stroke = 10, label }: { score: number; size?: number; stroke?: number; label: string }) {
   const r = (size - stroke) / 2;
@@ -210,6 +224,7 @@ export function AdminSeo() {
   const [sitemapPreview, setSitemapPreview] = useState<{ urls: string[]; raw: string } | null>(null);
   const [robotsPreview, setRobotsPreview] = useState("");
   const [infra, setInfra] = useState<SiteInfraSignal>({});
+  const [aiReady, setAiReady] = useState<{ llms: { ok: boolean; error?: string }; llmsFull: { ok: boolean; error?: string }; postMd: { ok: boolean; error?: string; slug: string } }>({ llms: { ok: false, error: "检测中" }, llmsFull: { ok: false, error: "检测中" }, postMd: { ok: false, error: "检测中", slug: "" } });
   const [error, setError] = useState<string | null>(null);
 
   const showMsg = (text: string, type: "success" | "error") => {
@@ -268,6 +283,26 @@ export function AdminSeo() {
       : { ok: false, error: rssResult.reason instanceof Error ? rssResult.reason.message : "抓取失败" };
 
     setInfra(nextInfra);
+
+    // AI 可读性探测：llms.txt / llms-full.txt / 首篇已发布文章的 .md 输出
+    const sampleSlug = postsResult.status === "fulfilled"
+      ? (postsResult.value.find((p) => p.published)?.slug || "")
+      : "";
+    const headProbe = (url: string) => fetch(url, { method: "HEAD" })
+      .then((r) => (r.ok ? { ok: true } : Promise.reject(new Error(`HTTP ${r.status}`))));
+    const [llmsResult, llmsFullResult, mdResult] = await Promise.allSettled([
+      headProbe("/llms.txt"),
+      headProbe("/llms-full.txt"),
+      sampleSlug ? headProbe(`/posts/${sampleSlug}.md`) : Promise.reject(new Error("无已发布文章")),
+    ]);
+    setAiReady({
+      llms: llmsResult.status === "fulfilled" ? { ok: true } : { ok: false, error: llmsResult.reason instanceof Error ? llmsResult.reason.message : "抓取失败" },
+      llmsFull: llmsFullResult.status === "fulfilled" ? { ok: true } : { ok: false, error: llmsFullResult.reason instanceof Error ? llmsFullResult.reason.message : "抓取失败" },
+      postMd: mdResult.status === "fulfilled"
+        ? { ok: true, slug: sampleSlug }
+        : { ok: false, slug: sampleSlug, error: mdResult.reason instanceof Error ? mdResult.reason.message : "抓取失败" },
+    });
+
     setRefreshing(false);
     setLoading(false);
   };
@@ -293,6 +328,50 @@ export function AdminSeo() {
 
   const selectedPost = useMemo(() => posts.find((post) => post.slug === selectedSlug) || null, [posts, selectedSlug]);
   const selectedReport = useMemo(() => overview.postReports.find((report) => report.slug === selectedSlug) || null, [overview.postReports, selectedSlug]);
+
+  // GEO 审计：对已发布文章构建 PageDocument 并跑规则引擎（seo-core，纯确定性规则）
+  const geoOverview = useMemo(() => {
+    const siteTitle = settings.site_title.trim() || "Monolith";
+    const siteContext: SiteContext = {
+      origin: window.location.origin,
+      title: siteTitle,
+      description: settings.site_description,
+      author: {
+        name: settings.author_name.trim() || siteTitle,
+        ...(settings.author_avatar.trim() ? { avatar: settings.author_avatar.trim() } : {}),
+      },
+      ...(settings.site_og_image.trim() ? { ogImageDefault: settings.site_og_image.trim() } : {}),
+      locale: "zh-CN",
+    };
+    const reports = posts
+      .filter((p) => p.published)
+      .map((post) => {
+        const findings = runAudit(buildPageDocument({
+          path: `/posts/${post.slug}`,
+          title: post.title,
+          type: "article",
+          description: post.excerpt || null,
+          contentMarkdown: post.content,
+          coverImage: post.coverImage || null,
+          publishedAt: post.createdAt,
+          modifiedAt: post.updatedAt,
+          tags: post.tags,
+          site: siteContext,
+        }));
+        return { slug: post.slug, title: post.title, findings, score: summarizeAudit(findings).score };
+      });
+    return { reports, summary: summarizeAudit(reports.flatMap((r) => r.findings)) };
+  }, [posts, settings]);
+
+  const selectedGeoReport = useMemo(() => geoOverview.reports.find((report) => report.slug === selectedSlug) || null, [geoOverview.reports, selectedSlug]);
+
+  // 全站最值得先修的 GEO findings（跨文章聚合，点击定位文章）
+  const geoActionItems = useMemo(() => geoOverview.reports
+    .flatMap((report) => report.findings
+      .filter((f) => f.status !== "pass")
+      .map((f) => ({ report, finding: f })))
+    .sort((a, b) => (a.finding.status === "fail" ? -1 : 1) - (b.finding.status === "fail" ? -1 : 1))
+    .slice(0, 6), [geoOverview.reports]);
 
   const filteredReports = useMemo(() => {
     let result = overview.postReports;
@@ -456,6 +535,58 @@ export function AdminSeo() {
             </div>
           </section>
 
+          {/* GEO 健康度：seo-core 规则引擎（纯确定性启发式） */}
+          <section className="rounded-md border border-border/20 bg-card/5 p-[16px]">
+            <div className="grid grid-cols-1 items-center gap-[16px] md:grid-cols-[180px_minmax(0,1fr)]">
+              <div className="flex flex-col items-center gap-[6px]">
+                <ScoreRing score={geoOverview.summary.score} size={150} stroke={12} label="GEO 健康度" />
+                <span className="max-w-[170px] text-center text-[10px] leading-[1.5] text-muted-foreground/45">Monolith 自定义健康度，非搜索引擎官方评分</span>
+              </div>
+              <div className="grid grid-cols-2 gap-[12px] lg:grid-cols-4">
+                {geoOverview.summary.dimensions.map((dimension) => (
+                  <ScoreRing
+                    key={dimension.dimension}
+                    score={dimension.score}
+                    size={96}
+                    stroke={8}
+                    label={`${GEO_DIMENSION_LABELS[dimension.dimension] || dimension.dimension} ${dimension.pass}/${dimension.pass + dimension.warn + dimension.fail}`}
+                  />
+                ))}
+              </div>
+            </div>
+
+            <div className="mt-[18px] border-t border-border/12 pt-[14px]">
+              <div className="mb-[8px] flex items-center justify-between">
+                <span className="text-[11px] font-medium uppercase tracking-normal text-muted-foreground/50">GEO 待修事项</span>
+                <span className="text-[11px] text-muted-foreground/60">
+                  {geoOverview.summary.total.pass + geoOverview.summary.total.warn + geoOverview.summary.total.fail} 项检查 · {geoOverview.reports.length} 篇已发布
+                </span>
+              </div>
+              {geoActionItems.length === 0 ? (
+                <div className="rounded-md border border-border/14 bg-background/25 px-[12px] py-[14px] text-[12px] text-muted-foreground/55">已发布文章的 GEO 检查全部通过。</div>
+              ) : (
+                <div className="grid gap-[8px] sm:grid-cols-2">
+                  {geoActionItems.map(({ report, finding }) => (
+                    <button
+                      key={`${report.slug}-${finding.id}`}
+                      type="button"
+                      onClick={() => selectPost(report.slug)}
+                      className="flex items-start gap-[8px] rounded-md border border-border/14 bg-background/25 px-[12px] py-[10px] text-left transition-colors hover:bg-card/25 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                      title={finding.recommendation ? `${finding.detail} → ${finding.recommendation}` : finding.detail}
+                    >
+                      <span className="mt-[2px] shrink-0"><StatusIcon status={finding.status} /></span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-[12px] font-medium text-foreground/85">{finding.title}</span>
+                        <span className="mt-[2px] block truncate text-[11px] text-muted-foreground/60">{report.title} · {finding.detail}</span>
+                      </span>
+                      <span className="shrink-0 rounded-md bg-card/30 px-[5px] py-[1px] text-[10px] text-muted-foreground/70">{GEO_DIMENSION_LABELS[finding.dimension] || finding.dimension}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </section>
+
           <div className="grid grid-cols-1 gap-[12px] lg:grid-cols-[0.82fr_1.18fr]">
             <section className="rounded-md border border-border/20 bg-card/5 p-[14px]">
               <h2 className="mb-[12px] flex items-center gap-[6px] text-[13px] font-semibold">
@@ -469,6 +600,20 @@ export function AdminSeo() {
                     <div className="min-w-0 flex-1">
                       <div className="text-[12px] font-medium leading-tight">{check.label}</div>
                       <div className="mt-[2px] truncate text-[10px] text-muted-foreground/60">{check.detail}</div>
+                    </div>
+                  </div>
+                ))}
+                {/* AI 可读性：Phase 2 的三个内容接口可用性 */}
+                {([
+                  ["AI 索引 /llms.txt", aiReady.llms, "可访问，AI 引擎与 Agent 可发现站点内容"],
+                  ["AI 全文 /llms-full.txt", aiReady.llmsFull, "可访问，输出最近文章全文"],
+                  ["单篇 Markdown /posts/:slug.md", aiReady.postMd, aiReady.postMd.slug ? `样例 /posts/${aiReady.postMd.slug}.md 可访问` : "可访问"],
+                ] as const).map(([label, signal, okDetail]) => (
+                  <div key={label} className="flex items-start gap-[8px] rounded-md border border-border/12 bg-background/25 p-[10px]">
+                    <StatusIcon status={signal.ok ? "pass" : "fail"} />
+                    <div className="min-w-0 flex-1">
+                      <div className="text-[12px] font-medium leading-tight">{label}</div>
+                      <div className="mt-[2px] truncate text-[10px] text-muted-foreground/60">{signal.ok ? okDetail : `不可用：${signal.error}`}</div>
                     </div>
                   </div>
                 ))}
@@ -704,6 +849,23 @@ export function AdminSeo() {
                         <span key={check.id} className="inline-flex items-center gap-[4px] rounded-md bg-card/35 px-[6px] py-[3px] text-[10px] text-muted-foreground/75" title={check.detail}>
                           <StatusIcon status={check.status} />
                           {check.label}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+                {selectedGeoReport && selectedGeoReport.findings.some((finding) => finding.status !== "pass") ? (
+                  <div className="rounded-md border border-border/14 bg-background/25 p-[10px]">
+                    <div className="mb-[6px] text-[11px] font-medium text-muted-foreground/60">GEO 待改进（当前 {selectedGeoReport.score} 分）</div>
+                    <div className="flex flex-wrap gap-[5px]">
+                      {selectedGeoReport.findings.filter((finding) => finding.status !== "pass").map((finding) => (
+                        <span
+                          key={finding.id}
+                          className="inline-flex items-center gap-[4px] rounded-md bg-card/35 px-[6px] py-[3px] text-[10px] text-muted-foreground/75"
+                          title={finding.recommendation ? `${finding.detail} → ${finding.recommendation}` : finding.detail}
+                        >
+                          <StatusIcon status={finding.status} />
+                          {finding.title}
                         </span>
                       ))}
                     </div>

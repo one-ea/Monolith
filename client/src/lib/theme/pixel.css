@@ -1,0 +1,316 @@
+/* ═══════════════════════════════════════════════════════════════════
+   Monolith Pixel Theme（Phase 6）
+   设计方向：Google Material 3 / Material 3 Expressive · Pixel UI
+   基调：Dynamic Color 紫罗兰种子 · Container 五级表面 · tonal 控件 ·
+   胶囊形状 · 明确交互状态层 · 弹簧表达性动效。
+   不只是"更圆的 Apple"：primary/secondary/tertiary container 角色齐全，
+   tonal button / pill 形状 / 状态层反馈强度均按 M3 语义。
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* ── Pixel · Dark（M3 dark scheme，violet seed hue≈300）──────────── */
+:root[data-theme="pixel"],
+:root[data-theme="pixel"][data-mode="dark"] {
+  /* 表面：M3 五级 container 阶梯 */
+  --background: oklch(0.185 0.012 300);
+  --background-secondary: oklch(0.165 0.012 300);
+  --surface: oklch(0.185 0.012 300);
+  --surface-secondary: oklch(0.165 0.012 300);
+  --surface-elevated: oklch(0.225 0.014 300);
+  --surface-container-lowest: oklch(0.145 0.010 300);
+  --surface-container-low: oklch(0.170 0.011 300);
+  --surface-container: oklch(0.205 0.012 300);
+  --surface-container-high: oklch(0.235 0.013 300);
+  --surface-container-highest: oklch(0.265 0.014 300);
+
+  /* 前景：on-surface / on-surface-variant */
+  --foreground: oklch(0.93 0.012 300);
+  --foreground-secondary: oklch(0.80 0.022 300);
+  --foreground-tertiary: oklch(0.68 0.018 300);
+  --foreground-disabled: oklch(0.45 0.012 300);
+
+  /* 品牌：M3 primary = 浅紫（dark scheme 中主色提亮，tonal 按钮主角）*/
+  --primary: oklch(0.83 0.075 300);
+  --primary-foreground: oklch(0.26 0.05 300);
+  --primary-container: oklch(0.37 0.07 300);
+  --primary-container-foreground: oklch(0.90 0.05 300);
+  --secondary: oklch(0.32 0.03 300);
+  --secondary-foreground: oklch(0.93 0.012 300);
+  --secondary-container: oklch(0.35 0.04 300);
+  --secondary-container-foreground: oklch(0.89 0.03 300);
+  --accent: oklch(0.30 0.02 300);
+  --accent-foreground: oklch(0.93 0.012 300);
+  --tertiary: oklch(0.84 0.10 195);
+  --tertiary-container: oklch(0.36 0.06 195);
+  --tertiary-container-foreground: oklch(0.90 0.06 195);
+
+  /* 状态语义 */
+  --success: oklch(0.74 0.15 150);
+  --success-foreground: oklch(0.16 0.04 150);
+  --success-container: oklch(0.74 0.15 150 / 15%);
+  --warning: oklch(0.83 0.13 90);
+  --warning-foreground: oklch(0.22 0.05 90);
+  --warning-container: oklch(0.83 0.13 90 / 15%);
+  --error: oklch(0.77 0.12 25);
+  --error-foreground: oklch(0.25 0.08 25);
+  --error-container: oklch(0.42 0.12 25);
+  --info: oklch(0.78 0.09 250);
+  --info-foreground: oklch(0.20 0.04 250);
+  --info-container: oklch(0.38 0.07 250);
+
+  /* 边框：M3 outline / outline-variant */
+  --border: oklch(0.62 0.02 300 / 45%);
+  --border-subtle: oklch(0.62 0.02 300 / 26%);
+  --border-strong: oklch(0.62 0.02 300 / 85%);
+  --focus-ring: var(--primary);
+
+  /* 字体：Google Sans / Roboto 系统栈（不下载字体，本地缺失即回退）*/
+  --font-ui: "Google Sans", "Google Sans Text", "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-display: "Google Sans", "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans SC", "PingFang SC", sans-serif;
+  --font-code: "Roboto Mono", ui-monospace, "SF Mono", "Cascadia Code", "Fira Code", Consolas, monospace;
+
+  /* 排版角色：更强的标题层级（Material hierarchy）*/
+  --type-display-size: 52px;
+  --type-display-weight: 730;
+  --type-headline-size: 32px;
+  --type-headline-weight: 720;
+  --type-title-lg-size: 21px;
+  --type-title-lg-weight: 640;
+  --type-label-md-weight: 520;
+
+  /* 动效：M3 emphasized + spring 表达性 */
+  --motion-fast: 160ms;
+  --motion-normal: 280ms;
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-emphasized: cubic-bezier(0.2, 0, 0, 1);
+  --ease-decelerate: cubic-bezier(0.05, 0.7, 0.1, 1);
+  --ease-accelerate: cubic-bezier(0.3, 0, 0.8, 0.15);
+  --spring-soft: cubic-bezier(0.3, 1.3, 0.55, 1);
+  --spring-medium: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --spring-bouncy: cubic-bezier(0.5, 1.7, 0.5, 1);
+
+  /* 状态层：明确、可感知的反馈 */
+  --state-hover: 0.08;
+  --state-pressed: 0.12;
+  --state-dragged: 0.16;
+
+  /* 结构：M3 尺度感 */
+  --radius: 1rem;
+  --focus-ring-width: 3px;
+  --chart-1: oklch(0.83 0.075 300);
+  --chart-2: oklch(0.84 0.10 195);
+  --chart-3: oklch(0.78 0.09 250);
+  --chart-4: oklch(0.83 0.13 90);
+  --chart-5: oklch(0.80 0.11 350);
+
+  /* ── shadcn 存量变量桥接 ── */
+  --card: var(--surface-container-low);
+  --card-foreground: var(--foreground);
+  --popover: var(--surface-container);
+  --popover-foreground: var(--foreground);
+  --muted: var(--surface-container);
+  --muted-foreground: var(--foreground-secondary);
+  --destructive: var(--error);
+  --input: var(--border-strong);
+  --ring: var(--focus-ring);
+  --sidebar: var(--surface-container-low);
+  --sidebar-foreground: var(--foreground);
+  --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: var(--primary-foreground);
+  --sidebar-accent: var(--secondary-container);
+  --sidebar-accent-foreground: var(--secondary-container-foreground);
+  --sidebar-border: var(--border-subtle);
+  --sidebar-ring: var(--focus-ring);
+  --glass-border: oklch(0.83 0.075 300 / 30%);
+
+  /* ── 领域色彩主题化（M3 紫 + tonal 容器）── */
+  --prose-link: var(--primary);
+  --prose-link-hover: oklch(0.90 0.06 300);
+  --prose-link-underline: oklch(0.83 0.075 300 / 40%);
+  --prose-link-underline-hover: oklch(0.90 0.06 300 / 62%);
+  --prose-quote-border: oklch(0.83 0.075 300 / 50%);
+  --prose-quote-bg: oklch(0.83 0.075 300 / 5%);
+  --code-bg: oklch(0.16 0.012 300);
+  --code-header-bg: oklch(0.14 0.011 300);
+  --code-title-bg: oklch(0.15 0.011 300);
+  --toc-active-border: var(--primary);
+  --toc-active-text: var(--primary);
+  --series-title: oklch(0.86 0.06 300);
+  --series-current-text: oklch(0.86 0.06 300);
+  --series-current-border: var(--primary);
+  --reaction-active-text: oklch(0.86 0.06 300);
+
+  color-scheme: dark;
+}
+
+/* ── Pixel · Light（M3 light scheme）────────────────────────────── */
+:root[data-theme="pixel"][data-mode="light"] {
+  --background: oklch(0.985 0.004 300);
+  --background-secondary: oklch(0.965 0.005 300);
+  --surface: oklch(0.985 0.004 300);
+  --surface-secondary: oklch(0.965 0.005 300);
+  --surface-elevated: oklch(1 0 0);
+  --surface-container-lowest: oklch(1 0 0);
+  --surface-container-low: oklch(0.982 0.004 300);
+  --surface-container: oklch(0.962 0.006 300);
+  --surface-container-high: oklch(0.94 0.007 300);
+  --surface-container-highest: oklch(0.915 0.008 300);
+
+  --foreground: oklch(0.24 0.02 300);
+  --foreground-secondary: oklch(0.47 0.03 300);
+  --foreground-tertiary: oklch(0.60 0.022 300);
+  --foreground-disabled: oklch(0.72 0.015 300);
+
+  --primary: oklch(0.47 0.16 300);
+  --primary-foreground: oklch(0.99 0.003 300);
+  --primary-container: oklch(0.90 0.05 300);
+  --primary-container-foreground: oklch(0.35 0.08 300);
+  --secondary: oklch(0.94 0.015 300);
+  --secondary-foreground: oklch(0.24 0.02 300);
+  --secondary-container: oklch(0.92 0.03 300);
+  --secondary-container-foreground: oklch(0.38 0.05 300);
+  --accent: oklch(0.93 0.02 300);
+  --accent-foreground: oklch(0.24 0.02 300);
+  --tertiary: oklch(0.42 0.10 195);
+  --tertiary-container: oklch(0.90 0.05 195);
+  --tertiary-container-foreground: oklch(0.30 0.06 195);
+
+  --success: oklch(0.52 0.15 150);
+  --success-foreground: oklch(0.99 0.005 150);
+  --success-container: oklch(0.90 0.08 150);
+  --warning: oklch(0.66 0.14 75);
+  --warning-foreground: oklch(0.99 0.005 75);
+  --warning-container: oklch(0.93 0.06 75);
+  --error: oklch(0.50 0.19 27);
+  --error-foreground: oklch(0.99 0.005 27);
+  --error-container: oklch(0.93 0.05 27);
+  --info: oklch(0.50 0.13 250);
+  --info-foreground: oklch(0.99 0.005 250);
+  --info-container: oklch(0.91 0.04 250);
+
+  --border: oklch(0.55 0.02 300 / 42%);
+  --border-subtle: oklch(0.55 0.02 300 / 24%);
+  --border-strong: oklch(0.55 0.02 300 / 80%);
+  --focus-ring: var(--primary);
+
+  --chart-1: oklch(0.47 0.16 300);
+  --chart-2: oklch(0.42 0.10 195);
+  --chart-3: oklch(0.50 0.13 250);
+  --chart-4: oklch(0.66 0.14 75);
+  --chart-5: oklch(0.58 0.13 350);
+
+  --glass-border: oklch(0.47 0.16 300 / 26%);
+
+  --prose-link: var(--primary);
+  --prose-link-hover: oklch(0.38 0.16 300);
+  --prose-link-underline: oklch(0.47 0.16 300 / 42%);
+  --prose-link-underline-hover: oklch(0.38 0.16 300 / 66%);
+  --prose-quote-border: oklch(0.47 0.16 300 / 46%);
+  --prose-quote-bg: oklch(0.47 0.16 300 / 5%);
+  --code-bg: oklch(0.965 0.005 300);
+  --code-header-bg: oklch(0.945 0.006 300);
+  --code-title-bg: oklch(0.955 0.006 300);
+  --toc-active-border: var(--primary);
+  --toc-active-text: var(--primary);
+  --series-title: oklch(0.47 0.16 300);
+  --series-current-text: oklch(0.47 0.16 300);
+  --series-current-border: var(--primary);
+  --reaction-active-text: oklch(0.47 0.16 300);
+
+  color-scheme: light;
+}
+
+/* ── Pixel 组件层 polish（Material 形状/状态/动效，无组件复制）──── */
+
+/* Header：Top App Bar · 近实色 tonal surface（M3 少用玻璃）*/
+[data-theme="pixel"] .app-header {
+  background: var(--material-tint-strong);
+  backdrop-filter: blur(16px) saturate(1.2);
+  -webkit-backdrop-filter: blur(16px) saturate(1.2);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+/* 导航选中态：把现有下划线 span 重塑为 pill 指示器（M3 NavigationBar）*/
+[data-theme="pixel"] .app-header nav a {
+  transition: color var(--motion-fast) var(--ease-standard);
+}
+[data-theme="pixel"] .app-header nav a > span {
+  top: 5px;
+  bottom: 5px;
+  left: 2px;
+  right: 2px;
+  height: auto;
+  border-radius: var(--radius-pill);
+  background: var(--secondary-container);
+  z-index: -1;
+  transition: transform var(--motion-normal) var(--spring-medium);
+}
+[data-theme="pixel"] .app-header nav a {
+  z-index: 0;
+}
+[data-theme="pixel"] .app-header nav a > span:hover {
+  transform: scaleX(1.04);
+}
+
+/* Button：胶囊形状（M3 Expressive）+ spring 按压 + 状态层反馈 */
+[data-theme="pixel"] [data-slot="button"] {
+  border-radius: var(--radius-pill);
+  transition-property: color, background-color, border-color, opacity, transform, box-shadow;
+  transition-duration: var(--motion-fast);
+  transition-timing-function: var(--ease-standard);
+}
+[data-theme="pixel"] [data-slot="button"]:active:not(:disabled) {
+  transform: scale(0.94);
+  transition-timing-function: var(--spring-medium);
+  transition-duration: 140ms;
+}
+/* tonal 变体在 Pixel 下使用 primary-container 角色 */
+[data-theme="pixel"] [data-slot="button"][data-variant="tonal"] {
+  background: var(--secondary-container);
+  color: var(--secondary-container-foreground);
+}
+[data-theme="pixel"] [data-slot="button"][data-variant="tonal"]:hover {
+  background: color-mix(in oklch, var(--secondary-container) 88%, var(--foreground) 12%);
+}
+
+/* Badge/Chip：胶囊 assist chip */
+[data-theme="pixel"] [data-slot="badge"] {
+  border-radius: var(--radius-pill);
+}
+
+/* Sheet / Dialog / Popover：M3 大圆角（28px 顶角 bottom sheet）*/
+[data-theme="pixel"] [data-slot="sheet-content"][data-side="bottom"],
+[data-theme="pixel"] [data-slot="dialog-content"] { border-radius: 28px 28px 0 0; }
+[data-theme="pixel"] [data-slot="dialog-content"] { border-radius: 28px; }
+[data-theme="pixel"] [data-slot="popover-content"] { border-radius: 16px; }
+
+/* 管理侧栏：Navigation Rail 语义 —— secondary-container 激活 pill，去细指示条 */
+[data-theme="pixel"] aside nav a span:first-child {
+  display: none;
+}
+[data-theme="pixel"] aside nav a[class*="bg-foreground"] {
+  background: var(--secondary-container);
+  color: var(--secondary-container-foreground);
+  border-radius: 999px;
+  box-shadow: none;
+}
+
+/* Tabs / SegmentedControl：胶囊轨道 + secondary-container 指示器 */
+[data-theme="pixel"] [data-slot="tabs-list"] {
+  background: var(--surface-container);
+  border-radius: var(--radius-pill);
+  padding: 4px;
+}
+[data-theme="pixel"] [data-slot="tabs-indicator"] {
+  background: var(--secondary-container);
+  box-shadow: none;
+  border-radius: var(--radius-pill);
+}
+[data-theme="pixel"] [data-slot="tabs-tab"][data-selected] {
+  color: var(--secondary-container-foreground);
+}
+
+/* 卡片 hover：Pixel 下弹性位移 */
+[data-theme="pixel"] .card-hover,
+[data-theme="pixel"] article.glass-surface {
+  transition-timing-function: var(--spring-medium);
+}

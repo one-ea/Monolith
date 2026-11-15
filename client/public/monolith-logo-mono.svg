@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">Monolith</title>
+  <desc id="desc">Monolith geometric M mark.</desc>
+  <path fill="currentColor" d="M112 128h72l72 92 72-92h72v256h-72V242l-72 92-72-92v142h-72z"/>
+</svg>

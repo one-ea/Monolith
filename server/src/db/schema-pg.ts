@@ -4,7 +4,7 @@
    但使用 PostgreSQL 方言（serial, timestamp 等）
    ────────────────────────────────────────────── */
 
-import { pgTable, serial, text, boolean, integer, timestamp, primaryKey, uniqueIndex, index } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, boolean, integer, bigint, timestamp, primaryKey, uniqueIndex, index, type AnyPgColumn } from "drizzle-orm/pg-core";
 
 /* ── 文章表 ────────────────────────────────── */
 export const pgPosts = pgTable("posts", {
@@ -51,6 +51,38 @@ export const pgPostTags = pgTable(
   })
 );
 
+/* ── 访问控制 ─────────────────────────────── */
+export const pgContentLocks = pgTable(
+  "content_locks",
+  {
+    kind: text("kind").notNull(),
+    name: text("name").notNull(),
+    passwordHash: text("password_hash").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.kind, table.name] }),
+    kindIdx: index("content_locks_kind_idx").on(table.kind),
+  })
+);
+
+/* ── 解锁失败计数 ─────────────────────────── */
+export const pgUnlockAttempts = pgTable(
+  "unlock_attempts",
+  {
+    key: text("key").notNull(),
+    // Date.now() 毫秒值远超 PostgreSQL INTEGER 上限，必须用 BIGINT。
+    windowStart: bigint("window_start", { mode: "number" }).notNull(),
+    count: integer("count").notNull().default(0),
+    updatedAt: bigint("updated_at", { mode: "number" }).notNull(),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.key, table.windowStart] }),
+    windowIdx: index("unlock_attempts_window_idx").on(table.windowStart),
+  })
+);
+
 /* ── 独立页表 ──────────────────────────────── */
 export const pgPages = pgTable("pages", {
   id: serial("id").primaryKey(),
@@ -82,10 +114,13 @@ export const pgComments = pgTable(
     authorEmail: text("author_email").notNull().default(""),
     content: text("content").notNull(),
     approved: boolean("approved").notNull().default(false),
+    parentId: integer("parent_id").references((): AnyPgColumn => pgComments.id, { onDelete: "cascade" }),
+    isAdmin: boolean("is_admin").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({
     postIdIdx: index("pg_comments_post_id_idx").on(table.postId),
+    parentIdIdx: index("pg_comments_parent_id_idx").on(table.parentId),
   })
 );
 

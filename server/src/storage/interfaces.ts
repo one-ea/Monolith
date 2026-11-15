@@ -26,6 +26,8 @@ export type Post = {
   seriesSlug: string | null;
   seriesOrder: number;
   category: string;
+  /** 是否设置了访问密码；永远不会返回密码哈希本身 */
+  hasPassword?: boolean;
 };
 
 export type PostSummary = {
@@ -48,6 +50,29 @@ export type PostSummary = {
 export type Tag = {
   id: number;
   name: string;
+};
+
+/* ── 访问控制 ─────────────────────────────── */
+
+export type ContentLockKind = "post" | "tag" | "category" | "series";
+
+export type ContentLock = {
+  kind: ContentLockKind;
+  name: string;
+  createdAt: string;
+  updatedAt: string;
+  hasPassword: boolean;
+};
+
+export type PostLock = {
+  kind: ContentLockKind;
+  key: string;
+  passwordHash: string;
+};
+
+export type PostAccess = {
+  post: Post & { tags: string[] };
+  locks: PostLock[];
 };
 
 export type Page = {
@@ -86,6 +111,8 @@ export type CreatePostInput = {
   seriesSlug?: string | null;
   seriesOrder?: number;
   category?: string;
+  /** 内部字段：由路由层哈希后写入；不会直接来自公开请求 */
+  passwordHash?: string | null;
 };
 
 export type UpdatePostInput = {
@@ -105,6 +132,8 @@ export type UpdatePostInput = {
   seriesSlug?: string | null;
   seriesOrder?: number;
   category?: string;
+  /** undefined = 保持不变；null = 移除密码；字符串 = 设置新密码哈希 */
+  passwordHash?: string | null;
 };
 
 export type UpsertPageInput = {
@@ -147,6 +176,8 @@ export type Comment = {
   authorEmail: string;
   content: string;
   approved: boolean;
+  parentId: number | null;
+  isAdmin: boolean;
   createdAt: string;
 };
 
@@ -155,6 +186,15 @@ export type CreateCommentInput = {
   authorName: string;
   authorEmail?: string;
   content: string;
+  parentId?: number | null;
+  isAdmin?: boolean;
+};
+
+export type CommentApprovalResult = {
+  found: boolean;
+  becameApproved: boolean;
+  comment?: Comment & { postSlug: string; postTitle: string };
+  parent?: Comment & { postSlug: string; postTitle: string };
 };
 
 export type GuestbookMessage = {
@@ -235,6 +275,19 @@ export interface IDatabase {
   /* 标签 */
   getAllTags(): Promise<Tag[]>;
 
+  /* 访问控制 */
+  getPostAccess(slug: string): Promise<PostAccess | null>;
+  listContentLocks(): Promise<ContentLock[]>;
+  getContentLock(kind: ContentLockKind, name: string): Promise<{ passwordHash: string } | null>;
+  setContentLock(kind: ContentLockKind, name: string, passwordHash: string | null): Promise<void>;
+  contentGroupExists(kind: ContentLockKind, name: string): Promise<boolean>;
+
+  /* 解锁限流 */
+  getUnlockAttemptCount(key: string, windowStart: number): Promise<number>;
+  recordUnlockFailure(key: string, windowStart: number, now: number): Promise<number>;
+  clearUnlockFailures(key: string, windowStart: number): Promise<void>;
+  pruneUnlockAttempts(before: number): Promise<void>;
+
   /* 独立页 */
   getPublishedPages(): Promise<PageSummary[]>;
   getAllPages(): Promise<Page[]>;
@@ -275,8 +328,10 @@ export interface IDatabase {
   /* 评论 */
   getApprovedComments(postSlug: string): Promise<Comment[]>;
   addComment(input: CreateCommentInput): Promise<Comment>;
+  addCommentReply(parentId: number, input: Pick<CreateCommentInput, "authorName" | "content">): Promise<{ reply: Comment; parent: Comment & { postSlug: string; postTitle: string } }>;
+  getCommentById(id: number): Promise<(Comment & { postSlug: string; postTitle: string }) | null>;
   getAllComments(): Promise<(Comment & { postSlug: string; postTitle: string })[]>;
-  approveComment(id: number): Promise<boolean>;
+  approveComment(id: number): Promise<CommentApprovalResult>;
   deleteComment(id: number): Promise<boolean>;
   getCommentCount(postSlug: string): Promise<number>;
 

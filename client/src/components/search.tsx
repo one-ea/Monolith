@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { Search, X, FileText, Loader2 } from "lucide-react";
 
 type SearchResult = {
@@ -66,6 +66,7 @@ export function SearchOverlay() {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const [location] = useLocation();
 
   // 全局快捷键 Ctrl+K / ⌘K
   useEffect(() => {
@@ -113,6 +114,16 @@ export function SearchOverlay() {
       setLoading(false);
     }
   }, []);
+
+  // /?q= 深链：从站外（搜索引擎 sitelinks、AI 引擎）带词直达搜索浮层
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search).get("q");
+    if (q && q.trim()) {
+      setOpen(true);
+      setQuery(q);
+      doSearch(q);
+    }
+  }, [location, doSearch]);
 
   const handleInputChange = (value: string) => {
     setQuery(value);

@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" role="img" aria-labelledby="title desc">
+  <title id="title">Monolith — Edge Journal / Code Archive</title>
+  <desc id="desc">Monolith personal technology blog and edge computing archive.</desc>
+  <rect width="1200" height="630" fill="#0d1117"/>
+  <path stroke="#30363d" stroke-width="1" opacity=".55" d="M0 126h1200M0 252h1200M0 378h1200M0 504h1200M120 0v630M240 0v630M360 0v630M480 0v630M600 0v630M720 0v630M840 0v630M960 0v630M1080 0v630"/>
+  <g transform="translate(116 118) scale(.77)">
+    <rect width="512" height="512" rx="112" fill="#161b22"/>
+    <path fill="#f0f6fc" d="M112 128h72l72 92 72-92h72v256h-72V242l-72 92-72-92v142h-72z"/>
+    <rect x="248" y="176" width="16" height="160" rx="8" fill="#4493f8"/>
+  </g>
+  <text x="570" y="290" fill="#f0f6fc" font-family="Space Grotesk, Work Sans, sans-serif" font-size="88" font-weight="600" letter-spacing="-3">MONOLITH</text>
+  <text x="576" y="350" fill="#8b949e" font-family="Work Sans, Noto Sans SC, sans-serif" font-size="25">代码 · 设计 · 边缘计算</text>
+  <rect x="576" y="386" width="64" height="4" rx="2" fill="#4493f8"/>
+</svg>

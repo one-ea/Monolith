@@ -44,7 +44,9 @@ export const onRequest: PagesFunction<{ API_BASE: string }> = async (context) =>
   const origin = context.request.headers.get("Origin") || "*";
   const responseHeaders = new Headers(res.headers);
   responseHeaders.set("Access-Control-Allow-Origin", origin);
-  responseHeaders.set("Vary", "Origin");
+  // 保留后端为解锁响应设置的 Vary: Cookie, Authorization，再追加 Origin。
+  const existingVary = responseHeaders.get("Vary");
+  responseHeaders.set("Vary", existingVary ? `${existingVary}, Origin` : "Origin");
 
   return new Response(res.body, {
     status: res.status,

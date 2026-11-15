@@ -8,7 +8,7 @@ import { SiteSettingsProvider } from "@/lib/site-settings";
 const updateSW = registerSW({
   onNeedRefresh() {
     if (confirm("新版本可用，是否重载页面更新？")) {
-      updateSW();
+      void updateSW(true);
     }
   },
   onOfflineReady() {

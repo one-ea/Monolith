@@ -9,6 +9,21 @@ import { SearchTrigger } from "@/components/search";
 import { fetchNavPages, type NavPage } from "@/lib/api";
 import { useSiteSettings } from "@/lib/site-settings";
 
+function BrandMark({ className = "h-[28px] w-[28px]", src = "/monolith-logo.svg" }: { className?: string; src?: string }) {
+  return (
+    <img
+      src={src}
+      alt=""
+      aria-hidden="true"
+      className={`${className} object-contain`}
+      onError={(event) => {
+        if (event.currentTarget.src.endsWith("/monolith-logo.svg")) return;
+        event.currentTarget.src = "/monolith-logo.svg";
+      }}
+    />
+  );
+}
+
 const fixedStart = [{ href: "/", label: "首页" }];
 const fixedEnd = [
   { href: "/archive", label: "归档" },
@@ -62,19 +77,12 @@ export function Navbar() {
         <div className="mx-auto flex h-[56px] max-w-[1440px] items-center justify-between px-[20px] lg:px-[40px]">
           <Link
             href="/"
+            aria-label={`${settings.site_title || "Monolith"} 首页`}
             className="group flex items-center gap-[10px] select-none animate-slide-in-left"
             onDoubleClick={handleLogoDoubleClick}
           >
-            <div className="relative flex h-[32px] w-[32px] shrink-0 items-center justify-center">
-              {settings.site_icon ? (
-                <img
-                  src={settings.site_icon}
-                  alt=""
-                  className="h-[28px] w-[28px] rounded-md object-cover transition-transform duration-300 group-hover:-translate-y-[2px]"
-                />
-              ) : (
-                <div className="absolute inset-0 rounded-[3px] bg-gradient-to-b from-foreground/90 to-foreground/44 transition-all duration-300 group-hover:from-foreground group-hover:to-foreground/62" />
-              )}
+            <div className="relative flex h-[32px] w-[32px] shrink-0 items-center justify-center transition-transform duration-300 group-hover:-translate-y-[2px]">
+              <BrandMark src={settings.site_icon?.trim() || "/monolith-logo.svg"} />
             </div>
             <span className="max-w-[180px] truncate text-[18px] font-semibold tracking-[-0.03em] text-foreground sm:max-w-[240px]">
               {settings.site_title}

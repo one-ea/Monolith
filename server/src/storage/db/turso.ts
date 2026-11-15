@@ -7,11 +7,12 @@
 import { drizzle } from "drizzle-orm/libsql";
 import { createClient } from "@libsql/client";
 import { and, eq, desc, inArray, lt, sql } from "drizzle-orm";
-import { posts, tags, postTags, pages, comments, guestbookMessages, friendLinks, reactions, visits, postVersions } from "../../db/schema";
+import { posts, tags, postTags, pages, comments, guestbookMessages, friendLinks, reactions, visits, postVersions, contentLocks, unlockAttempts } from "../../db/schema";
 import type {
   IDatabase, Post, PostSummary, Tag, Page, PageSummary,
   CreatePostInput, UpdatePostInput, UpsertPageInput,
-  BackupData, ImportResult, ViewStats, Comment, CreateCommentInput, GuestbookMessage, CreateGuestbookMessageInput, FriendLink, CreateFriendLinkInput, UpdateFriendLinkInput, PostVersion
+  BackupData, ImportResult, ViewStats, Comment, CreateCommentInput, GuestbookMessage, CreateGuestbookMessageInput, FriendLink, CreateFriendLinkInput, UpdateFriendLinkInput, PostVersion,
+  ContentLock, ContentLockKind, PostAccess, PostLock,
 } from "../interfaces";
 import { normalizeCardHeight, normalizeCardWidth } from "./card-layout";
 
@@ -56,6 +57,28 @@ export class TursoAdapter implements IDatabase {
     }
 
     return tagMap;
+  }
+
+  private publicPostFilter(ignoreSeriesLock = false) {
+    const seriesCondition = ignoreSeriesLock
+      ? sql`false`
+      : sql`(cl.kind = 'series' AND cl.name = ${posts.seriesSlug} AND ${posts.seriesSlug} IS NOT NULL)`;
+    return sql`(
+      ${posts.published} = 1
+      AND ${posts.listed} = 1
+      AND (${posts.publishAt} IS NULL OR datetime(${posts.publishAt}) <= datetime('now'))
+      AND NOT EXISTS (
+        SELECT 1 FROM content_locks cl
+        WHERE (cl.kind = 'post' AND cl.name = ${posts.slug})
+          OR (cl.kind = 'category' AND cl.name = ${posts.category} AND ${posts.category} != '')
+          OR ${seriesCondition}
+          OR (cl.kind = 'tag' AND cl.name IN (
+            SELECT t.name FROM post_tags pt
+            INNER JOIN tags t ON t.id = pt.tag_id
+            WHERE pt.post_id = ${posts.id}
+          ))
+      )
+    )`;
   }
 
   private async syncPostTags(postId: number, tagNames: string[]): Promise<void> {
@@ -106,6 +129,7 @@ export class TursoAdapter implements IDatabase {
 
   /** 初始化核心表（首次运行时自动创建） */
   async ensureCoreTables(): Promise<void> {
+    await this.db.run(sql`PRAGMA foreign_keys = ON;`);
     await this.db.run(sql`CREATE TABLE IF NOT EXISTS posts (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       slug TEXT NOT NULL UNIQUE,
@@ -138,15 +162,17 @@ export class TursoAdapter implements IDatabase {
     await this.ensureCommentsTable();
     await this.ensureGuestbookMessagesTable();
     await this.ensureFriendLinksTable();
+    await this.ensureAccessTables();
 
     await this.db.run(sql`CREATE TABLE IF NOT EXISTS post_versions (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      post_slug TEXT NOT NULL REFERENCES posts(slug) ON DELETE CASCADE,
+      post_id INTEGER NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
       title TEXT NOT NULL,
       content TEXT NOT NULL,
       excerpt TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     )`);
+    await this.ensurePostVersionsPostId();
     await this.db.run(sql`CREATE TABLE IF NOT EXISTS reactions (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       post_slug TEXT NOT NULL REFERENCES posts(slug) ON DELETE CASCADE,
@@ -177,7 +203,57 @@ export class TursoAdapter implements IDatabase {
     try { await this.db.run(sql`ALTER TABLE posts ADD COLUMN card_height INTEGER NOT NULL DEFAULT 220`); } catch {}
   }
 
+  private async ensureAccessTables(): Promise<void> {
+    await this.db.run(sql`CREATE TABLE IF NOT EXISTS content_locks (
+      kind TEXT NOT NULL,
+      name TEXT NOT NULL,
+      password_hash TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      PRIMARY KEY (kind, name)
+    )`);
+    await this.db.run(sql`CREATE INDEX IF NOT EXISTS content_locks_kind_idx ON content_locks(kind)`);
+    await this.db.run(sql`CREATE TABLE IF NOT EXISTS unlock_attempts (
+      key TEXT NOT NULL,
+      window_start INTEGER NOT NULL,
+      count INTEGER NOT NULL DEFAULT 0,
+      updated_at INTEGER NOT NULL,
+      PRIMARY KEY (key, window_start)
+    )`);
+    await this.db.run(sql`CREATE INDEX IF NOT EXISTS unlock_attempts_window_idx ON unlock_attempts(window_start)`);
+  }
+
+  private async ensurePostVersionsPostId(): Promise<void> {
+    const result = await this.db.run(sql`SELECT name FROM pragma_table_info('post_versions')`);
+    const columns = new Set(
+      ((result.rows ?? []) as { name?: string }[])
+        .map((row) => row.name)
+        .filter((name): name is string => Boolean(name))
+    );
+    if (!columns.has("post_slug")) return;
+
+    // 早期 Turso 启动代码误用 post_slug；代码与 D1/PG 都按 post_id 查询。
+    // 重建表并尽量保留历史版本（按 slug 关联回 posts.id）。
+    await this.db.run(sql`ALTER TABLE post_versions RENAME TO post_versions_legacy`);
+    await this.db.run(sql`CREATE TABLE post_versions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      post_id INTEGER NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+      title TEXT NOT NULL,
+      content TEXT NOT NULL,
+      excerpt TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )`);
+    await this.db.run(sql`INSERT INTO post_versions (id, post_id, title, content, excerpt, created_at)
+      SELECT v.id, p.id, v.title, v.content, v.excerpt, v.created_at
+      FROM post_versions_legacy v
+      INNER JOIN posts p ON p.slug = v.post_slug`);
+    await this.db.run(sql`DROP TABLE post_versions_legacy`);
+  }
+
+  private commentsTableEnsured = false;
+
   private async ensureCommentsTable(): Promise<void> {
+    if (this.commentsTableEnsured) return;
     await this.db.run(sql`CREATE TABLE IF NOT EXISTS comments (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       post_id INTEGER NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
@@ -185,9 +261,23 @@ export class TursoAdapter implements IDatabase {
       author_email TEXT NOT NULL DEFAULT '',
       content TEXT NOT NULL,
       approved INTEGER NOT NULL DEFAULT 0,
+      parent_id INTEGER REFERENCES comments(id) ON DELETE CASCADE,
+      is_admin INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     )`);
+    // 历史库补列：先查表结构再按需补齐，避免每次请求都跑必然失败的 ALTER；
+    // try/catch 兜底并发首跑的 duplicate column 竞态（适配器每请求新建实例）
+    const columnResult = await this.db.run(sql`SELECT name FROM pragma_table_info('comments')`);
+    const columns = new Set(((columnResult.rows ?? []) as { name?: string }[]).map((r) => r.name).filter((name): name is string => Boolean(name)));
+    if (!columns.has("parent_id")) {
+      try { await this.db.run(sql`ALTER TABLE comments ADD COLUMN parent_id INTEGER REFERENCES comments(id) ON DELETE CASCADE`); } catch { /* 并发补列竞态，忽略 */ }
+    }
+    if (!columns.has("is_admin")) {
+      try { await this.db.run(sql`ALTER TABLE comments ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0`); } catch { /* 并发补列竞态，忽略 */ }
+    }
     await this.db.run(sql`CREATE INDEX IF NOT EXISTS comments_post_id_idx ON comments(post_id)`);
+    await this.db.run(sql`CREATE INDEX IF NOT EXISTS comments_parent_id_idx ON comments(parent_id)`);
+    this.commentsTableEnsured = true;
   }
 
   private async ensureGuestbookMessagesTable(): Promise<void> {
@@ -241,9 +331,7 @@ export class TursoAdapter implements IDatabase {
         category: posts.category,
       })
       .from(posts)
-      .where(
-        sql`${posts.published} = 1 AND (${posts.publishAt} IS NULL OR ${posts.publishAt} <= datetime('now'))`
-      )
+      .where(this.publicPostFilter())
       .orderBy(desc(posts.pinned), desc(posts.createdAt));
 
     const tagMap = await this.getPostTagsMap(allPosts.map((post) => post.id));
@@ -273,6 +361,12 @@ export class TursoAdapter implements IDatabase {
       .orderBy(desc(posts.createdAt));
 
     const tagMap = await this.getPostTagsMap(allPosts.map((post) => post.id));
+    const lockedSlugs = new Set(
+      (await this.db
+        .select({ name: contentLocks.name })
+        .from(contentLocks)
+        .where(eq(contentLocks.kind, "post"))).map((row) => row.name)
+    );
 
     return allPosts.map((post) => ({
       id: post.id,
@@ -295,6 +389,7 @@ export class TursoAdapter implements IDatabase {
       category: post.category || "",
       seriesOrder: post.seriesOrder ?? 0,
       tags: tagMap.get(post.id) || [],
+      hasPassword: lockedSlugs.has(post.slug),
     }));
   }
 
@@ -328,6 +423,7 @@ export class TursoAdapter implements IDatabase {
       category: post.category || "",
       seriesOrder: post.seriesOrder ?? 0,
       tags: await this.getPostTags(post.id),
+      hasPassword: (await this.getContentLock("post", slug)) !== null,
     };
   }
 
@@ -356,6 +452,8 @@ export class TursoAdapter implements IDatabase {
     if (data.tags?.length) {
       await this.syncPostTags(newPost.id, data.tags);
     }
+    // 新文章显式写入/清除单篇锁，避免复用已删除文章的 slug 时继承孤儿锁。
+    await this.setContentLock("post", newPost.slug, data.passwordHash || null);
 
     return {
       id: newPost.id,
@@ -377,6 +475,7 @@ export class TursoAdapter implements IDatabase {
       seriesSlug: newPost.seriesSlug || null,
       category: newPost.category || "",
       seriesOrder: newPost.seriesOrder ?? 0,
+      hasPassword: Boolean(data.passwordHash),
     };
   }
 
@@ -416,6 +515,21 @@ export class TursoAdapter implements IDatabase {
       await this.syncPostTags(existing.id, data.tags);
     }
 
+    if (data.slug !== undefined && data.slug !== slug) {
+      const existingLock = await this.getContentLock("post", slug);
+      if (existingLock) {
+        await this.setContentLock("post", slug, null);
+        await this.setContentLock("post", updated.slug, existingLock.passwordHash);
+      }
+    }
+    if (data.passwordHash !== undefined) {
+      await this.setContentLock("post", updated.slug, data.passwordHash);
+    }
+
+    const hasPassword = data.passwordHash !== undefined
+      ? Boolean(data.passwordHash)
+      : (await this.getContentLock("post", updated.slug)) !== null;
+
     return {
       id: updated.id,
       slug: updated.slug,
@@ -436,18 +550,28 @@ export class TursoAdapter implements IDatabase {
       seriesSlug: updated.seriesSlug || null,
       category: updated.category || "",
       seriesOrder: updated.seriesOrder ?? 0,
+      hasPassword,
     };
   }
 
   async deletePost(slug: string): Promise<boolean> {
+    // 先删文章，成功后再清锁；避免删除失败时把仍存在的文章意外解锁。
     const result = await this.db.delete(posts).where(eq(posts.slug, slug)).returning();
-    return result.length > 0;
+    if (result.length === 0) return false;
+    await this.setContentLock("post", slug, null);
+    return true;
   }
 
   async batchOperatePosts(slugs: string[], action: "publish" | "unpublish" | "delete"): Promise<number> {
     if (!slugs || slugs.length === 0) return 0;
     if (action === "delete") {
       const result = await this.db.delete(posts).where(inArray(posts.slug, slugs)).returning();
+      const deletedSlugs = result.map((row) => row.slug);
+      if (deletedSlugs.length > 0) {
+        await this.db
+          .delete(contentLocks)
+          .where(and(eq(contentLocks.kind, "post"), inArray(contentLocks.name, deletedSlugs)));
+      }
       return result.length;
     } else {
       const published = action === "publish";
@@ -464,7 +588,7 @@ export class TursoAdapter implements IDatabase {
       .update(posts)
       .set({ published: true })
       .where(
-        sql`${posts.published} = 0 AND ${posts.publishAt} IS NOT NULL AND ${posts.publishAt} <= datetime('now')`
+        sql`${posts.published} = 0 AND ${posts.publishAt} IS NOT NULL AND datetime(${posts.publishAt}) <= datetime('now')`
       )
       .returning();
     return result.length;
@@ -510,7 +634,18 @@ export class TursoAdapter implements IDatabase {
   /* ── 标签 ─────────────────────── */
 
   async getAllTags(): Promise<Tag[]> {
-    return this.db.select().from(tags).orderBy(tags.name);
+    const result = await this.db.run(
+      sql`SELECT t.id, t.name FROM tags t
+          WHERE NOT EXISTS (
+            SELECT 1 FROM content_locks cl WHERE cl.kind = 'tag' AND cl.name = t.name
+          )
+          ORDER BY t.name`
+    );
+    type Row = { id: number; name: string };
+    return ((result.rows as unknown as Row[] | undefined) || []).map((row) => ({
+      id: row.id,
+      name: row.name,
+    }));
   }
 
   /* ── 独立页 ───────────────────── */
@@ -824,7 +959,7 @@ export class TursoAdapter implements IDatabase {
       })
       .from(posts)
       .where(
-        sql`${posts.published} = 1 AND (${posts.publishAt} IS NULL OR ${posts.publishAt} <= datetime('now')) AND (${posts.title} LIKE ${pattern} OR ${posts.content} LIKE ${pattern} OR ${posts.excerpt} LIKE ${pattern})`
+        sql`(${posts.title} LIKE ${pattern} OR ${posts.content} LIKE ${pattern} OR ${posts.excerpt} LIKE ${pattern}) AND ${this.publicPostFilter()}`
       )
       .orderBy(desc(posts.createdAt))
       .limit(limit);
@@ -899,7 +1034,7 @@ export class TursoAdapter implements IDatabase {
         updatedAt: posts.updatedAt,
       })
       .from(posts)
-      .where(eq(posts.published, true))
+      .where(this.publicPostFilter())
       .orderBy(desc(posts.createdAt))
       .limit(limit);
 
@@ -911,7 +1046,7 @@ export class TursoAdapter implements IDatabase {
   async getApprovedComments(postSlug: string): Promise<Comment[]> {
     await this.ensureCommentsTable();
     const result = await this.db.run(
-      sql`SELECT c.id, c.post_id, c.author_name, c.author_email, c.content, c.approved, c.created_at
+      sql`SELECT c.id, c.post_id, c.author_name, c.author_email, c.content, c.approved, c.parent_id, c.is_admin, c.created_at
           FROM comments c
           INNER JOIN posts p ON c.post_id = p.id
           WHERE p.slug = ${postSlug} AND c.approved = 1
@@ -924,6 +1059,8 @@ export class TursoAdapter implements IDatabase {
       authorEmail: (r.author_email as string) || "",
       content: r.content as string,
       approved: Boolean(r.approved),
+      parentId: r.parent_id == null ? null : Number(r.parent_id),
+      isAdmin: Boolean(r.is_admin),
       createdAt: r.created_at as string,
     }));
   }
@@ -936,6 +1073,10 @@ export class TursoAdapter implements IDatabase {
       .where(eq(posts.slug, input.postSlug))
       .limit(1);
     if (!post) throw new Error("文章不存在");
+    if (input.parentId != null) {
+      const parent = await this.db.run(sql`SELECT id FROM comments WHERE id = ${input.parentId} AND post_id = ${post.id} AND approved = 1 LIMIT 1`);
+      if (!parent.rows?.[0]) throw new Error("只能回复同一文章中已审核的评论");
+    }
 
     const [newComment] = await this.db
       .insert(comments)
@@ -944,7 +1085,9 @@ export class TursoAdapter implements IDatabase {
         authorName: input.authorName,
         authorEmail: input.authorEmail || "",
         content: input.content,
-        approved: false,
+        approved: Boolean(input.isAdmin),
+        parentId: input.parentId ?? null,
+        isAdmin: Boolean(input.isAdmin),
       })
       .returning();
 
@@ -955,14 +1098,48 @@ export class TursoAdapter implements IDatabase {
       authorEmail: newComment.authorEmail,
       content: newComment.content,
       approved: newComment.approved,
+      parentId: newComment.parentId,
+      isAdmin: Boolean(newComment.isAdmin),
       createdAt: newComment.createdAt,
+    };
+  }
+
+  async addCommentReply(parentId: number, input: Pick<CreateCommentInput, "authorName" | "content">) {
+    await this.ensureCommentsTable();
+    const found = await this.db.run(sql`SELECT c.*, p.slug AS post_slug, p.title AS post_title FROM comments c INNER JOIN posts p ON c.post_id = p.id WHERE c.id = ${parentId} AND c.approved = 1 LIMIT 1`);
+    const row = found.rows?.[0] as Record<string, unknown> | undefined;
+    if (!row) throw new Error("只能回复同一文章中已审核的评论");
+    const [created] = await this.db.insert(comments).values({ postId: Number(row.post_id), authorName: input.authorName, authorEmail: "", content: input.content, approved: true, parentId, isAdmin: true }).returning();
+    return {
+      reply: { id: created.id, postId: created.postId, authorName: created.authorName, authorEmail: created.authorEmail, content: created.content, approved: created.approved, parentId: created.parentId, isAdmin: true, createdAt: created.createdAt },
+      parent: { id: Number(row.id), postId: Number(row.post_id), authorName: String(row.author_name), authorEmail: String(row.author_email || ""), content: String(row.content), approved: Boolean(row.approved), parentId: row.parent_id == null ? null : Number(row.parent_id), isAdmin: Boolean(row.is_admin), createdAt: String(row.created_at), postSlug: String(row.post_slug), postTitle: String(row.post_title) },
+    };
+  }
+
+  async getCommentById(id: number): Promise<(Comment & { postSlug: string; postTitle: string }) | null> {
+    await this.ensureCommentsTable();
+    const result = await this.db.run(sql`SELECT c.*, p.slug AS post_slug, p.title AS post_title FROM comments c INNER JOIN posts p ON c.post_id = p.id WHERE c.id = ${id} LIMIT 1`);
+    const row = result.rows?.[0] as Record<string, unknown> | undefined;
+    if (!row) return null;
+    return {
+      id: Number(row.id),
+      postId: Number(row.post_id),
+      authorName: String(row.author_name),
+      authorEmail: String(row.author_email || ""),
+      content: String(row.content),
+      approved: Boolean(row.approved),
+      parentId: row.parent_id == null ? null : Number(row.parent_id),
+      isAdmin: Boolean(row.is_admin),
+      createdAt: String(row.created_at),
+      postSlug: String(row.post_slug),
+      postTitle: String(row.post_title),
     };
   }
 
   async getAllComments(): Promise<(Comment & { postSlug: string; postTitle: string })[]> {
     await this.ensureCommentsTable();
     const result = await this.db.run(
-      sql`SELECT c.id, c.post_id, c.author_name, c.author_email, c.content, c.approved, c.created_at,
+      sql`SELECT c.id, c.post_id, c.author_name, c.author_email, c.content, c.approved, c.parent_id, c.is_admin, c.created_at,
                  p.slug as post_slug, p.title as post_title
           FROM comments c
           INNER JOIN posts p ON c.post_id = p.id
@@ -975,28 +1152,46 @@ export class TursoAdapter implements IDatabase {
       authorEmail: (r.author_email as string) || "",
       content: r.content as string,
       approved: Boolean(r.approved),
+      parentId: r.parent_id == null ? null : Number(r.parent_id),
+      isAdmin: Boolean(r.is_admin),
       createdAt: r.created_at as string,
       postSlug: r.post_slug as string,
       postTitle: r.post_title as string,
     }));
   }
 
-  async approveComment(id: number): Promise<boolean> {
+  async approveComment(id: number) {
     await this.ensureCommentsTable();
-    const result = await this.db
-      .update(comments)
-      .set({ approved: true })
-      .where(eq(comments.id, id))
-      .returning();
-    return result.length > 0;
+    const result = await this.db.run(sql`SELECT c.*, p.slug AS post_slug, p.title AS post_title FROM comments c INNER JOIN posts p ON c.post_id = p.id WHERE c.id = ${id} LIMIT 1`);
+    const row = result.rows?.[0] as Record<string, unknown> | undefined;
+    if (!row) return { found: false, becameApproved: false };
+    const updated = await this.db.update(comments).set({ approved: true }).where(and(eq(comments.id, id), eq(comments.approved, false))).returning({ id: comments.id });
+    const becameApproved = updated.length > 0;
+    const toComment = (value: Record<string, unknown>, approved = true) => ({ id: Number(value.id), postId: Number(value.post_id), authorName: String(value.author_name), authorEmail: String(value.author_email || ""), content: String(value.content), approved, parentId: value.parent_id == null ? null : Number(value.parent_id), isAdmin: Boolean(value.is_admin), createdAt: String(value.created_at), postSlug: String(value.post_slug), postTitle: String(value.post_title) });
+    let parent;
+    if (row.parent_id != null) {
+      const parentResult = await this.db.run(sql`SELECT c.*, p.slug AS post_slug, p.title AS post_title FROM comments c INNER JOIN posts p ON c.post_id = p.id WHERE c.id = ${Number(row.parent_id)} LIMIT 1`);
+      const parentRow = parentResult.rows?.[0] as Record<string, unknown> | undefined;
+      if (parentRow) parent = toComment(parentRow, Boolean(parentRow.approved));
+    }
+    return { found: true, becameApproved, comment: toComment(row), parent };
   }
 
   async deleteComment(id: number): Promise<boolean> {
     await this.ensureCommentsTable();
+    // 先删目标行拿 found 标志（FK 生效时引擎级联清掉后代）；
+    // 再用递归 CTE 兜底清理后代，覆盖 PRAGMA foreign_keys 未生效的连接；
+    // UNION 去重保证 parent_id 成环的脏数据下递归自然终止
     const result = await this.db
       .delete(comments)
       .where(eq(comments.id, id))
       .returning();
+    await this.db.run(sql`WITH RECURSIVE subtree(id) AS (
+        SELECT id FROM comments WHERE parent_id = ${id}
+        UNION
+        SELECT c.id FROM comments c INNER JOIN subtree s ON c.parent_id = s.id
+      )
+      DELETE FROM comments WHERE id IN (SELECT id FROM subtree)`);
     return result.length > 0;
   }
 
@@ -1199,17 +1394,148 @@ export class TursoAdapter implements IDatabase {
     const rows = await this.db
       .select({ slug: posts.slug, title: posts.title, seriesOrder: posts.seriesOrder })
       .from(posts)
-      .where(sql`${posts.seriesSlug} = ${seriesSlug} AND ${posts.published} = 1 AND (${posts.publishAt} IS NULL OR ${posts.publishAt} <= datetime('now'))`)
+      .where(sql`${posts.seriesSlug} = ${seriesSlug} AND ${this.publicPostFilter(true)}`)
       .orderBy(posts.seriesOrder);
     return rows.map(r => ({ slug: r.slug, title: r.title, seriesOrder: r.seriesOrder ?? 0 }));
   }
 
   async getCategories(): Promise<{ name: string; count: number }[]> {
     const result = await this.db.run(
-      sql`SELECT category as name, COUNT(*) as count FROM posts WHERE published = 1 AND (publish_at IS NULL OR publish_at <= datetime('now')) AND category != '' AND category IS NOT NULL GROUP BY category ORDER BY count DESC`
+      sql`SELECT category as name, COUNT(*) as count FROM posts
+          WHERE ${this.publicPostFilter()}
+            AND category != '' AND category IS NOT NULL
+            AND NOT EXISTS (
+              SELECT 1 FROM content_locks cl WHERE cl.kind = 'category' AND cl.name = posts.category
+            )
+          GROUP BY category ORDER BY count DESC`
     );
     type Row = Record<string, unknown>;
     return (result.rows as unknown as Row[] || []).map(r => ({ name: r.name as string, count: r.count as number }));
+  }
+
+  /* ── 访问控制 ─────────────────── */
+
+  async getPostAccess(slug: string): Promise<PostAccess | null> {
+    const post = await this.getPostBySlug(slug);
+    if (!post) return null;
+
+    const rows = await this.db
+      .select({
+        kind: contentLocks.kind,
+        name: contentLocks.name,
+        passwordHash: contentLocks.passwordHash,
+      })
+      .from(contentLocks);
+
+    const tagSet = new Set(post.tags);
+    const locks: PostLock[] = [];
+    for (const row of rows) {
+      const kind = row.kind as ContentLockKind;
+      const matches =
+        (kind === "post" && row.name === slug)
+        || (kind === "tag" && tagSet.has(row.name))
+        || (kind === "category" && Boolean(post.category) && row.name === post.category)
+        || (kind === "series" && Boolean(post.seriesSlug) && row.name === post.seriesSlug);
+      if (matches) locks.push({ kind, key: row.name, passwordHash: row.passwordHash });
+    }
+
+    return { post, locks };
+  }
+
+  async listContentLocks(): Promise<ContentLock[]> {
+    const rows = await this.db
+      .select({
+        kind: contentLocks.kind,
+        name: contentLocks.name,
+        createdAt: contentLocks.createdAt,
+        updatedAt: contentLocks.updatedAt,
+      })
+      .from(contentLocks)
+      .orderBy(contentLocks.kind, contentLocks.name);
+    return rows.map((row) => ({
+      kind: row.kind as ContentLockKind,
+      name: row.name,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+      hasPassword: true,
+    }));
+  }
+
+  async getContentLock(kind: ContentLockKind, name: string): Promise<{ passwordHash: string } | null> {
+    const [row] = await this.db
+      .select({ passwordHash: contentLocks.passwordHash })
+      .from(contentLocks)
+      .where(and(eq(contentLocks.kind, kind), eq(contentLocks.name, name)))
+      .limit(1);
+    return row || null;
+  }
+
+  async setContentLock(kind: ContentLockKind, name: string, passwordHash: string | null): Promise<void> {
+    if (!passwordHash) {
+      await this.db
+        .delete(contentLocks)
+        .where(and(eq(contentLocks.kind, kind), eq(contentLocks.name, name)));
+      return;
+    }
+
+    await this.db
+      .insert(contentLocks)
+      .values({ kind, name, passwordHash })
+      .onConflictDoUpdate({
+        target: [contentLocks.kind, contentLocks.name],
+        set: { passwordHash, updatedAt: sql`datetime('now')` },
+      });
+  }
+
+  async contentGroupExists(kind: ContentLockKind, name: string): Promise<boolean> {
+    if (kind === "post") {
+      const [row] = await this.db.select({ id: posts.id }).from(posts).where(eq(posts.slug, name)).limit(1);
+      return Boolean(row);
+    }
+    if (kind === "tag") {
+      const [row] = await this.db.select({ id: tags.id }).from(tags).where(eq(tags.name, name)).limit(1);
+      return Boolean(row);
+    }
+    if (kind === "category") {
+      const [row] = await this.db.select({ id: posts.id }).from(posts).where(eq(posts.category, name)).limit(1);
+      return Boolean(row);
+    }
+    const [row] = await this.db.select({ id: posts.id }).from(posts).where(eq(posts.seriesSlug, name)).limit(1);
+    return Boolean(row);
+  }
+
+  async getUnlockAttemptCount(key: string, windowStart: number): Promise<number> {
+    const [row] = await this.db
+      .select({ count: unlockAttempts.count })
+      .from(unlockAttempts)
+      .where(and(eq(unlockAttempts.key, key), eq(unlockAttempts.windowStart, windowStart)))
+      .limit(1);
+    return row?.count ?? 0;
+  }
+
+  async recordUnlockFailure(key: string, windowStart: number, now: number): Promise<number> {
+    const [row] = await this.db
+      .insert(unlockAttempts)
+      .values({ key, windowStart, count: 1, updatedAt: now })
+      .onConflictDoUpdate({
+        target: [unlockAttempts.key, unlockAttempts.windowStart],
+        set: {
+          count: sql`${unlockAttempts.count} + 1`,
+          updatedAt: now,
+        },
+      })
+      .returning({ count: unlockAttempts.count });
+    return row?.count ?? 1;
+  }
+
+  async clearUnlockFailures(key: string, windowStart: number): Promise<void> {
+    await this.db
+      .delete(unlockAttempts)
+      .where(and(eq(unlockAttempts.key, key), eq(unlockAttempts.windowStart, windowStart)));
+  }
+
+  async pruneUnlockAttempts(before: number): Promise<void> {
+    await this.db.delete(unlockAttempts).where(lt(unlockAttempts.windowStart, before));
   }
 
   async getReactions(postSlug: string): Promise<Record<string, number>> {

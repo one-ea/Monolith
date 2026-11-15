@@ -85,10 +85,17 @@ for (const bin of optionalBins) {
   if (!hasCommand(bin)) warnings.push(`可选命令未安装: ${bin}`);
 }
 
-const cloudflareTokenReady = Boolean(process.env.CLOUDFLARE_API_TOKEN && process.env.CLOUDFLARE_ACCOUNT_ID);
+const accountId = (process.env.CLOUDFLARE_ACCOUNT_ID || "").trim();
+if (accountId && !/^[0-9a-f]{32}$/i.test(accountId)) {
+  problems.push("CLOUDFLARE_ACCOUNT_ID 格式无效：需要 32 位十六进制 Account ID");
+}
+
+const cloudflareTokenReady = Boolean(process.env.CLOUDFLARE_API_TOKEN);
 const wranglerOAuthReady = existsSync(`${process.env.HOME || ""}/.config/.wrangler/config/default.toml`);
 if (!cloudflareTokenReady && !wranglerOAuthReady) {
-  warnings.push("Cloudflare 认证未就绪；本地开发可先跳过，部署前需 wrangler login 或配置 CLOUDFLARE_API_TOKEN/CLOUDFLARE_ACCOUNT_ID");
+  warnings.push("Cloudflare 认证未就绪；本地开发可先跳过，部署前需 wrangler login 或配置 CLOUDFLARE_API_TOKEN");
+} else if (!accountId) {
+  warnings.push("未设置 CLOUDFLARE_ACCOUNT_ID；部署脚本会从 wrangler 登录态自动识别，多账户时需显式指定");
 }
 
 console.log("Monolith local environment");
