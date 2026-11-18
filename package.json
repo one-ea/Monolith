@@ -63,6 +63,9 @@
     "minimatch": "11.0.9",
     "filelist": {
       "minimatch": "5.1.9"
+    },
+    "workbox-build": {
+      "glob": "14.0.6"
     }
   }
 }
