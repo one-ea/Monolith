@@ -59,6 +59,13 @@
     "qs": "6.17.1",
     "shell-quote": "1.12.0",
     "undici": "7.30.1",
-    "ws": "8.21.0"
+    "ws": "8.21.0",
+    "minimatch": "11.0.9",
+    "filelist": {
+      "minimatch": "5.1.9"
+    },
+    "workbox-build": {
+      "glob": "14.0.6"
+    }
   }
 }
